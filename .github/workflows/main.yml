@@ -25,7 +25,7 @@ jobs:
       
       - name: Compressed as Archive
         run: |
-          cd /home/runner/work/${GITHUB_WORKSPACE}/out/arch/arm/boot || exit 1
+          cd /home/runner/work/${GITHUB_WORKSPACE}/out/arch/arm/boot
           zip -r9 "${{ github.event.inputs.DEVICE_NAME }}-${{ steps.props.outputs.date }}.zip" ./* -x "dts" -x "dts/*"
       
       - name: Release
