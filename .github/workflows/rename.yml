@@ -1,0 +1,35 @@
+name: Change Folder Name
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+
+jobs:
+  download-and-commit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Coba ganti nama folder
+      run: |
+        cd ${GITHUB_WORKSPACE}
+        cd toolchain
+        mv android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9-lineage-19.1 gcc
+        mv clang tempe
+        mv tempe/host/linux-x86/clang-r383902 clang
+        rm -rf tempe
+    - name: Configure Git
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "actions@github.com"
+    - name: Add and Commit file
+      run: |
+        git add *
+        git commit -m "Update folder"
+        git push
