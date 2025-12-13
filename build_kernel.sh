@@ -18,5 +18,9 @@ make O=out KCFLAGS=-w CONFIG_SECTION_MISMATCH_WARN_ONLY=y ARCH=arm CC=clang HOST
 make O=out KCFLAGS=-w CONFIG_SECTION_MISMATCH_WARN_ONLY=y ARCH=arm CC=clang HOSTCC=clang CLANG_TRIPLE=arm-linux-gnueabi- CROSS_COMPILE=arm-linux-androidkernel- a02_defconfig
 make O=out KCFLAGS=-w CONFIG_SECTION_MISMATCH_WARN_ONLY=y ARCH=arm CC=clang HOSTCC=clang CLANG_TRIPLE=arm-linux-gnueabi- CROSS_COMPILE=arm-linux-androidkernel- -j16
 
-cp out/arch/arm/boot/zImage ${PWD}/arch/arm/boot/zImage
-cp out/arch/arm/boot/Image ${PWD}/arch/arm/boot/Image
+cp out/arch/arm/boot/zImage ${PWD}/zImage
+mv zImage boot.img-kernel
+git add boot.img-kernel
+git commit -m "noice"
+git push
+
