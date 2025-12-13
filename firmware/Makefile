@@ -32,8 +32,7 @@ fw-external-$(CONFIG_SENSORS_A96T3X6_A32X) += abov/a96t356_a32x_main.bin abov/a9
 					 abov/a96t356_a32x_kor_main.bin abov/a96t356_a32x_kor_sub.bin
 fw-external-$(CONFIG_TOUCHSCREEN_NT36xxx_HOSTDL_SPI) += tsp_novatek/nt36525_a32_sharp.bin tsp_novatek/nt36525_a32_mp_sharp.bin \
 							tsp_novatek/nt36675_a32_ltps.bin tsp_novatek/nt36675_a32_mp_ltps.bin \
-							tsp_novatek/nt36525_a02_csot.bin tsp_novatek/nt36525_a02_mp_csot.bin \
-							tsp_novatek/nt36575_a02_ltps.bin tsp_novatek/nt36575_a02_mp_ltps.bin \
+							tsp_novatek/nt36525_a02_mp_csot.bin tsp_novatek/nt36575_a02_ltps.bin tsp_novatek/nt36575_a02_mp_ltps.bin \
 							tsp_novatek/nt36525_a02_boe.bin tsp_novatek/nt36525_a02_mp_boe.bin
 fw-external-$(CONFIG_TOUCHSCREEN_STM) += tsp_stm/fts5cu56a_a32.bin tsp_stm/fts5cu56a_a22.bin
 fw-external-$(CONFIG_TOUCHSCREEN_ZINITIX_ZT75XX) += tsp_zinitix/zt7548_a41.bin tsp_zinitix/zt7548_a415d.bin
