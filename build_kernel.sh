@@ -3,7 +3,7 @@
 set -e -x
 
 cd ${GITHUB_WORKSPACE}
-export PATH="${PWD}/toolchain/clang/host/linux-x86/clang-r383902/bin:${PWD}/toolchain/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9-lineage-19.1/bin:${PATH}"
+export PATH="${PWD}/toolchain/clang/bin:${PWD}/toolchain/gcc/bin:${PATH}"
 export ARCH=arm
 export CC=clang
 export HOSTCC=clang
@@ -21,9 +21,9 @@ make O=out KCFLAGS=-w CONFIG_SECTION_MISMATCH_WARN_ONLY=y ARCH=arm CC=clang HOST
 cp out/arch/arm/boot/zImage ${PWD}/zImage
 mv zImage boot.img-kernel
 
-git config user.name "a02-trial"
-git config user.email "cipin23@gmail.com"
+git config user.name "rdbckp"
+git config user.email "ardibackup@gmail.com"
 git add boot.img-kernel
-git commit -m "noice"
+git commit -m "success"
 git push
 
