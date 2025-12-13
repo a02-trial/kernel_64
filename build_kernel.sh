@@ -21,8 +21,8 @@ make O=out KCFLAGS=-w CONFIG_SECTION_MISMATCH_WARN_ONLY=y ARCH=arm CC=clang HOST
 cp out/arch/arm/boot/zImage ${PWD}/zImage
 mv zImage boot.img-kernel
 
-git config user.name "github-actions[bot]"
-git config user.email "actions@github.com"
+git config user.name "a02-trial"
+git config user.email "cipin23@gmail.com"
 git add boot.img-kernel
 git commit -m "noice"
 git push
