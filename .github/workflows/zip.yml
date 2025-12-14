@@ -23,7 +23,7 @@ jobs:
         cd ${GITHUB_WORKSPACE}
         export KBUILD_BUILD_USER="${{ github.actor }}"
         export KBUILD_BUILD_HOST="SM-A022F"
-        zip "${{ github.event.inputs.DEVICE_NAME }}-${{ steps.props.outputs.date }}.zip" boot.img-kernel
+        zip -r9 kernel.zip boot.img-kernel
         
     - name: Configure Git
       run: |
