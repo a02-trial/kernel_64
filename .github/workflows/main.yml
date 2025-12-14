@@ -13,10 +13,17 @@ jobs:
         
       - name: Start Building Rookie Kernel
         run: |
+          cd ${GITHUB_WORKSPACE}
           export KBUILD_BUILD_USER="${{ github.actor }}"
           export KBUILD_BUILD_HOST="${{ github.event.inputs.DEVICE_NAME }}"
           chmod +x build_kernel.sh
           ./build_kernel.sh
+          mv zImage boot.img-kernel
+          git config user.name "rdbckp"
+          git config user.email "ardibackup@gmail.com"
+          git add boot.img-kernel
+          git commit -m "kernel ready"
+          git push
       
       - name: Set Properties
         id: props
