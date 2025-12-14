@@ -1,4 +1,4 @@
-name: Build
+name: Build Kernel With Custom Toolchain
 
 on:
   workflow_dispatch:
@@ -13,7 +13,7 @@ on:
         default: 'https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9/+archive/refs/heads/android11-release.tar.gz'
 
 jobs:
-  building kernel:
+  build:
     runs-on: ubuntu-latest
     permissions:
     contents: write
