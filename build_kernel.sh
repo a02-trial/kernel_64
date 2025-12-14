@@ -4,6 +4,7 @@ set -e -x
 
 # custom toolchain preparation
 cd ${GITHUB_WORKSPACE}
+ls
 mkdir toolchain2
 cd toolchain2
 if [ ! -d clang ]; then mkdir clang && curl -Lsq "${CLANG_AOSP}" -o clang.tgz && tar -xzf clang.tgz -C clang; fi
