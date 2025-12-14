@@ -4,6 +4,7 @@ set -e -x
 
 # custom toolchain preparation
 cd ${GITHUB_WORKSPACE}
+ls
 export PATH="${PWD}/toolchain2/clang/bin:${PWD}/toolchain2/gcc/bin:${PATH}"
 
 # export PATH="${PWD}/toolchain/clang/bin:${PWD}/toolchain/gcc/bin:${PATH}"
