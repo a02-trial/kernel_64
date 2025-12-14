@@ -21,9 +21,8 @@ jobs:
     - name: Coba ganti nama folder
       run: |
         cd ${GITHUB_WORKSPACE}
-        export KBUILD_BUILD_USER="${{ github.actor }}"
-        export KBUILD_BUILD_HOST="SM-A022F"
-        zip -r9 kernel.zip boot.img-kernel
+        export DEVICE_NAME="${SM-A022F}"
+        zip -r9 ${DEVICE_NAME}-${{ steps.props.outputs.date }}.zip boot.img-kernel
         
     - name: Configure Git
       run: |
@@ -42,14 +41,14 @@ jobs:
         artifacts: |
           ${GITHUB_WORKSPACE}/*.zip
           ${GITHUB_WORKSPACE}/build.log
-        name: Compiled Kernel for ${{ github.event.inputs.DEVICE_NAME }} - ${{ steps.props.outputs.date }}
+        name: Compiled Kernel for ${DEVICE_NAME} - ${{ steps.props.outputs.date }}
         draft: false
         prerelease: false
         tag: ${{ github.run_id }}-${{ steps.props.outputs.date }}
         token: ${{ secrets.GITHUB_TOKEN }}
         body: |
           ## Notes
-            - Extract ${{ github.event.inputs.DEVICE_NAME }}-${{ steps.props.outputs.date }}.zip, look your newly-compiled kernel inside.
+            - Extract ${DEVICE_NAME}-${{ steps.props.outputs.date }}.zip, look your newly-compiled kernel inside.
             - Include building logs.
       
     - name: Link of Release
