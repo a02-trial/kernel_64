@@ -4,12 +4,6 @@ set -e -x
 
 # custom toolchain preparation
 cd ${GITHUB_WORKSPACE}
-ls
-mkdir toolchain2
-cd toolchain2
-if [ ! -d clang ]; then mkdir clang && curl -Lsq "${{ inputs.CLANG_AOSP }}" -o clang.tgz && tar -xzf clang.tgz -C clang; fi
-if [ ! -d gcc ]; then mkdir gcc && curl -Lsq "${{ inputs.GCC_AOSP }}" -o gcc.tgz && tar -xzf gcc.tgz -C gcc; fi
-cd ${GITHUB_WORKSPACE}
 export PATH="${PWD}/toolchain2/clang/bin:${PWD}/toolchain2/gcc/bin:${PATH}"
 
 # export PATH="${PWD}/toolchain/clang/bin:${PWD}/toolchain/gcc/bin:${PATH}"
