@@ -22,7 +22,7 @@ jobs:
       run: |
         cd ${GITHUB_WORKSPACE}
         rm *.zip
-        export DEVICE_NAME="${SM-A022F}"
+        export DEVICE_NAME=SM-A022F
         zip -r9 ${DEVICE_NAME}-${{ steps.props.outputs.date }}.zip boot.img-kernel
         ls
         
