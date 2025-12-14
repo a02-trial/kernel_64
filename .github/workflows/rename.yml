@@ -19,10 +19,7 @@ jobs:
     - name: Coba ganti nama folder
       run: |
         cd ${GITHUB_WORKSPACE}
-        - name: Compressed as Archive
-        run: |
-          cd ${GITHUB_WORKSPACE}
-          zip "kernel.zip" boot.img-kernel
+        zip -r9 kernel.zip boot.img-kernel
     - name: Configure Git
       run: |
         git config user.name "github-actions[bot]"
