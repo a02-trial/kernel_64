@@ -28,7 +28,7 @@ jobs:
       - name: Compressed as Archive
         run: |
           cd ${GITHUB_WORKSPACE}
-          zip -r9 "${{ github.event.inputs.DEVICE_NAME }}-${{ steps.props.outputs.date }}.zip" ./boot.img-kernel -x "dts" -x "dts/*"
+          zip -r9 "${{ github.event.inputs.DEVICE_NAME }}-${{ steps.props.outputs.date }}.zip" ./boot.img-kernel
       
       - name: Release
         uses: ncipollo/release-action@v1.12.0
