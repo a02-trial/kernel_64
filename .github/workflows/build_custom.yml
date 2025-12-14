@@ -21,12 +21,12 @@ jobs:
 
     - name: Preparing Toolchain
       run: |
-        CLANG=${{ inputs.CLANG_AOSP }}
-        GCC=${{ inputs.GCC_AOSP }}
         cd ${GITHUB_WORKSPACE}
         mkdir toolchain2
         cd toolchain2
+        CLANG=${{ inputs.CLANG_AOSP }}
         if [ ! -d clang ]; then mkdir clang && curl -Lsq "${CLANG}" -o clang.tgz && tar -xzf clang.tgz -C clang; fi
+        GCC=${{ inputs.GCC_AOSP }}
         if [ ! -d gcc ]; then mkdir gcc && curl -Lsq "${GCC}" -o gcc.tgz && tar -xzf gcc.tgz -C gcc; fi
 
     - name: Start Building Rookie Kernel
