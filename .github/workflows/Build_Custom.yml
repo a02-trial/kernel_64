@@ -1,4 +1,4 @@
-name: Build Kernel With Custom Toolchain
+name: Build
 
 on:
   workflow_dispatch:
