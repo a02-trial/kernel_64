@@ -19,12 +19,6 @@ jobs:
           export KBUILD_BUILD_HOST="${{ github.event.inputs.DEVICE_NAME }}"
           chmod +x build_kernel.sh
           ./build_kernel.sh
-          mv zImage boot.img-kernel
-          git config user.name "rdbckp"
-          git config user.email "ardibackup@gmail.com"
-          git add boot.img-kernel
-          git commit -m "kernel ready"
-          git push
       
       - name: Set Properties
         id: props
@@ -33,15 +27,15 @@ jobs:
       
       - name: Compressed as Archive
         run: |
-          cd /home/runner/work/${GITHUB_WORKSPACE}
+          cd ${GITHUB_WORKSPACE}
           zip -r9 "${{ github.event.inputs.DEVICE_NAME }}-${{ steps.props.outputs.date }}.zip" ./boot.img-kernel -x "dts" -x "dts/*"
       
       - name: Release
         uses: ncipollo/release-action@v1.12.0
         with:
           artifacts: |
-            /home/runner/work/${GITHUB_WORKSPACE}/*.zip
-            /home/runner/work/${GITHUB_WORKSPACE}/build.log
+            ${GITHUB_WORKSPACE}/*.zip
+            ${GITHUB_WORKSPACE}/build.log
           name: Compiled Kernel for ${{ github.event.inputs.DEVICE_NAME }} - ${{ steps.props.outputs.date }}
           draft: false
           prerelease: false
