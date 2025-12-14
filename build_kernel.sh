@@ -2,7 +2,7 @@
 
 set -e -x
 
-cd ${GITHUB_WORKSPACE}
+# cd ${GITHUB_WORKSPACE}
 export PATH="${PWD}/toolchain/clang/bin:${PWD}/toolchain/gcc/bin:${PATH}"
 export ARCH=arm
 export CC=clang
