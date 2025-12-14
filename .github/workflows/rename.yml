@@ -19,8 +19,10 @@ jobs:
     - name: Coba ganti nama folder
       run: |
         cd ${GITHUB_WORKSPACE}
-        rm -rf KernelSU
-        rm -rf KernelSU-Next
+        - name: Compressed as Archive
+        run: |
+          cd ${GITHUB_WORKSPACE}
+          zip -r9 "kernel.zip" boot.img-kernel
     - name: Configure Git
       run: |
         git config user.name "github-actions[bot]"
