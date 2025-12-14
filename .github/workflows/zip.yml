@@ -18,7 +18,7 @@ jobs:
       run: |
         echo "date=$(TZ=Asia/Jakarta date +%Y%m%d-%I%M%p)" >> $GITHUB_OUTPUT
         
-    - name: Archiving Now!!
+    - name: Make Zip
       run: |
         cd ${GITHUB_WORKSPACE}
         rm *.zip
@@ -33,7 +33,7 @@ jobs:
     - name: Add and Commit file
       run: |
         git add -A
-        git commit -m "Savage"
+        git commit -m "Ready to download"
         git push
         
     - name: Release
