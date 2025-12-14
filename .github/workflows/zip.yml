@@ -40,9 +40,8 @@ jobs:
     - name: Release
       uses: ncipollo/release-action@v1.12.0
       with:
-        cd ${GITHUB_WORKSPACE}
         artifacts: |
-          *.zip
+          ${{ github.workspace }}/*.zip
         name: Compiled Kernel for ${DEVICE_NAME} - ${{ steps.props.outputs.date }}
         draft: false
         prerelease: false
