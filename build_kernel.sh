@@ -2,7 +2,6 @@
 
 set -e -x
 
-# cd ${GITHUB_WORKSPACE}
 export PATH="${PWD}/toolchain/clang/bin:${PWD}/toolchain/gcc/bin:${PATH}"
 export ARCH=arm
 export CC=clang
@@ -19,11 +18,3 @@ make O=out KCFLAGS=-w CONFIG_SECTION_MISMATCH_WARN_ONLY=y ARCH=arm CC=clang HOST
 make O=out KCFLAGS=-w CONFIG_SECTION_MISMATCH_WARN_ONLY=y ARCH=arm CC=clang HOSTCC=clang CLANG_TRIPLE=arm-linux-gnueabi- CROSS_COMPILE=arm-linux-androidkernel- -j16
 
 cp out/arch/arm/boot/zImage ${PWD}/zImage
-# mv zImage boot.img-kernel
-
-# git config user.name "rdbckp"
-# git config user.email "ardibackup@gmail.com"
-# git add boot.img-kernel
-# git commit -m "success"
-# git push
-
