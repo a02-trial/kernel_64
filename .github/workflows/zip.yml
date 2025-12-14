@@ -39,8 +39,8 @@ jobs:
       uses: ncipollo/release-action@v1.12.0
       with:
         artifacts: |
-          ${GITHUB_WORKSPACE}/*.zip
-          ${GITHUB_WORKSPACE}/build.log
+          /home/runner/work/${GITHUB_WORKSPACE}/*.zip
+          /home/runner/work/${GITHUB_WORKSPACE}/build.log
         name: Compiled Kernel for ${DEVICE_NAME} - ${{ steps.props.outputs.date }}
         draft: false
         prerelease: false
