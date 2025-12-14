@@ -19,11 +19,8 @@ jobs:
     - name: Coba ganti nama folder
       run: |
         cd ${GITHUB_WORKSPACE}
-        cd toolchain
-        mv android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9-lineage-19.1 gcc
-        mv clang tempe
-        mv tempe/host/linux-x86/clang-r383902 clang
-        rm -rf tempe
+        rm -rf KernelSU
+        rm -rf KernelSU-Next
     - name: Configure Git
       run: |
         git config user.name "github-actions[bot]"
@@ -31,5 +28,5 @@ jobs:
     - name: Add and Commit file
       run: |
         git add *
-        git commit -m "Update folder"
+        git commit -m "Savage"
         git push
