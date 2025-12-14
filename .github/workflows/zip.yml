@@ -23,6 +23,7 @@ jobs:
         cd ${GITHUB_WORKSPACE}
         export DEVICE_NAME="${SM-A022F}"
         zip -r9 ${DEVICE_NAME}-${{ steps.props.outputs.date }}.zip boot.img-kernel
+        ls
         
     - name: Configure Git
       run: |
@@ -39,8 +40,7 @@ jobs:
       uses: ncipollo/release-action@v1.12.0
       with:
         artifacts: |
-          /home/runner/work/${GITHUB_WORKSPACE}/*.zip
-          /home/runner/work/${GITHUB_WORKSPACE}/build.log
+          ${GITHUB_REPOSITORY}/${DEVICE_NAME}-${{ steps.props.outputs.date }}.zip
         name: Compiled Kernel for ${DEVICE_NAME} - ${{ steps.props.outputs.date }}
         draft: false
         prerelease: false
