@@ -3,11 +3,14 @@
 set -e -x
 
 # custom toolchain preparation
+CLANG_URL=${{ inputs.CLANG_AOSP }}
+GCC_URL=${{ inputs.GCC_AOSP }}
+ls
 mkdir toolchain2
 cd toolchain2
 if [ ! -d clang ]; then mkdir clang && curl -Lsq "${CLANG_URL}" -o clang.tgz && tar -xzf clang.tgz -C clang; fi
 if [ ! -d gcc ]; then mkdir gcc && curl -Lsq "${GCC_URL}" -o gcc.tgz && tar -xzf gcc.tgz -C gcc; fi
-cd -
+cd ${GITHUB_WORKSPACE}
 export PATH="${PWD}/toolchain2/clang/bin:${PWD}/toolchain2/gcc/bin:${PATH}"
 
 # export PATH="${PWD}/toolchain/clang/bin:${PWD}/toolchain/gcc/bin:${PATH}"
