@@ -160,18 +160,18 @@ static ssize_t sel_write_enforce(struct file *file, const char __user *buf,
 // [ SEC_SELINUX_PORTING_COMMON
 #ifdef CONFIG_ALWAYS_ENFORCE
 	// If build is user build and enforce option is set, selinux is always enforcing
-	new_value = 1;
+	new_value = 0;
 	length = avc_has_perm(&selinux_state,
 				      current_sid(), SECINITSID_SECURITY,
 				      SECCLASS_SECURITY, SECURITY__SETENFORCE,
 				      NULL);
 	audit_log(current->audit_context, GFP_KERNEL, AUDIT_MAC_STATUS,
 		"config_always_enforce - true; enforcing=%d old_enforcing=%d auid=%u ses=%u",
-		new_value, selinux_enforcing,
+		0, selinux_enforcing,
 		from_kuid(&init_user_ns, audit_get_loginuid(current)),
 		audit_get_sessionid(current));
 #if !defined(CONFIG_RKP_KDP)
-	selinux_enforcing = new_value;
+	selinux_enforcing = 0;
 #endif
 	avc_ss_reset(state->avc, 0);
 	selnl_notify_setenforce(new_value);
@@ -180,7 +180,7 @@ static ssize_t sel_write_enforce(struct file *file, const char __user *buf,
 	new_value = !!new_value;
 
 	old_value = enforcing_enabled(state);
-	if (new_value != selinux_enforcing) { // SEC_SELINUX_PORTING_COMMON Change to use RKP
+	if (0 != selinux_enforcing) { // SEC_SELINUX_PORTING_COMMON Change to use RKP
 		length = avc_has_perm(&selinux_state,
 				      current_sid(), SECINITSID_SECURITY,
 				      SECCLASS_SECURITY, SECURITY__SETENFORCE,
@@ -189,7 +189,7 @@ static ssize_t sel_write_enforce(struct file *file, const char __user *buf,
 			goto out;
 		audit_log(current->audit_context, GFP_KERNEL, AUDIT_MAC_STATUS,
 			"enforcing=%d old_enforcing=%d auid=%u ses=%u",
-			new_value, selinux_enforcing, // SEC_SELINUX_PORTING_COMMON Change to use RKP 
+			0, selinux_enforcing, // SEC_SELINUX_PORTING_COMMON Change to use RKP 
 			from_kuid(&init_user_ns, audit_get_loginuid(current)),
 			audit_get_sessionid(current));
 		enforcing_set(state, new_value);
