@@ -4,13 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       CLANG_AOSP:
-        description: 'Clang url'
+        description: 'input Clang url'
         required: true
-        default: 'https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/master-kernel-build-2021/clang-r383902.tar.gz'
+        default: ''
       GCC_AOSP:
-        description: 'GCC url'
+        description: 'input GCC url'
         required: true
-        default: 'https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9/+archive/refs/heads/android11-release.tar.gz'
+        default: ''
 
 jobs:
   build:
@@ -19,17 +19,15 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Display Inputs
+    - name: Preparing Toolchain
       run: |
-        echo "Displaying variables/inputs."
-        echo "Clang url: ${{ inputs.CLANG_AOSP }}"
-        echo "GCC url: ${{ inputs.GCC_AOSP }}"
+        CLANG=${{ inputs.CLANG_AOSP }}
+        GCC=${{ inputs.GCC_AOSP }}
         cd ${GITHUB_WORKSPACE}
-        ls
         mkdir toolchain2
         cd toolchain2
-        if [ ! -d clang ]; then mkdir clang && curl -Lsq "${{ inputs.CLANG_AOSP }}" -o clang.tgz && tar -xzf clang.tgz -C clang; fi
-        if [ ! -d gcc ]; then mkdir gcc && curl -Lsq "${{ inputs.GCC_AOSP }}" -o gcc.tgz && tar -xzf gcc.tgz -C gcc; fi
+        if [ ! -d clang ]; then mkdir clang && curl -Lsq "${CLANG}" -o clang.tgz && tar -xzf clang.tgz -C clang; fi
+        if [ ! -d gcc ]; then mkdir gcc && curl -Lsq "${GCC}" -o gcc.tgz && tar -xzf gcc.tgz -C gcc; fi
 
     - name: Start Building Rookie Kernel
       run: |
