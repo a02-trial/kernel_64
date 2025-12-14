@@ -41,14 +41,14 @@ jobs:
       with:
         artifacts: |
           ${{ github.workspace }}/*.zip
-        name: Compiled Kernel for ${{ DEVICE_NAME }} - ${{ steps.props.outputs.date }}
+        name: Compiled Kernel for SM-A022F - ${{ steps.props.outputs.date }}
         draft: false
         prerelease: false
         tag: ${{ github.run_id }}-${{ steps.props.outputs.date }}
         token: ${{ secrets.GITHUB_TOKEN }}
         body: |
           ## Notes
-            - Extract ${{ DEVICE_NAME }}-${{ steps.props.outputs.date }}.zip, look your newly-compiled kernel inside.
+            - Extract ${DEVICE_NAME}-${{ steps.props.outputs.date }}.zip, look your newly-compiled kernel inside.
             - Include building logs.
       
     - name: Link of Release
