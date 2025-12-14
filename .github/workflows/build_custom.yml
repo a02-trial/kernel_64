@@ -19,6 +19,12 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
+    - name: Display Inputs
+      run: |
+        echo "Displaying variables/inputs."
+        echo "Clang url: ${{ inputs.CLANG_AOSP }}"
+        echo "GCC url: ${{ inputs.GCC_AOSP }}"
+
     - name: Start Building Rookie Kernel
       run: |
         cd ${GITHUB_WORKSPACE}
