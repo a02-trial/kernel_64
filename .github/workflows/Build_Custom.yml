@@ -1,4 +1,3 @@
-
 name: Build Kernel With Custom Toolchain
 
 on:
@@ -12,7 +11,7 @@ on:
         description: 'GCC url with tar.gz format'
         required: true
         default: 'https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9/+archive/refs/heads/android11-release.tar.gz'
-      
+
 jobs:
   building kernel:
     runs-on: ubuntu-latest
@@ -58,5 +57,4 @@ jobs:
     - name: Link of Release
       run: |
         echo "Enjoy your Newly Built Kernel"
-        echo "https://github.com/${GITHUB_REPOSITORY}/releases/tag/${{ github.run_id }}-${{ steps.props.outputs.date }}"     
-    
+        echo "https://github.com/${GITHUB_REPOSITORY}/releases/tag/${{ github.run_id }}-${{ steps.props.outputs.date }}"
