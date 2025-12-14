@@ -18,9 +18,10 @@ jobs:
       run: |
         echo "date=$(TZ=Asia/Jakarta date +%Y%m%d-%I%M%p)" >> $GITHUB_OUTPUT
         
-    - name: Coba ganti nama folder
+    - name: Archiving Now!!
       run: |
         cd ${GITHUB_WORKSPACE}
+        rm *.zip
         export DEVICE_NAME="${SM-A022F}"
         zip -r9 ${DEVICE_NAME}-${{ steps.props.outputs.date }}.zip boot.img-kernel
         ls
@@ -40,7 +41,7 @@ jobs:
       uses: ncipollo/release-action@v1.12.0
       with:
         artifacts: |
-          ${GITHUB_REPOSITORY}/${DEVICE_NAME}-${{ steps.props.outputs.date }}.zip
+          ${DEVICE_NAME}-${{ steps.props.outputs.date }}.zip
         name: Compiled Kernel for ${DEVICE_NAME} - ${{ steps.props.outputs.date }}
         draft: false
         prerelease: false
