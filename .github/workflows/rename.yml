@@ -2,9 +2,6 @@ name: Change Folder Name
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - master
 
 jobs:
   download-and-commit:
@@ -16,16 +13,46 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
+    - name: Set Properties
+      id: props
+      run: |
+        echo "date=$(TZ=Asia/Jakarta date +%Y%m%d-%I%M%p)" >> $GITHUB_OUTPUT
+        
     - name: Coba ganti nama folder
       run: |
         cd ${GITHUB_WORKSPACE}
-        zip -r9 kernel.zip boot.img-kernel
+        export KBUILD_BUILD_USER="${{ github.actor }}"
+        export KBUILD_BUILD_HOST="${{ github.event.inputs.DEVICE_NAME }}"
+        zip -r9 "${{ github.event.inputs.DEVICE_NAME }}-${{ steps.props.outputs.date }}.zip" boot.img-kernel
+        
     - name: Configure Git
       run: |
         git config user.name "github-actions[bot]"
         git config user.email "actions@github.com"
+        
     - name: Add and Commit file
       run: |
         git add *
         git commit -m "Savage"
         git push
+        
+    - name: Release
+      uses: ncipollo/release-action@v1.12.0
+      with:
+        artifacts: |
+          ${GITHUB_WORKSPACE}/*.zip
+          ${GITHUB_WORKSPACE}/build.log
+        name: Compiled Kernel for ${{ github.event.inputs.DEVICE_NAME }} - ${{ steps.props.outputs.date }}
+        draft: false
+        prerelease: false
+        tag: ${{ github.run_id }}-${{ steps.props.outputs.date }}
+        token: ${{ secrets.GITHUB_TOKEN }}
+        body: |
+          ## Notes
+            - Extract ${{ github.event.inputs.DEVICE_NAME }}-${{ steps.props.outputs.date }}.zip, look your newly-compiled kernel inside.
+            - Include building logs.
+      
+    - name: Link of Release
+      run: |
+        echo "Enjoy your Newly Built Kernel"
+        echo "https://github.com/${GITHUB_REPOSITORY}/releases/tag/${{ github.run_id }}-${{ steps.props.outputs.date }}"     
