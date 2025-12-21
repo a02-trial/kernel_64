@@ -1,10 +1,14 @@
 #!/bin/sh
 
 set -e -x
+cd ${GITHUB_WORKSPACE}
 
 # custom toolchain preparation
-cd ${GITHUB_WORKSPACE}
-export PATH="${PWD}/toolchain2/clang/bin:${PWD}/toolchain2/gcc/bin:${PATH}"
+# export PATH="${PWD}/toolchain2/clang/bin:${PWD}/toolchain2/gcc/bin:${PATH}"
+
+# toolchain preparation
+export PATH="${PWD}/toolchain/clang/bin:${PWD}/toolchain/gcc/bin:${PATH}"
+
 mkdir -p out
 export KCFLAGS=-w
 export CONFIG_SECTION_MISMATCH_WARN_ONLY=y
