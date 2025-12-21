@@ -46,7 +46,9 @@ jobs:
       run: |
         cd ${GITHUB_WORKSPACE}
         export DEVICE_NAME=SM-A022F
-        zip -r9 ${DEVICE_NAME}-${{ steps.props.outputs.date }}.zip out
+        cd out/arch/arm
+        ls
+        zip -r9 ${DEVICE_NAME}-${{ steps.props.outputs.date }}.zip boot
 
     - name: Release
       uses: ncipollo/release-action@v1.12.0
