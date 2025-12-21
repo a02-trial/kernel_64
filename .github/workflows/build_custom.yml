@@ -45,8 +45,8 @@ jobs:
     - name: Make Zip
       run: |
         cd ${GITHUB_WORKSPACE}
-        export DEVICE_NAME=SM-A022F
         cd out/arch/arm
+        export DEVICE_NAME=SM-A022F
         ls
         zip -r9 ${DEVICE_NAME}-${{ steps.props.outputs.date }}.zip boot
 
