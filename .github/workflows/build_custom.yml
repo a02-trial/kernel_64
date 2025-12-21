@@ -44,9 +44,9 @@ jobs:
 
     - name: Make Zip
       run: |
-        cd ${GITHUB_WORKSPACE}/out/arch/arm/boot || exit 1
+        cd ${GITHUB_WORKSPACE}
         export DEVICE_NAME=SM-A022F
-        zip -r9 "${DEVICE_NAME}-${{ steps.props.outputs.date }}.zip" ./* -x "dts" -x "dts/*"
+        zip -r9 ${DEVICE_NAME}-${{ steps.props.outputs.date }}.zip out
 
     - name: Release
       uses: ncipollo/release-action@v1.12.0
