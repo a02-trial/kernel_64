@@ -13,6 +13,7 @@ fw-external-y := $(subst $(quote),,$(CONFIG_EXTRA_FIRMWARE))
 
 ifeq (,$(filter $(CONFIG_MTK_PLATFORM), "mt6739"))
 fw-external-$(CONFIG_TOUCHSCREEN_NT36xxx_HOSTDL_SPI_A02C) += tsp_novatek/nt36525_a02_csot.bin
+endif
 fw-external-$(CONFIG_TOUCHSCREEN_ILITEK_ILI9881X) += tsp_ilitek/ili9881x_a02.hex \
 							tsp_ilitek/ili9881x_a02_boe.hex \
 							tsp_ilitek/ili9882q_a02_boe.hex
