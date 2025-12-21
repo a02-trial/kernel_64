@@ -10,7 +10,6 @@ fwdir := $(subst $(quote),,$(CONFIG_EXTRA_FIRMWARE_DIR))
 fwabs := $(addprefix $(srctree)/,$(filter-out /%,$(fwdir)))$(filter /%,$(fwdir))
 
 fw-external-y := $(subst $(quote),,$(CONFIG_EXTRA_FIRMWARE))
-fw-external-$(CONFIG_FIVE_TEE_DRIVER) += five/ffffffff000000000000000000000072.tlbin
 
 ifeq (,$(filter $(CONFIG_MTK_PLATFORM), "mt6739"))
 fw-external-$(CONFIG_TOUCHSCREEN_NT36xxx_HOSTDL_SPI_A02C) += tsp_novatek/nt36525_a02_csot.bin
