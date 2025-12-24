@@ -48,7 +48,7 @@ jobs:
         cd out/arch/arm
         export DEVICE_NAME=SM-A022F
         ls
-        zip -r9 ${DEVICE_NAME}-${{ steps.props.outputs.date }}.zip boot
+        zip -r9 ${DEVICE_NAME}-${{ steps.props.outputs.date }}.zip *
 
     - name: Release
       uses: ncipollo/release-action@v1.12.0
