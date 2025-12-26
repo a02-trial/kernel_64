@@ -32,17 +32,6 @@ jobs:
           export DEVICE_NAME=SM-A022F
           zip -r9 ${DEVICE_NAME}-${{ steps.props.outputs.date }}.zip *
         
-      - name: Configure Git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "actions@github.com"
-        
-      - name: Add and Commit file
-        run: |
-          git add -A
-          git commit -m "Ready to download"
-          git push
-        
       - name: Release
         uses: ncipollo/release-action@v1.12.0
         with:
