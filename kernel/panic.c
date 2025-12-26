@@ -145,8 +145,8 @@ void panic(const char *fmt, ...)
 #ifdef CONFIG_SEC_DEBUG_EXTRA_INFO
 	struct pt_regs regs;
 
-	regs.regs[30] = _RET_IP_;
-	regs.pc = regs.regs[30] - sizeof(unsigned int);
+	regs.uregs[30] = _RET_IP_;
+	regs.pc = regs.uregs[30] - sizeof(unsigned int);
 #endif
 #endif
 	/*
