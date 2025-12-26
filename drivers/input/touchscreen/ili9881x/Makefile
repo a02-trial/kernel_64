@@ -2,6 +2,7 @@ ccflags-y += -Wall
 
 obj-y += ili9881x.o \
 	ili9881x_spi.o \
+	ili9881x_fw.h \
 	ili9881x_init.o \
 	ili9881x_ic.o \
 	ili9881x_touch.o \
