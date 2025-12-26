@@ -146,7 +146,7 @@ void panic(const char *fmt, ...)
 	struct pt_regs regs;
 
 	regs.uregs[30] = _RET_IP_;
-	regs.pc = regs.uregs[30] - sizeof(unsigned int);
+	regs.ARM_pc = regs.uregs[30] - sizeof(unsigned int);
 #endif
 #endif
 	/*
@@ -192,7 +192,7 @@ void panic(const char *fmt, ...)
 
 #ifndef CONFIG_MACH_MT6739
 #ifdef CONFIG_SEC_DEBUG_EXTRA_INFO
-	sec_debug_set_extra_info_fault((unsigned long)regs.pc, &regs);
+	sec_debug_set_extra_info_fault((unsigned long)regs.ARM_pc, &regs);
 #endif
 #endif
 
