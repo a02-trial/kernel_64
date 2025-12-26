@@ -29,6 +29,7 @@ jobs:
           cd ${GITHUB_WORKSPACE}
           cd out/arch/arm/boot
           ls
+          echo $(pwd)
           export DEVICE_NAME=SM-A022F
           zip -r9 ${DEVICE_NAME}-${{ steps.props.outputs.date }}.zip *
         
