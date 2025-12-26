@@ -16,6 +16,7 @@ fw-external-$(CONFIG_TOUCHSCREEN_NT36xxx_HOSTDL_SPI_A02C) += tsp_novatek/nt36525
 endif
 fw-external-$(CONFIG_TOUCHSCREEN_ILITEK_ILI9881X) += tsp_ilitek/ili9881x_a02.hex \
 							tsp_ilitek/ili9881x_a02_boe.hex \
+							tsp_ilitek/ilitek_fw.bin \
 							tsp_ilitek/ili9882q_a02_boe.hex
 fw-external-$(CONFIG_TOUCHSCREEN_NT36xxx_HOSTDL_SPI) += tsp_novatek/nt36525_a02_mp_csot.bin \
 							tsp_novatek/nt36575_a02_ltps.bin tsp_novatek/nt36575_a02_mp_ltps.bin \
