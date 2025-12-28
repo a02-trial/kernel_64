@@ -4,10 +4,10 @@ set -e -x
 cd ${GITHUB_WORKSPACE}
 
 # custom toolchain preparation
-# export PATH="${PWD}/toolchain2/clang/bin:${PWD}/toolchain2/gcc/bin:${PATH}"
+export PATH="${PWD}/toolchain2/clang/bin:${PWD}/toolchain2/gcc/bin:${PATH}"
 
 # toolchain preparation
-export PATH="$(pwd)/toolchain/clang/bin:${PWD}/toolchain/gcc/bin:${PATH}"
+# export PATH="$(pwd)/toolchain/clang/bin:${PWD}/toolchain/gcc/bin:${PATH}"
 rm -rf out
 mkdir -p out
 
