@@ -3,7 +3,7 @@ name: Build Kernel
 on: workflow_dispatch
 
 jobs:
-  run-script-file-job:
+  building-kernel:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -11,7 +11,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         
-      - name: Start Building Rookie Kernel
+      - name: Start Building RooXie Kernel for SM-A022F
         run: |
           cd ${GITHUB_WORKSPACE}
           export KBUILD_BUILD_USER="${{ github.actor }}"
@@ -28,8 +28,6 @@ jobs:
         run: |
           cd ${GITHUB_WORKSPACE}
           cd out/arch/arm/boot
-          ls
-          echo $(pwd)
           export DEVICE_NAME=SM-A022F
           zip -r9 ${DEVICE_NAME}-${{ steps.props.outputs.date }}.zip *
           cp *.zip ${{ github.workspace }}/.
