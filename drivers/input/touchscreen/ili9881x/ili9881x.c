@@ -513,8 +513,9 @@ int ili_sleep_handler(int mode)
 		sense_stop = false;
 	else
 		sense_stop = true;
-	/* If you want to add other mode, must check sleep_handler_mode condition. */
+
 	switch (mode) {
+
 	case TP_EARLY_SUSPEND:
 		ilits->tp_suspend = true;
 		if (sense_stop) {
@@ -523,9 +524,7 @@ int ili_sleep_handler(int mode)
 			if (ili_ic_check_busy(50, 20) < 0)
 				input_err(true, ilits->dev, "%s Check busy timeout during suspend\n", __func__);
 		}
-		input_info(true, ilits->dev, "%s prox_power_off:%d, prox_face_mode:%d, gesture:%d, ges_sym:0x%x, incell_power_state:%d\n",
-				__func__, ilits->prox_power_off, ilits->prox_face_mode,
-				ilits->gesture, ilits->ges_sym, ilits->incell_power_state);
+
 		if (ilits->prox_face_mode || ilits->gesture) {
 			ili_incell_power_control(ENABLE);
 			ilits->power_status = LP_AOT_STATUS;
@@ -551,15 +550,18 @@ int ili_sleep_handler(int mode)
 			ilitek_pin_control(false);
 			ilits->power_status = POWER_OFF_STATUS;
 		}
+
 		ilits->screen_off_sate = TP_EARLY_SUSPEND;
 		ilits->sleep_handler_mode = mode;
 		break;
+
 	case TP_EARLY_RESUME:
-		input_info(true, ilits->dev, "%s ilits->power_status:%d, ges_sym:0x%x\n",
-				__func__, ilits->power_status, ilits->ges_sym);
-		if ((ilits->power_status != POWER_OFF_STATUS) && (ilits->power_status != POWER_ON_STATUS)
-			&& !ilits->tp_shutdown) {
+		if ((ilits->power_status != POWER_OFF_STATUS) &&
+			(ilits->power_status != POWER_ON_STATUS) &&
+			!ilits->tp_shutdown) {
+
 			ili_irq_wake_disable();
+
 			if (ilits->power_status == LP_PROX_STATUS) {
 				ilits->actual_tp_mode = P5_X_FW_AP_MODE;
 				ili_ic_func_ctrl("sleep", 0x01);
@@ -570,25 +572,23 @@ int ili_sleep_handler(int mode)
 				ilits->prox_power_off = 0;
 				ilits->prox_lp_scan_mode_enabled = false;
 			}
-			if ((ilits->power_status != LP_FACTORY_STATUS) && !ilits->tp_shutdown) {
-				if ((ilits->chip->id == ILI7807_CHIP) || (ilits->chip->id == ILI9882_CHIP)) {
-					ilitek_pin_control(false);
-					usleep_range(5 * 1000, 5 * 1000);
-					ili_incell_power_control(DISABLE);
-				} else {
-					ili_incell_power_control(DISABLE);
-					ilitek_pin_control(false);
-				}
+
+			if ((ilits->power_status != LP_FACTORY_STATUS) &&
+				!ilits->tp_shutdown) {
+
+				ili_incell_power_control(DISABLE);
+				ilitek_pin_control(false);
 				ilits->power_status = POWER_OFF_STATUS;
 				usleep_range(15000, 15000);
 			}
 		}
+
 		ilits->screen_off_sate = TP_EARLY_RESUME;
 		break;
+
 	case TP_RESUME:
 #if !RESUME_BY_DDI
 		ilits->power_status = POWER_ON_STATUS;
-		/* Set tp as demo mode and reload code if it's iram. */
 		ilits->actual_tp_mode = P5_X_FW_AP_MODE;
 		ilits->screen_off_sate = TP_RESUME;
 
@@ -596,10 +596,10 @@ int ili_sleep_handler(int mode)
 
 		if (ilits->fw_upgrade_mode == UPGRADE_IRAM) {
 			if (ili_fw_upgrade_handler(NULL) < 0)
-				input_err(true, ilits->dev, "%sFW upgrade failed during resume\n", __func__);
+				input_err(true, ilits->dev, "%s FW upgrade failed during resume\n", __func__);
 		} else {
 			if (ili_reset_ctrl(ilits->reset) < 0)
-				input_err(true, ilits->dev, "%sTP Reset failed during resume\n", __func__);
+				input_err(true, ilits->dev, "%s TP Reset failed during resume\n", __func__);
 			ili_ic_func_ctrl_reset();
 		}
 
@@ -608,21 +608,28 @@ int ili_sleep_handler(int mode)
 		ilits->proxmity_face = false;
 #endif
 #endif
+		/* ===== FIX INTI RESUME ILI9881X ===== */
+
+		/* tunggu IC stabil total */
+		if (ilits->rst_edge_delay < 120)
+			msleep(120);
+		else
+			msleep(ilits->rst_edge_delay);
+
+		msleep(50);
+
+		/* IC harus NORMAL sebelum IRQ */
+		set_current_ic_mode(SET_MODE_NORMAL);
+		msleep(20);
+
+		/* IRQ setelah IC siap */
+		ili_irq_enable();
+
+		/* baru ESD & BAT */
+		msleep(10);
 		ili_wq_ctrl(WQ_ESD, ENABLE);
 		ili_wq_ctrl(WQ_BAT, ENABLE);
-		
-		/* ILI9881X needs longer delay after reset */
-		if (ilits->rst_edge_delay < 120)
-				msleep(120);
-		else
-				msleep(ilits->rst_edge_delay);
-		
-		/* extra guard before enabling IRQ */
-		msleep(50);
-		
-		set_current_ic_mode(SET_MODE_NORMAL);
-		
-		ili_irq_enable();
+
 		ilits->sleep_handler_mode = mode;
 		break;
 	}
@@ -641,7 +648,10 @@ int ili_sleep_handler(int mode)
 	ili_touch_release_all_point();
 	atomic_set(&ilits->tp_sleep, END);
 	mutex_unlock(&ilits->touch_mutex);
-	input_info(true, ilits->dev, "%s end (mode %d)\n", __func__, ilits->sleep_handler_mode);
+
+	input_info(true, ilits->dev, "%s end (mode %d)\n",
+		__func__, ilits->sleep_handler_mode);
+
 	return ret;
 }
 
