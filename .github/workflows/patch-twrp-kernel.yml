@@ -13,33 +13,24 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Show kernel tree (debug)
+      - name: Locate ili9881x source
         run: |
-          ls
-          ls drivers/input/touchscreen || true
-
-      - name: Verify patch file exists
-        run: |
-          if [ ! -f patches/ili9881x_twrp_input_fix.patch ]; then
-            echo "Patch file not found!"
-            exit 1
-          fi
+          find . -name "*ili9881x*.c"
 
       - name: Apply TWRP input patch
         run: |
-          patch -p1 < patches/ili9881x_twrp_input_fix.patch
+          git apply --verbose patches/ili9881x_twrp_input_fix.patch
 
-      - name: Verify patch result
+      - name: Verify patch applied
         run: |
-          grep -R "input_register_device" drivers/input/touchscreen/patched_ili9881x.c
+          grep -R "input_register_device" . | head -n 5
 
-      - name: Commit patched source
+      - name: Commit changes
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-          git add drivers/input/touchscreen/patched_ili9881x.c
-          git commit -m "twrp: fix ilitek touchscreen input subsystem" || echo "Nothing to commit"
+          git status
+          git commit -am "twrp: fix ilitek touchscreen input subsystem" || echo "Nothing to commit"
 
       - name: Push changes
-        run: |
-          git push
+        run: git push
