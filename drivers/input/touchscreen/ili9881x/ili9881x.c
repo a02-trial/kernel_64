@@ -290,7 +290,11 @@ static void ilitek_tddi_wq_esd_check(struct work_struct *work)
 	mutex_lock(&ilits->touch_mutex);
 	if (ilits->esd_recover() < 0) {
 		input_err(true, ilits->dev, "%s SPI ACK failed, doing spi recovery\n", __func__);
-		ili_spi_recovery();
+		if (strstr(saved_command_line, "recovery")) {
+        input_info(true, ilits->dev, "[ILI] Skip SPI recovery in recovery mode\n");
+    } else {
+        ili_spi_recovery();
+    }
 	}
 	mutex_unlock(&ilits->touch_mutex);
 	complete_all(&ilits->esd_done);
@@ -892,7 +896,11 @@ int ili_report_handler(void)
 				ilits->irq_after_recovery = true;
 			} else {
 				input_err(true, ilits->dev, "%s SPI ACK failed, doing spi recovery\n", __func__);
-				ili_spi_recovery();
+				if (strstr(saved_command_line, "recovery")) {
+        input_info(true, ilits->dev, "[ILI] Skip SPI recovery in recovery mode\n");
+    } else {
+        ili_spi_recovery();
+    }
 				ilits->irq_after_recovery = true;
 			}
 		}
