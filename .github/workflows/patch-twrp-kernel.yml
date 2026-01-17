@@ -1,36 +1,31 @@
-name: Patch TWRP Touchscreen (ILI9881x)
+name: TWRP Touchscreen Fix (ILI9881x)
 
 on:
   workflow_dispatch:
 
 jobs:
-  apply-patch:
+  twrp-touch-fix:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout kernel source
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Locate ili9881x source
+      - name: Locate ili9881x driver
+        id: find
         run: |
-          find . -name "*ili9881x*.c"
+          FILE=$(find . -name "*ili9881x*.c" | head -n 1)
+          if [ -z "$FILE" ]; then
+            echo "ili9881x driver not found"
+            exit 1
+          fi
+          echo "file=$FILE" >> $GITHUB_OUTPUT
+          echo "Found: $FILE"
 
-      - name: Apply TWRP input patch
+      - name: Inject TWRP input support
         run: |
-          git apply --verbose patches/ili9881x_twrp_input_fix.patch
+          FILE="${{ steps.find.outputs.file }}"
 
-      - name: Verify patch applied
-        run: |
-          grep -R "input_register_device" . | head -n 5
-
-      - name: Commit changes
-        run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          git status
-          git commit -am "twrp: fix ilitek touchscreen input subsystem" || echo "Nothing to commit"
-
-      - name: Push changes
-        run: git push
+          # add headers if missing
+          grep -q "<linux/input.h>" "$FILE" || \
+            sed -i '/#include <linux\/delay.h>/a #include
