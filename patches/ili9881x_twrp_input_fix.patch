@@ -1,0 +1,78 @@
+diff --git a/drivers/input/touchscreen/patched_ili9881x.c b/drivers/input/touchscreen/patched_ili9881x.c
+index 1111111..2222222 100644
+--- a/drivers/input/touchscreen/patched_ili9881x.c
++++ b/drivers/input/touchscreen/patched_ili9881x.c
+@@ -45,6 +45,8 @@
+ #include <linux/spi/spi.h>
+ #include <linux/of_gpio.h>
+ #include <linux/delay.h>
++#include <linux/input.h>
++#include <linux/input/mt.h>
+
+ struct ilitek_ts {
+     struct spi_device *spi;
+@@ -52,6 +54,7 @@ struct ilitek_ts {
+     int irq_gpio;
+     int reset_gpio;
+     int irq;
++    struct input_dev *input;
+     int max_x;
+     int max_y;
+ };
+
+@@ -300,6 +303,56 @@ static int ilitek_power_on(struct ilitek_ts *ts)
+     return 0;
+ }
+
++static int ilitek_input_init(struct ilitek_ts *ts)
++{
++    int ret;
++
++    ts->input = input_allocate_device();
++    if (!ts->input)
++        return -ENOMEM;
++
++    ts->input->name = "ili9881x-touch";
++    ts->input->id.bustype = BUS_SPI;
++    ts->input->dev.parent = &ts->spi->dev;
++
++    __set_bit(EV_SYN, ts->input->evbit);
++    __set_bit(EV_ABS, ts->input->evbit);
++    __set_bit(EV_KEY, ts->input->evbit);
++    __set_bit(BTN_TOUCH, ts->input->keybit);
++
++    input_set_abs_params(ts->input, ABS_MT_POSITION_X, 0, ts->max_x, 0, 0);
++    input_set_abs_params(ts->input, ABS_MT_POSITION_Y, 0, ts->max_y, 0, 0);
++    input_set_abs_params(ts->input, ABS_MT_PRESSURE, 0, 255, 0, 0);
++
++    ret = input_mt_init_slots(ts->input, 10, INPUT_MT_DIRECT);
++    if (ret) {
++        input_free_device(ts->input);
++        return ret;
++    }
++
++    ret = input_register_device(ts->input);
++    if (ret) {
++        input_free_device(ts->input);
++        return ret;
++    }
++
++    return 0;
++}
++
+ static int ilitek_ts_probe(struct spi_device *spi)
+ {
+     struct ilitek_ts *ts;
+@@ -350,6 +403,12 @@ static int ilitek_ts_probe(struct spi_device *spi)
+         goto err_power;
+     }
+
++    ret = ilitek_input_init(ts);
++    if (ret) {
++        dev_err(&spi->dev, "input init failed\n");
++        goto err_power;
++    }
++
+     ret = request_threaded_irq(ts->irq, NULL,
+         ilitek_irq_handler,
+         IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
