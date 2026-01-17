@@ -1,5 +1,5 @@
 /*
- * ILITEK Touch IC driver
+ * ILITEK Touch IC driver_fix
  *
  * Copyright (C) 2011 ILI Technology Corporation.
  *
