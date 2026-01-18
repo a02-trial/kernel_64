@@ -35,9 +35,8 @@ jobs:
 
     - name: Setup Clang
       run: |
-        cd ${GITHUB_WORKSPACE}
+        cd ${GITHUB_WORKSPACE}/work/myKernel
         ls
-        cd /work/myKernel
         mkdir toolchain && cd toolchain
         mkdir -p clang && cd clang
         mv ${GITHUB_WORKSPACE}/toolchain/clang .
