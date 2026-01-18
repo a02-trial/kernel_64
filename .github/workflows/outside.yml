@@ -1,4 +1,4 @@
-name: Fast_Builder
+name: outside
 
 on: 
   workflow_dispatch:
@@ -36,6 +36,7 @@ jobs:
     - name: Setup Clang
       run: |
         cd ${GITHUB_WORKSPACE}
+        ls
         cd /work/myKernel
         mkdir toolchain && cd toolchain
         mkdir -p clang && cd clang
