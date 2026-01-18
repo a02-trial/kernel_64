@@ -1,0 +1,16 @@
+#!/bin/sh
+
+set -e -x
+
+cd ${GITHUB_WORKSPACE}
+echo $PWD
+ls
+cd work/myKernel/toolchain
+export PATH="${PWD}/clang/bin:${PWD}/gcc/bin:${PATH}"
+cd ..
+echo $PATH
+echo $PWD
+
+make mrproper && rm -rf out && mkdir -p out
+make O=out KCFLAGS="-w -ffreestanding" ARCH=arm CROSS_COMPILE=arm-linux-androideabi- CC=clang HOSTCC=clang a02_defconfig
+make O=out KCFLAGS="-w -ffreestanding" ARCH=arm CROSS_COMPILE=arm-linux-androideabi- CC=clang HOSTCC=clang -j$(nproc) zImage 2>&1 | tee build.log 
