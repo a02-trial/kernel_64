@@ -21,8 +21,13 @@ jobs:
     - name: Prepare the environment
       run: |
         sudo apt-get install -y build-essential bc gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi libssl-dev libfl-dev
-        sudo apt install python2
-        sudo ln -s /usr/bin/python2 /usr/bin/python
+        cd ${GITHUB_WORKSPACE}
+        wget https://www.python.org/ftp/python/2.7.18/Python-2.7.18.tgz
+        tar -xzf Python-2.7.18.tgz
+        cd Python-2.7.18
+        ./configure --prefix=/usr/local/python2
+        make -j4
+        sudo make install
 
     - name: Setup Kernel Source
       run: |
