@@ -21,6 +21,8 @@ jobs:
     - name: Prepare the environment
       run: |
         sudo apt-get install -y build-essential bc gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi libssl-dev libfl-dev
+        sudo apt install python2
+        sudo ln -s /usr/bin/python2 /usr/bin/python
 
     - name: Setup Kernel Source
       run: |
@@ -46,6 +48,8 @@ jobs:
     - name: Building Kernel
       run: |
         cd ${GITHUB_WORKSPACE}
+        rm -f work/myKernel/scripts/dtc/dtc-lexer.lex.c
+        rm -f work/myKernel/scripts/dtc/dtc-parser.tab.c
         chmod +x build
         ./build
 
