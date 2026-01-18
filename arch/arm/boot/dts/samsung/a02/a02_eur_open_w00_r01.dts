@@ -2209,3 +2209,24 @@
 	dtbo-hw_rev = <1>;
 	dtbo-hw_rev_end = <5>;
 };
+
+&spi0 {
+    status = "okay";
+
+    ilitek@41 {
+        compatible = "ilitek,ili9881x";
+        reg = <0x41>;
+        spi-max-frequency = <9600000>;
+
+        reset-gpio = <&pio 45 GPIO_ACTIVE_LOW>;
+        irq-gpio   = <&pio 46 GPIO_ACTIVE_LOW>;
+
+        interrupt-parent = <&pio>;
+        interrupts = <46 IRQ_TYPE_LEVEL_LOW>;
+
+        vdd-supply = <&reg_vgp2>;
+        vcc-supply = <&reg_vgp1>;
+
+        status = "okay";
+    };
+};
