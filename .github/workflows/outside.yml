@@ -30,23 +30,21 @@ jobs:
         cd ${GITHUB_WORKSPACE}
         export KBUILD_BUILD_USER="${{ github.actor }}"
         export KBUILD_BUILD_HOST="${{ github.event.inputs.DEVICE_NAME }}"
-        chmod +x kernel
-        ./kernel
+        chmod +x kernels
+        ./kernels
 
     - name: Setup Clang
       run: |
-        cd /home/runner/work/kernel_builder/kernel_builder/work/myKernel
+        cd ${GITHUB_WORKSPACE}
+        cd /work/myKernel
         mkdir toolchain && cd toolchain
-        mkdir clang && cd clang
-        mv ${GITHUB_WORKSPACE}/clang .
+        mkdir -p clang && cd clang
+        mv ${GITHUB_WORKSPACE}/toolchain/clang .
+        cd .. && mkdir -p gcc && cd gcc
+        mv ${GITHUB_WORKSPACE}/toolchain/gcc .
+        cd ..
         ls
         echo -------------------------------- C L A N G --------------------------------------------
-
-    - name: Setup Gcc
-      run: |
-        cd ${GITHUB_WORKSPACE}
-        chmod +x gcc11
-        ./gcc11
 
     - name: Building Kernel
       run: |
