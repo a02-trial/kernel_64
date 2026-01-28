@@ -11,42 +11,53 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v4
 
-      - name: Setup AIK-Linux
+      - name: Setup AIK & Amunisi
         run: |
           sudo apt-get update
           sudo apt-get install -y p7zip-full cpio python3
           
-          # Clone langsung ke folder spesifik
-          git clone https://github.com/osm0sis/Android-Image-Kitchen.git ${GITHUB_WORKSPACE}/AIK
+          # Clone AIK ke folder sementara
+          git clone https://github.com/osm0sis/Android-Image-Kitchen.git temp_aik
           
-          # Hajar permission semua file di dalemnya
-          chmod -R 755 ${GITHUB_WORKSPACE}/AIK
+          # PINDAHKAN SEMUA ISI AIK KE ROOT (Biar sejajar sama recovery.img & zImage)
+          cp -r temp_aik/* .
+          rm -rf temp_aik
+          
+          # Hajar permission semua script di root
+          chmod -R 755 *.sh
+          chmod -R 755 tools/
+          
+          # Cek mata-mata (buat mastiin file sejajar)
+          ls -F
 
       - name: Repack Process
         run: |
-          # 1. Definisikan folder AIK biar gak ngetik panjang
-          AIK_DIR="${GITHUB_WORKSPACE}/AIK"
+          echo "--- 1. CEK FILE UTAMA ---"
+          if [ ! -f "recovery.img" ] || [ ! -f "zImage" ]; then
+            echo "ERROR: recovery.img atau zImage GAK ADA DI ROOT REPO!"
+            exit 1
+          fi
+
+          echo "--- 2. PROSES UNPACK ---"
+          # Jalankan langsung karena sudah di root
+          ./unpackimg.sh recovery.img
           
-          # 2. Copy file utama ke dalem AIK
-          cp ${GITHUB_WORKSPACE}/recovery.img ${AIK_DIR}/
-          cp ${GITHUB_WORKSPACE}/zImage ${AIK_DIR}/zImage_new
+          echo "--- 3. SWAP KERNEL ---"
+          # Karena sudah di unpack, folder split_img otomatis muncul di root
+          cp zImage split_img/recovery.img-kernel
           
-          # 3. Jalankan script langsung dari foldernya (tanpa cd)
-          echo "--- PROSES UNPACK ---"
-          bash ${AIK_DIR}/unpackimg.sh ${AIK_DIR}/recovery.img
+          echo "--- 4. PROSES REPACK ---"
+          ./repackimg.sh
           
-          echo "--- GANTI KERNEL ---"
-          # AIK bakal bikin folder split_img di dalem folder AIK
-          cp ${AIK_DIR}/zImage_new ${AIK_DIR}/split_img/recovery.img-kernel
-          
-          echo "--- PROSES REPACK ---"
-          bash ${AIK_DIR}/repackimg.sh --workingdir ${AIK_DIR}
-          
-          # 4. Ambil hasilnya (biasanya image-new.img ada di folder tempat script dijalankan)
+          echo "--- 5. RENAME HASIL ---"
           DATE_TIME=$(TZ='Asia/Jakarta' date +"%d%b_%I_%M%p")
-          
-          # Cek dulu filenya ada dimana, lalu pindahin
-          find ${AIK_DIR} -name "image-new.img" -exec mv {} ${GITHUB_WORKSPACE}/TWRP-A02-RooXie-${DATE_TIME}.img \;
+          # AIK bakal keluarin file image-new.img di root
+          if [ -f "image-new.img" ]; then
+            mv image-new.img TWRP-A02-RooXie-${DATE_TIME}.img
+          else
+            echo "ERROR: image-new.img gagal ke-buat!"
+            exit 1
+          fi
 
       - name: Upload Repacked Recovery
         uses: actions/upload-artifact@v4
