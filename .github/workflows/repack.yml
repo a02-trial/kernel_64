@@ -11,64 +11,56 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v4
 
-      - name: Setup AIK (The Right Way)
+      - name: Setup AIK (SebaUbuntu Mirror)
         run: |
           sudo apt-get update
-          sudo apt-get install -y p7zip-full cpio python3 curl
+          sudo apt-get install -y p7zip-full cpio python3
           
-          # 1. Clone AIK-Linux (Branch yang lu sidak tadi)
-          git clone --depth=1 -b AIK-Linux https://github.com/osm0sis/Android-Image-Kitchen.git AIK
+          # 1. Clone repo temuan si Intel GitHub (Lu, Bro!)
+          git clone --depth=1 https://github.com/SebaUbuntu/AIK-Linux-mirror.git AIK
           
-          # 2. DOWNLOAD BINARY DARI REPO PUBLIC LAIN
-          # Karena osm0sis misahin binary-nya, kita ambil dari penyedia binary yang open
-          mkdir -p AIK/bin/linux/x86_64
-          
-          # Kita download langsung unpackbootimg & mkbootimg (dua sejoli paling penting)
-          curl -L https://raw.githubusercontent.com/carliv/Android_Image_Kitchen_64bit/master/bin/linux/x86_64/unpackbootimg -o AIK/bin/linux/x86_64/unpackbootimg
-          curl -L https://raw.githubusercontent.com/carliv/Android_Image_Kitchen_64bit/master/bin/linux/x86_64/mkbootimg -o AIK/bin/linux/x86_64/mkbootimg
-          
-          # 3. Kasih izin eksekusi
+          # 2. Hajar permission (Penting biar binary-nya bisa 'nembak')
           chmod -R 755 AIK
-          chmod +x AIK/bin/linux/x86_64/*
+          find AIK/bin -type f -exec chmod 755 {} +
 
       - name: Repack Process
         run: |
-          # Bahan-bahan
+          # Ambil amunisi
           cp recovery.img AIK/
           cp zImage AIK/zImage_new
           
           cd AIK || exit 1
           
-          echo "--- CEK BINARY ---"
+          echo "--- CEK KESIAPAN SENJATA ---"
           ls -l bin/linux/x86_64/
           
           echo "--- PROSES UNPACK ---"
-          # Paksa jalanin unpack
+          # Paksa jalanin script unpack
           bash unpackimg.sh recovery.img
           
-          echo "--- SWAP KERNEL ---"
+          echo "--- SWAP KERNEL (THE MOMENT OF TRUTH) ---"
           if [ -d "split_img" ]; then
              cp zImage_new split_img/recovery.img-kernel
-             echo "Kernel diganti!"
+             echo "Kernel lama ditiban kernel baru (RooXie Version)!"
           else
-             echo "ERROR: split_img gak muncul. Log sistem:"
-             ls -R
+             echo "ERROR: split_img gagal dibuat! Berarti unpack gagal."
              exit 1
           fi
           
           echo "--- PROSES REPACK ---"
           bash repackimg.sh
           
-          echo "--- ANGKUT HASIL ---"
+          echo "--- ANGKUT HASIL AKHIR ---"
           DATE_TIME=$(TZ='Asia/Jakarta' date +"%d%b_%I_%M%p")
           if [ -f "image-new.img" ]; then
              mv image-new.img ../TWRP-A02-RooXie-${DATE_TIME}.img
+             echo "REPACK SUKSES, BROOHH!"
           else
-             echo "ERROR: image-new.img gagal!" && exit 1
+             echo "ERROR: image-new.img tidak ditemukan!" && exit 1
           fi
 
       - name: Upload Repacked Recovery
         uses: actions/upload-artifact@v4
         with:
-          name: Recovery-TWRP-A02
+          name: Recovery-TWRP-A02-Mateng
           path: TWRP-A02-*.img
