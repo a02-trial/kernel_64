@@ -11,53 +11,38 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v4
 
-      - name: Setup AIK & Amunisi
+      - name: Setup & Process AIK
         run: |
+          # 1. Install alat tempur
           sudo apt-get update
           sudo apt-get install -y p7zip-full cpio python3
           
-          # Clone AIK ke folder sementara
-          git clone https://github.com/osm0sis/Android-Image-Kitchen.git temp_aik
+          # 2. Clone AIK ke folder 'AIK'
+          git clone https://github.com/osm0sis/Android-Image-Kitchen.git AIK
           
-          # PINDAHKAN SEMUA ISI AIK KE ROOT (Biar sejajar sama recovery.img & zImage)
-          cp -r temp_aik/* .
-          rm -rf temp_aik
+          # 3. Kasih izin eksekusi (Full Power)
+          chmod -R 755 AIK
           
-          # Hajar permission semua script di root
-          chmod -R 755 *.sh
-          chmod -R 755 tools/
+          # 4. Ambil amunisi dari root repo masukin ke folder AIK
+          cp recovery.img AIK/
+          cp zImage AIK/zImage_new
           
-          # Cek mata-mata (buat mastiin file sejajar)
-          ls -F
-
-      - name: Repack Process
-        run: |
-          echo "--- 1. CEK FILE UTAMA ---"
-          if [ ! -f "recovery.img" ] || [ ! -f "zImage" ]; then
-            echo "ERROR: recovery.img atau zImage GAK ADA DI ROOT REPO!"
-            exit 1
-          fi
-
-          echo "--- 2. PROSES UNPACK ---"
-          # Jalankan langsung karena sudah di root
-          ./unpackimg.sh recovery.img
-          
-          echo "--- 3. SWAP KERNEL ---"
-          # Karena sudah di unpack, folder split_img otomatis muncul di root
-          cp zImage split_img/recovery.img-kernel
-          
-          echo "--- 4. PROSES REPACK ---"
-          ./repackimg.sh
-          
-          echo "--- 5. RENAME HASIL ---"
-          DATE_TIME=$(TZ='Asia/Jakarta' date +"%d%b_%I_%M%p")
-          # AIK bakal keluarin file image-new.img di root
-          if [ -f "image-new.img" ]; then
-            mv image-new.img TWRP-A02-RooXie-${DATE_TIME}.img
-          else
-            echo "ERROR: image-new.img gagal ke-buat!"
-            exit 1
-          fi
+          # 5. Eksekusi di dalam folder AIK (Gunakan subshell)
+          (
+            cd AIK
+            echo "--- MULAI UNPACK ---"
+            ./unpackimg.sh recovery.img
+            
+            echo "--- GANTI KERNEL ---"
+            cp zImage_new split_img/recovery.img-kernel
+            
+            echo "--- MULAI REPACK ---"
+            ./repackimg.sh
+            
+            echo "--- RENAME HASIL ---"
+            DATE_TIME=$(TZ='Asia/Jakarta' date +"%d%b_%I_%M%p")
+            mv image-new.img ../TWRP-A02-RooXie-${DATE_TIME}.img
+          )
 
       - name: Upload Repacked Recovery
         uses: actions/upload-artifact@v4
