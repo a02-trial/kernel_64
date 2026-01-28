@@ -11,35 +11,29 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v4
 
-      - name: Setup AIK Mateng
+      - name: Setup AIK (The Right Way)
         run: |
           sudo apt-get update
-          sudo apt-get install -y p7zip-full cpio python3
+          sudo apt-get install -y p7zip-full cpio python3 curl
           
-          # 1. Download AIK-Linux versi rilis yang isinya LENGKAP
-          # Kita pake link download langsung dari server osm0sis (v3.8)
-          curl -L "https://forum.xda-developers.com/attachments/aik-linux-v3-8-all-static-tar-gz.5300923/" -o AIK.tar.gz || \
-          curl -L "https://github.com/osm0sis/Android-Image-Kitchen/archive/refs/heads/AIK-Linux.zip" -o AIK.zip
+          # 1. Clone AIK-Linux (Branch yang lu sidak tadi)
+          git clone --depth=1 -b AIK-Linux https://github.com/osm0sis/Android-Image-Kitchen.git AIK
           
-          # 2. Ekstrak (Karena kita gak yakin formatnya, kita hajar pake cara manual)
-          mkdir AIK
-          # Kita coba pake trik lain: Clone repo tapi download binary manual kalau masih kosong
-          # TAPI, cara paling gampang adalah ambil dari folder 'bin' yang emang buat Linux
-          git clone --depth=1 -b AIK-Linux https://github.com/osm0sis/Android-Image-Kitchen.git AIK_TMP
-          cp -r AIK_TMP/* AIK/
+          # 2. DOWNLOAD BINARY DARI REPO PUBLIC LAIN
+          # Karena osm0sis misahin binary-nya, kita ambil dari penyedia binary yang open
+          mkdir -p AIK/bin/linux/x86_64
           
-          # 3. DOWNLOAD BINARY MANUAL (Karena GitHub AIK isinya kosong)
-          # Kita ambil binary 'unpackbootimg' dkk yang udah dicompile buat Linux
-          git clone --depth=1 https://github.com/nand-sethu/Android-Image-Kitchen-Linux.git AIK_FIX
-          cp -r AIK_FIX/bin/* AIK/bin/
+          # Kita download langsung unpackbootimg & mkbootimg (dua sejoli paling penting)
+          curl -L https://raw.githubusercontent.com/carliv/Android_Image_Kitchen_64bit/master/bin/linux/x86_64/unpackbootimg -o AIK/bin/linux/x86_64/unpackbootimg
+          curl -L https://raw.githubusercontent.com/carliv/Android_Image_Kitchen_64bit/master/bin/linux/x86_64/mkbootimg -o AIK/bin/linux/x86_64/mkbootimg
           
-          # 4. Hajar Permission
+          # 3. Kasih izin eksekusi
           chmod -R 755 AIK
-          find AIK/bin -type f -exec chmod 755 {} +
+          chmod +x AIK/bin/linux/x86_64/*
 
       - name: Repack Process
         run: |
-          # Amunisi
+          # Bahan-bahan
           cp recovery.img AIK/
           cp zImage AIK/zImage_new
           
@@ -49,6 +43,7 @@ jobs:
           ls -l bin/linux/x86_64/
           
           echo "--- PROSES UNPACK ---"
+          # Paksa jalanin unpack
           bash unpackimg.sh recovery.img
           
           echo "--- SWAP KERNEL ---"
@@ -56,7 +51,9 @@ jobs:
              cp zImage_new split_img/recovery.img-kernel
              echo "Kernel diganti!"
           else
-             echo "ERROR: Unpack gagal total!" && exit 1
+             echo "ERROR: split_img gak muncul. Log sistem:"
+             ls -R
+             exit 1
           fi
           
           echo "--- PROSES REPACK ---"
@@ -67,7 +64,7 @@ jobs:
           if [ -f "image-new.img" ]; then
              mv image-new.img ../TWRP-A02-RooXie-${DATE_TIME}.img
           else
-             echo "ERROR: Gagal bikin image!" && exit 1
+             echo "ERROR: image-new.img gagal!" && exit 1
           fi
 
       - name: Upload Repacked Recovery
