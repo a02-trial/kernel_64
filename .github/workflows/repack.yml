@@ -16,37 +16,37 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y p7zip-full cpio python3
           
-          # Clone AIK
-          git clone https://github.com/osm0sis/Android-Image-Kitchen.git AIK
+          # Clone langsung ke folder spesifik
+          git clone https://github.com/osm0sis/Android-Image-Kitchen.git ${GITHUB_WORKSPACE}/AIK
           
-          # Hajar permission pake jalur folder yang pasti ketemu
-          chmod -R 755 AIK
+          # Hajar permission semua file di dalemnya
+          chmod -R 755 ${GITHUB_WORKSPACE}/AIK
 
       - name: Repack Process
         run: |
-          # 1. Pastikan file ada di depan mata
-          ls -l recovery.img zImage
+          # 1. Definisikan folder AIK biar gak ngetik panjang
+          AIK_DIR="${GITHUB_WORKSPACE}/AIK"
           
-          # 2. Masukin file ke folder AIK
-          cp recovery.img AIK/
-          cp zImage AIK/zImage_new
+          # 2. Copy file utama ke dalem AIK
+          cp ${GITHUB_WORKSPACE}/recovery.img ${AIK_DIR}/
+          cp ${GITHUB_WORKSPACE}/zImage ${AIK_DIR}/zImage_new
           
-          # 3. Pindah ke folder AIK dan eksekusi
-          cd AIK
-          
+          # 3. Jalankan script langsung dari foldernya (tanpa cd)
           echo "--- PROSES UNPACK ---"
-          # Pake 'sh' buat manggil scriptnya biar lebih kuat
-          sh unpackimg.sh recovery.img
+          bash ${AIK_DIR}/unpackimg.sh ${AIK_DIR}/recovery.img
           
           echo "--- GANTI KERNEL ---"
-          cp zImage_new split_img/recovery.img-kernel
+          # AIK bakal bikin folder split_img di dalem folder AIK
+          cp ${AIK_DIR}/zImage_new ${AIK_DIR}/split_img/recovery.img-kernel
           
           echo "--- PROSES REPACK ---"
-          sh repackimg.sh
+          bash ${AIK_DIR}/repackimg.sh --workingdir ${AIK_DIR}
           
-          # 4. Angkut hasilnya keluar
+          # 4. Ambil hasilnya (biasanya image-new.img ada di folder tempat script dijalankan)
           DATE_TIME=$(TZ='Asia/Jakarta' date +"%d%b_%I_%M%p")
-          mv image-new.img ../TWRP-A02-RooXie-${DATE_TIME}.img
+          
+          # Cek dulu filenya ada dimana, lalu pindahin
+          find ${AIK_DIR} -name "image-new.img" -exec mv {} ${GITHUB_WORKSPACE}/TWRP-A02-RooXie-${DATE_TIME}.img \;
 
       - name: Upload Repacked Recovery
         uses: actions/upload-artifact@v4
