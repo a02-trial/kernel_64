@@ -16,39 +16,41 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y p7zip-full cpio python3
           
-          git clone https://github.com/osm0sis/Android-Image-Kitchen.git AIK
+          # Clone AIK ke direktori home runner
+          git clone https://github.com/osm0sis/Android-Image-Kitchen.git ${GITHUB_WORKSPACE}/AIK
           
-          # Fix: Masuk ke folder AIK dulu baru chmod
-          cd AIK
-          chmod -R 755 *.sh
-          find tools -type f -executable -exec chmod 755 {} +
-          cd ..
+          # Langsung hajar chmod pake full path biar gak ada alasan "No such file"
+          chmod 755 ${GITHUB_WORKSPACE}/AIK/*.sh
+          chmod 755 ${GITHUB_WORKSPACE}/AIK/tools/*
+          # Pastikan binary di tools bisa dieksekusi
+          find ${GITHUB_WORKSPACE}/AIK/tools -type f -exec chmod 755 {} +
 
       - name: Repack Process
         run: |
-          # 1. Cek isi direktori awal buat mastiin file ada
-          ls -l
+          # 1. Pastikan amunisi ada di root
+          ls -l ${GITHUB_WORKSPACE}/recovery.img
+          ls -l ${GITHUB_WORKSPACE}/zImage
           
-          # 2. Copy amunisi ke folder AIK
-          # Kita pake path absolut biar aman
+          # 2. Copy file ke folder AIK
           cp ${GITHUB_WORKSPACE}/recovery.img ${GITHUB_WORKSPACE}/AIK/
           cp ${GITHUB_WORKSPACE}/zImage ${GITHUB_WORKSPACE}/AIK/zImage_new
           
-          # 3. Eksekusi di dalem folder AIK
+          # 3. Eksekusi Unpack & Repack
           cd ${GITHUB_WORKSPACE}/AIK
           
-          # Unpack
+          echo "--- MENGUNDAK RECOVERY ---"
           ./unpackimg.sh recovery.img
           
-          # Ganti kernel (tiban file lama di split_img)
+          echo "--- MENGGANTI KERNEL ---"
+          # Ganti kernel lama dengan zImage baru
           cp zImage_new split_img/recovery.img-kernel
           
-          # Repack
+          echo "--- MEMBUNGKUS ULANG ---"
           ./repackimg.sh
           
-          # 4. Pindahin hasil keluar dan kasih nama
+          # 4. Beri nama dengan Timestamp WIB
           DATE_TIME=$(TZ='Asia/Jakarta' date +"%d%b_%I_%M%p")
-          mv image-new.img ../TWRP-A02-${DATE_TIME}.img
+          mv image-new.img ${GITHUB_WORKSPACE}/TWRP-A02-RooXie-${DATE_TIME}.img
 
       - name: Upload Repacked Recovery
         uses: actions/upload-artifact@v4
