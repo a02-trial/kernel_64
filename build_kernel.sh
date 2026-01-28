@@ -62,6 +62,9 @@ grep "return 0;" drivers/input/touchscreen/mediatek/mtk_tpd.c || echo "WADUH GAG
 # Cek hasil suntikan config
 grep "CONFIG_LOCALVERSION" arch/arm/configs/a02_defconfig
 
+sed -i '351,363d' drivers/tty/vt/selection.c
+# sed -i '/int set_selection(const struct tiocl_selection __user \*v,$/,/}/d' drivers/tty/vt/selection.c
+
 # =============================================================================================================================
 # =============================================================================================================================
 # =============================================================================================================================
