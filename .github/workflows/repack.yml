@@ -27,22 +27,31 @@ jobs:
           cp recovery.img AIK/
           cp zImage AIK/zImage_new
           
-          # 5. Eksekusi di dalam folder AIK (Gunakan subshell)
-          (
-            cd AIK
-            echo "--- MULAI UNPACK ---"
-            ./unpackimg.sh recovery.img
-            
-            echo "--- GANTI KERNEL ---"
-            cp zImage_new split_img/recovery.img-kernel
-            
-            echo "--- MULAI REPACK ---"
-            ./repackimg.sh
-            
-            echo "--- RENAME HASIL ---"
-            DATE_TIME=$(TZ='Asia/Jakarta' date +"%d%b_%I_%M%p")
-            mv image-new.img ../TWRP-A02-RooXie-${DATE_TIME}.img
-          )
+          # 5. Eksekusi BERTAHAP (Gak pake subshell biar stabil)
+          cd AIK || exit 1
+          
+          echo "--- MULAI UNPACK ---"
+          # Panggil pake bash dan jalur lengkap
+          bash ./unpackimg.sh recovery.img
+          
+          echo "--- GANTI KERNEL ---"
+          # Cek folder split_img muncul gak
+          if [ -d "split_img" ]; then
+             cp zImage_new split_img/recovery.img-kernel
+          else
+             echo "ERROR: Folder split_img gak muncul!" && exit 1
+          fi
+          
+          echo "--- MULAI REPACK ---"
+          bash ./repackimg.sh
+          
+          echo "--- PINDAH HASIL ---"
+          DATE_TIME=$(TZ='Asia/Jakarta' date +"%d%b_%I_%M%p")
+          if [ -f "image-new.img" ]; then
+             mv image-new.img ../TWRP-A02-RooXie-${DATE_TIME}.img
+          else
+             echo "ERROR: image-new.img GAGAL DICETAK!" && exit 1
+          fi
 
       - name: Upload Repacked Recovery
         uses: actions/upload-artifact@v4
