@@ -1,0 +1,57 @@
+name: Unpack Repack Recovery
+
+on:
+  workflow_dispatch: # Biar bisa lu klik manual dari tab Actions
+
+jobs:
+  repack-job:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      - name: Setup AIK-Linux
+        run: |
+          # Install dependencies yang dibutuhin AIK
+          sudo apt-get update
+          sudo apt-get install -y image-sig-verifier p7zip-full
+          
+          # Clone Android Image Kitchen versi Linux
+          git clone https://github.com/osm0sis/Android-Image-Kitchen.git AIK
+          chmod -R 755 AIK/*.sh
+          chmod -R 755 AIK/tools/*.*
+
+      - name: Repack Process
+        run: |
+          # 1. Masuk ke folder AIK
+          ls
+          echo $(pwd)
+          
+          # 2. Copy recovery lama lu ke sini
+          # (Ganti path 'base/recovery.img' sesuai lokasi di repo lu)
+          cd ${GITHUB_WORKSPACE}
+          cp recovery.img AIK/.
+          
+          # 3. Unpack recovery lama
+          cd AIK
+          ./unpackimg.sh recovery.img
+          
+          # 4. Ganti kernel di dalam folder split_img
+          # zImage adalah hasil build lu. Sesuaikan path-nya.
+          # Kalau build lu baru beres, biasanya di 'out/arch/arm/boot/zImage'
+          cd ${GITHUB_WORKSPACE}
+          cp zImage AIK/split_img/recovery.img-kernel
+          
+          # 5. Repack lagi jadi image baru
+          ./repackimg.sh
+          
+          # 6. Kasih nama unik pake timestamp biar gak bingung
+          DATE_TIME=$(date +"%d%b_%I_%M%p")
+          mv image-new.img ../TWRP-A02-${DATE_TIME}.img
+
+      - name: Upload Repacked Recovery
+        uses: actions/upload-artifact@v4
+        with:
+          name: Recovery-TWRP-A02
+          path: TWRP-A02-*.img
