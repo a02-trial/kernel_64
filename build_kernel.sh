@@ -42,12 +42,19 @@ sed -i '/^#/d' arch/arm/configs/a02_defconfig
 sed -i '/^$/d' arch/arm/configs/a02_defconfig
 
 # --- 5. ADJUST DRIVER TOUCH (MTK_TPD.C) ---
-# Perhatikan: Setiap 'sed' sekarang punya tanda kutip pembuka dan penutup yang JELAS.
-sed -i 's/create_singlethread_workqueue("mtk-tpd")/alloc_workqueue("mtk-tpd", WQ_HIGHPRI | WQ_UNBOUND, 1)/' drivers/input/touchscreen/mediatek/mtk_tpd.c
-sed -i '/static int tpd_suspend(struct device \*dev)/!b;n;a \    return 0;' drivers/input/touchscreen/mediatek/mtk_tpd.c
-sed -i '/static int tpd_resume(struct device \*dev)/!b;n;a \    return 0;' drivers/input/touchscreen/mediatek/mtk_tpd.c
-# Cek hasil (Grep ini bakal lapor kalau 'return 0' udah masuk)
-grep -A 2 "static int tpd_resume" drivers/input/touchscreen/mediatek/mtk_tpd.c
+
+# Ganti isi fungsi suspend biar langsung return 0 di baris pertama setelah kurung kurawal
+sed -i 's/static int tpd_suspend(struct device \*dev)/static int tpd_suspend(struct device \*dev) { return 0;/g' drivers/input/touchscreen/mediatek/mtk_tpd.c
+
+# Ganti isi fungsi resume biar langsung return 0 di baris pertama setelah kurung kurawal
+sed -i 's/static int tpd_resume(struct device \*dev)/static int tpd_resume(struct device \*dev) { return 0;/g' drivers/input/touchscreen/mediatek/mtk_tpd.c
+
+# Percepat workqueue
+sed -i 's/create_singlethread_workqueue("mtk-tpd")/alloc_workqueue("mtk-tpd", WQ_HIGHPRI | WQ_UNBOUND, 1)/g' drivers/input/touchscreen/mediatek/mtk_tpd.c
+
+# CEK HASIL: Kalau muncul "return 0", berarti Bos lu bisa senyum lagi
+grep "tpd_resume" drivers/input/touchscreen/mediatek/mtk_tpd.c
+
 # Cek hasil suntikan config
 grep "CONFIG_LOCALVERSION" arch/arm/configs/a02_defconfig
 
