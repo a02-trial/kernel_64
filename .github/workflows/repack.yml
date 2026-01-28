@@ -13,47 +13,51 @@ jobs:
 
       - name: Setup & Process AIK
         run: |
-          # 1. Alat tempur
+          # 1. Install Alat Tempur Lengkap
           sudo apt-get update
-          sudo apt-get install -y p7zip-full cpio python3
+          sudo apt-get install -y p7zip-full cpio python3 file
           
-          # 2. CLONE BRANCH YANG BENER (AIK-Linux)
-          # Gara-gara ini kita begadang bro! wkwkwk
+          # 2. Clone AIK-Linux
           git clone --depth=1 -b AIK-Linux https://github.com/osm0sis/Android-Image-Kitchen.git AIK
           
-          # 3. Kasih izin eksekusi
-          chmod -R 755 AIK
+          # 3. KUNCI KESUKSESAN: Hajar semua binary di folder bin
+          # Kita kasih izin eksekusi ke SEMUA file di dalam folder bin dan subfoldernya
+          chmod -R 755 AIK/
+          find AIK/bin -type f -exec chmod 755 {} +
           
-          # 4. Ambil amunisi masukin ke dapur AIK
+          # 4. Amunisi
           cp recovery.img AIK/
           cp zImage AIK/zImage_new
           
-          # 5. Eksekusi di dalem folder AIK
+          # 5. Eksekusi
           cd AIK || exit 1
           
-          echo "--- CEK ISI FOLDER (Biar Mantap) ---"
-          ls -F
+          # Set variabel environment biar AIK gak bingung nyari binary
+          export HOME=$(pwd)
           
           echo "--- PROSES UNPACK ---"
-          ./unpackimg.sh recovery.img
+          # Kita pake 'bash -x' buat debug kalau gagal lagi kita tau line mana yang mati
+          bash unpackimg.sh recovery.img
           
           echo "--- SWAP KERNEL ---"
           if [ -d "split_img" ]; then
              cp zImage_new split_img/recovery.img-kernel
              echo "Kernel diganti!"
           else
-             echo "ERROR: Unpack gagal, split_img gak ada!" && exit 1
+             echo "ERROR: split_img gak ada. Cek isi bin:"
+             ls -R bin/linux/
+             exit 1
           fi
           
           echo "--- PROSES REPACK ---"
-          ./repackimg.sh
+          bash repackimg.sh
           
           echo "--- ANGKUT HASIL ---"
           DATE_TIME=$(TZ='Asia/Jakarta' date +"%d%b_%I_%M%p")
           if [ -f "image-new.img" ]; then
              mv image-new.img ../TWRP-A02-RooXie-${DATE_TIME}.img
           else
-             echo "ERROR: image-new.img gak kebuat!" && exit 1
+             echo "ERROR: image-new.img gagal!" && exit 1
           fi
 
       - name: Upload Repacked Recovery
