@@ -11,56 +11,42 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v4
 
-      - name: Setup AIK (SebaUbuntu Mirror)
+      - name: Setup AIK
         run: |
           sudo apt-get update
           sudo apt-get install -y p7zip-full cpio python3
-          
-          # 1. Clone repo temuan si Intel GitHub (Lu, Bro!)
           git clone --depth=1 https://github.com/SebaUbuntu/AIK-Linux-mirror.git AIK
-          
-          # 2. Hajar permission (Penting biar binary-nya bisa 'nembak')
           chmod -R 755 AIK
           find AIK/bin -type f -exec chmod 755 {} +
 
-      - name: Repack Process
+      - name: Repacking
         run: |
-          # Ambil amunisi
           cp recovery.img AIK/
           cp zImage AIK/zImage_new
-          
           cd AIK || exit 1
-          
-          echo "--- CEK KESIAPAN SENJATA ---"
           ls -l bin/linux/x86_64/
-          
-          echo "--- PROSES UNPACK ---"
-          # Paksa jalanin script unpack
           bash unpackimg.sh recovery.img
-          
-          echo "--- SWAP KERNEL (THE MOMENT OF TRUTH) ---"
+
           if [ -d "split_img" ]; then
              cp zImage_new split_img/recovery.img-kernel
-             echo "Kernel lama ditiban kernel baru (RooXie Version)!"
+             echo "Kernel swap!"
           else
-             echo "ERROR: split_img gagal dibuat! Berarti unpack gagal."
+             echo "ERROR: split_img failed!"
              exit 1
           fi
-          
-          echo "--- PROSES REPACK ---"
+
           bash repackimg.sh
-          
-          echo "--- ANGKUT HASIL AKHIR ---"
+
           DATE_TIME=$(TZ='Asia/Jakarta' date +"%d%b_%I_%M%p")
           if [ -f "image-new.img" ]; then
              mv image-new.img ../TWRP-A02-RooXie-${DATE_TIME}.img
-             echo "REPACK SUKSES, BROOHH!"
+             echo "REPACK SUCCESSED!"
           else
-             echo "ERROR: image-new.img tidak ditemukan!" && exit 1
+             echo "ERROR: image-new.img not found!" && exit 1
           fi
 
       - name: Upload Repacked Recovery
         uses: actions/upload-artifact@v4
         with:
-          name: Recovery-TWRP-A02-Mateng
+          name: Recovery-TWRP-A02-IMG
           path: TWRP-A02-*.img
