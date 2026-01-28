@@ -11,11 +11,17 @@ export PATH="$(pwd)/toolchain/clang/bin:${PWD}/toolchain/gcc/bin:${PATH}"
 rm -rf out
 mkdir -p out
 
-sed -i 's/msleep(ilits->rst_edge_delay);/msleep(1);/g' drivers/input/touchscreen/ili9881x/ili9881x.c
-sed -i 's/msleep(10)/msleep(1)/g' drivers/input/touchscreen/ili9881x/ili9881x.c
-sed -i 's/msleep(20)/msleep(1)/g' drivers/input/touchscreen/ili9881x/ili9881x.c
-sed -i '/ili_ic_init();/a \    device_init_wakeup(ilits->dev, true);' drivers/input/touchscreen/ili9881x/ili9881x.c
-sed -i 's/usleep_range(15000, 15000);/usleep_range(100, 100);/g' drivers/input/touchscreen/ili9881x/ili9881x.c
+sed -i '/CONFIG_PM_SLEEP=y/a CONFIG_PM_WAKEREFS_TRACKING=y' arch/arm/configs/a02_defconfig
+sed -i '/CONFIG_PM_SLEEP=y/a CONFIG_PM_AUTOSLEEP=y' arch/arm/configs/a02_defconfig
+echo "# CONFIG_SPI_MTK_RUNTIME_PM is not set" >> arch/arm/configs/a02_defconfig
+sed -i 's/CONFIG_HZ=100/CONFIG_HZ=300/g' arch/arm/configs/a02_defconfig 2>/dev/null || echo "CONFIG_HZ=300" >> arch/arm/configs/a02_defconfig
+echo "CONFIG_PM_DEBUG=y" >> arch/arm/configs/a02_defconfig
+echo "CONFIG_PM_ADVANCED_DEBUG=y" >> arch/arm/configs/a02_defconfig
+echo "CONFIG_SUSPEND_SKIP_SET_WAKEUP=y" >> arch/arm/configs/a02_defconfig
+sed -i 's/CONFIG_KERNEL_GZIP=y/# CONFIG_KERNEL_GZIP is not set/g' arch/arm/configs/a02_defconfig
+sed -i 's/# CONFIG_KERNEL_LZMA is not set/CONFIG_KERNEL_LZMA=y/g' arch/arm/configs/a02_defconfig
+BUILD_TIME=$(date +"%I_%M%p")
+sed -i "s/CONFIG_LOCALVERSION=.*/CONFIG_LOCALVERSION=\"-a02-RooXie_${BUILD_TIME}\"/g" arch/arm/configs/a02_defconfig
 
 export ARCH=arm
 export CC=clang
