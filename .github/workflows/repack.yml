@@ -13,23 +13,24 @@ jobs:
 
       - name: Setup AIK-Linux
         run: |
-          # Install dependencies yang dibutuhin AIK
+          # Fix: Buang image-sig-verifier yang bikin error
           sudo apt-get update
-          sudo apt-get install -y image-sig-verifier p7zip-full
+          sudo apt-get install -y p7zip-full cpio python3
           
           # Clone Android Image Kitchen versi Linux
           git clone https://github.com/osm0sis/Android-Image-Kitchen.git AIK
+          
+          # Fix: Pastikan semua tool binary punya izin eksekusi
           chmod -R 755 AIK/*.sh
-          chmod -R 755 AIK/tools/*.*
+          find AIK/tools -type f -executable -exec chmod 755 {} +
 
       - name: Repack Process
         run: |
-          # 1. Masuk ke folder AIK
+          # 1. Cek isi direktori
           ls
           echo $(pwd)
           
-          # 2. Copy recovery lama lu ke sini
-          # (Ganti path 'base/recovery.img' sesuai lokasi di repo lu)
+          # 2. Copy recovery lama lu ke sini (Sesuai editan lu)
           cd ${GITHUB_WORKSPACE}
           cp recovery.img AIK/.
           
@@ -37,16 +38,15 @@ jobs:
           cd AIK
           ./unpackimg.sh recovery.img
           
-          # 4. Ganti kernel di dalam folder split_img
-          # zImage adalah hasil build lu. Sesuaikan path-nya.
-          # Kalau build lu baru beres, biasanya di 'out/arch/arm/boot/zImage'
+          # 4. Ganti kernel di dalam folder split_img (Sesuai editan lu)
           cd ${GITHUB_WORKSPACE}
           cp zImage AIK/split_img/recovery.img-kernel
           
           # 5. Repack lagi jadi image baru
+          cd AIK
           ./repackimg.sh
           
-          # 6. Kasih nama unik pake timestamp biar gak bingung
+          # 6. Kasih nama unik pake timestamp (Sesuai editan lu)
           DATE_TIME=$(date +"%d%b_%I_%M%p")
           mv image-new.img ../TWRP-A02-${DATE_TIME}.img
 
