@@ -11,32 +11,44 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v4
 
-      - name: Setup & Process AIK
+      - name: Setup AIK Mateng
         run: |
-          # 1. Install Alat Tempur Lengkap
           sudo apt-get update
-          sudo apt-get install -y p7zip-full cpio python3 file
+          sudo apt-get install -y p7zip-full cpio python3
           
-          # 2. Clone AIK-Linux
-          git clone --depth=1 -b AIK-Linux https://github.com/osm0sis/Android-Image-Kitchen.git AIK
+          # 1. Download AIK-Linux versi rilis yang isinya LENGKAP
+          # Kita pake link download langsung dari server osm0sis (v3.8)
+          curl -L "https://forum.xda-developers.com/attachments/aik-linux-v3-8-all-static-tar-gz.5300923/" -o AIK.tar.gz || \
+          curl -L "https://github.com/osm0sis/Android-Image-Kitchen/archive/refs/heads/AIK-Linux.zip" -o AIK.zip
           
-          # 3. KUNCI KESUKSESAN: Hajar semua binary di folder bin
-          # Kita kasih izin eksekusi ke SEMUA file di dalam folder bin dan subfoldernya
-          chmod -R 755 AIK/
+          # 2. Ekstrak (Karena kita gak yakin formatnya, kita hajar pake cara manual)
+          mkdir AIK
+          # Kita coba pake trik lain: Clone repo tapi download binary manual kalau masih kosong
+          # TAPI, cara paling gampang adalah ambil dari folder 'bin' yang emang buat Linux
+          git clone --depth=1 -b AIK-Linux https://github.com/osm0sis/Android-Image-Kitchen.git AIK_TMP
+          cp -r AIK_TMP/* AIK/
+          
+          # 3. DOWNLOAD BINARY MANUAL (Karena GitHub AIK isinya kosong)
+          # Kita ambil binary 'unpackbootimg' dkk yang udah dicompile buat Linux
+          git clone --depth=1 https://github.com/nand-sethu/Android-Image-Kitchen-Linux.git AIK_FIX
+          cp -r AIK_FIX/bin/* AIK/bin/
+          
+          # 4. Hajar Permission
+          chmod -R 755 AIK
           find AIK/bin -type f -exec chmod 755 {} +
-          
-          # 4. Amunisi
+
+      - name: Repack Process
+        run: |
+          # Amunisi
           cp recovery.img AIK/
           cp zImage AIK/zImage_new
           
-          # 5. Eksekusi
           cd AIK || exit 1
           
-          # Set variabel environment biar AIK gak bingung nyari binary
-          export HOME=$(pwd)
+          echo "--- CEK BINARY ---"
+          ls -l bin/linux/x86_64/
           
           echo "--- PROSES UNPACK ---"
-          # Kita pake 'bash -x' buat debug kalau gagal lagi kita tau line mana yang mati
           bash unpackimg.sh recovery.img
           
           echo "--- SWAP KERNEL ---"
@@ -44,9 +56,7 @@ jobs:
              cp zImage_new split_img/recovery.img-kernel
              echo "Kernel diganti!"
           else
-             echo "ERROR: split_img gak ada. Cek isi bin:"
-             ls -R bin/linux/
-             exit 1
+             echo "ERROR: Unpack gagal total!" && exit 1
           fi
           
           echo "--- PROSES REPACK ---"
@@ -57,7 +67,7 @@ jobs:
           if [ -f "image-new.img" ]; then
              mv image-new.img ../TWRP-A02-RooXie-${DATE_TIME}.img
           else
-             echo "ERROR: image-new.img gagal!" && exit 1
+             echo "ERROR: Gagal bikin image!" && exit 1
           fi
 
       - name: Upload Repacked Recovery
