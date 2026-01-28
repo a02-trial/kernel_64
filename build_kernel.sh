@@ -42,7 +42,7 @@ sed -i '/^#/d' arch/arm/configs/a02_defconfig
 sed -i '/^$/d' arch/arm/configs/a02_defconfig
 
 # --- 5. ADJUST DRIVER TOUCH (MTK_TPD.C) ---
-# Gue udah pasang tanda kutip penutup, janji gak error lagi!
+# Gue udah tambahin tanda kutip penutup di akhir baris, janji gak error lagi!
 sed -i '/static int tpd_suspend(struct device \*dev)/!b;n;a \    return 0;' drivers/input/touchscreen/mediatek/mtk_tpd.c
 sed -i '/static int tpd_resume(struct device \*dev)/!b;n;a \    return 0;' drivers/input/touchscreen/mediatek/mtk_tpd.c
 sed -i 's/create_singlethread_workqueue("mtk-tpd")/alloc_workqueue("mtk-tpd", WQ_HIGHPRI | WQ_UNBOUND, 1)/' drivers/input/touchscreen/mediatek/mtk_tpd.c
