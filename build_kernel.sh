@@ -11,10 +11,11 @@ export PATH="$(pwd)/toolchain/clang/bin:${PWD}/toolchain/gcc/bin:${PATH}"
 rm -rf out
 mkdir -p out
 
-sed -i 's/msleep(ilits->rst_edge_delay);/msleep(1);/g' drivers/input/touchscreen/ili9881x/ili9881x.c && \
-sed -i 's/usleep_range(15000, 15000);/usleep_range(1000, 1000);/g' drivers/input/touchscreen/ili9881x/ili9881x.c && \
-sed -i 's/usleep_range(5 \* 1000, 5 \* 1000);/usleep_range(500, 500);/g' drivers/input/touchscreen/ili9881x/ili9881x.c && \
+sed -i 's/msleep(ilits->rst_edge_delay);/msleep(1);/g' drivers/input/touchscreen/ili9881x/ili9881x.c
+sed -i 's/msleep(10)/msleep(1)/g' drivers/input/touchscreen/ili9881x/ili9881x.c
+sed -i 's/msleep(20)/msleep(1)/g' drivers/input/touchscreen/ili9881x/ili9881x.c
 sed -i '/ili_ic_init();/a \    device_init_wakeup(ilits->dev, true);' drivers/input/touchscreen/ili9881x/ili9881x.c
+sed -i 's/usleep_range(15000, 15000);/usleep_range(100, 100);/g' drivers/input/touchscreen/ili9881x/ili9881x.c
 
 export ARCH=arm
 export CC=clang
