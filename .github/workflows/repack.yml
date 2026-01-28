@@ -13,53 +13,47 @@ jobs:
 
       - name: Setup & Process AIK
         run: |
-          # 1. Install Alat Tempur
+          # 1. Alat tempur
           sudo apt-get update
           sudo apt-get install -y p7zip-full cpio python3
           
-          # 2. Clone AIK
-          git clone --depth=1 https://github.com/osm0sis/Android-Image-Kitchen.git AIK
+          # 2. CLONE BRANCH YANG BENER (AIK-Linux)
+          # Gara-gara ini kita begadang bro! wkwkwk
+          git clone --depth=1 -b AIK-Linux https://github.com/osm0sis/Android-Image-Kitchen.git AIK
           
-          # 3. Ambil lokasi absolut biar gak nyasar
-          ROOT_DIR=$(pwd)
-          AIK_PATH=$(find $ROOT_DIR/AIK -name "unpackimg.sh" -exec dirname {} \;)
+          # 3. Kasih izin eksekusi
+          chmod -R 755 AIK
           
-          echo "Lokasi AIK ditemukan di: $AIK_PATH"
+          # 4. Ambil amunisi masukin ke dapur AIK
+          cp recovery.img AIK/
+          cp zImage AIK/zImage_new
           
-          # 4. Masuk ke lokasi AIK dan CHMOD
-          cd $AIK_PATH
-          chmod -R 755 .
-          chmod -R 755 tools/
+          # 5. Eksekusi di dalem folder AIK
+          cd AIK || exit 1
           
-          # 5. Copy file dari root repo ke lokasi AIK
-          cp $ROOT_DIR/recovery.img .
-          cp $ROOT_DIR/zImage ./zImage_new
+          echo "--- CEK ISI FOLDER (Biar Mantap) ---"
+          ls -F
           
           echo "--- PROSES UNPACK ---"
-          # Paksa eksekusi pake BASH langsung
-          bash unpackimg.sh recovery.img
+          ./unpackimg.sh recovery.img
           
           echo "--- SWAP KERNEL ---"
           if [ -d "split_img" ]; then
              cp zImage_new split_img/recovery.img-kernel
-             echo "Kernel berhasil diganti!"
+             echo "Kernel diganti!"
           else
-             echo "ERROR: split_img gak ketemu! Log unpack:"
-             ls -R
-             exit 1
+             echo "ERROR: Unpack gagal, split_img gak ada!" && exit 1
           fi
           
           echo "--- PROSES REPACK ---"
-          bash repackimg.sh
+          ./repackimg.sh
           
-          echo "--- PINDAH HASIL ---"
+          echo "--- ANGKUT HASIL ---"
           DATE_TIME=$(TZ='Asia/Jakarta' date +"%d%b_%I_%M%p")
           if [ -f "image-new.img" ]; then
-             mv image-new.img $ROOT_DIR/TWRP-A02-RooXie-${DATE_TIME}.img
-             echo "Repack Berhasil!"
+             mv image-new.img ../TWRP-A02-RooXie-${DATE_TIME}.img
           else
-             echo "ERROR: image-new.img tidak tercipta!"
-             exit 1
+             echo "ERROR: image-new.img gak kebuat!" && exit 1
           fi
 
       - name: Upload Repacked Recovery
