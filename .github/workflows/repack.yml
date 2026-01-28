@@ -16,35 +16,35 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y p7zip-full cpio python3
           
-          # Clone dan langsung hajar chmod dalam satu baris perintah
-          git clone https://github.com/osm0sis/Android-Image-Kitchen.git AIK && chmod -R 755 AIK && chmod 755 AIK/*.sh
+          # Clone AIK
+          git clone https://github.com/osm0sis/Android-Image-Kitchen.git AIK
           
-          # Cek isi folder buat mastiin (buat debug di log)
-          ls -R AIK
+          # Hajar permission pake jalur folder yang pasti ketemu
+          chmod -R 755 AIK
 
       - name: Repack Process
         run: |
-          # Pastikan file ada
+          # 1. Pastikan file ada di depan mata
           ls -l recovery.img zImage
           
-          # Copy amunisi
+          # 2. Masukin file ke folder AIK
           cp recovery.img AIK/
           cp zImage AIK/zImage_new
           
-          # Pindah ke folder AIK
+          # 3. Pindah ke folder AIK dan eksekusi
           cd AIK
           
           echo "--- PROSES UNPACK ---"
-          ./unpackimg.sh recovery.img
+          # Pake 'sh' buat manggil scriptnya biar lebih kuat
+          sh unpackimg.sh recovery.img
           
-          echo "--- PROSES SWAP KERNEL ---"
-          # Tiban kernel lama
+          echo "--- GANTI KERNEL ---"
           cp zImage_new split_img/recovery.img-kernel
           
           echo "--- PROSES REPACK ---"
-          ./repackimg.sh
+          sh repackimg.sh
           
-          # Balik ke folder awal buat upload
+          # 4. Angkut hasilnya keluar
           DATE_TIME=$(TZ='Asia/Jakarta' date +"%d%b_%I_%M%p")
           mv image-new.img ../TWRP-A02-RooXie-${DATE_TIME}.img
 
