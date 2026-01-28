@@ -1,7 +1,7 @@
 name: Unpack Repack Recovery
 
 on:
-  workflow_dispatch: # Biar bisa lu klik manual dari tab Actions
+  workflow_dispatch:
 
 jobs:
   repack-job:
@@ -13,41 +13,41 @@ jobs:
 
       - name: Setup AIK-Linux
         run: |
-          # Fix: Buang image-sig-verifier yang bikin error
           sudo apt-get update
           sudo apt-get install -y p7zip-full cpio python3
           
-          # Clone Android Image Kitchen versi Linux
           git clone https://github.com/osm0sis/Android-Image-Kitchen.git AIK
           
-          # Fix: Pastikan semua tool binary punya izin eksekusi
-          chmod -R 755 AIK/*.sh
-          find AIK/tools -type f -executable -exec chmod 755 {} +
+          # Fix: Masuk ke folder AIK dulu baru chmod
+          cd AIK
+          chmod -R 755 *.sh
+          find tools -type f -executable -exec chmod 755 {} +
+          cd ..
 
       - name: Repack Process
         run: |
-          # 1. Cek isi direktori
-          ls
-          echo $(pwd)
+          # 1. Cek isi direktori awal buat mastiin file ada
+          ls -l
           
-          # 2. Copy recovery lama lu ke sini (Sesuai editan lu)
-          cd ${GITHUB_WORKSPACE}
-          cp recovery.img AIK/.
+          # 2. Copy amunisi ke folder AIK
+          # Kita pake path absolut biar aman
+          cp ${GITHUB_WORKSPACE}/recovery.img ${GITHUB_WORKSPACE}/AIK/
+          cp ${GITHUB_WORKSPACE}/zImage ${GITHUB_WORKSPACE}/AIK/zImage_new
           
-          # 3. Unpack recovery lama
-          cd AIK
+          # 3. Eksekusi di dalem folder AIK
+          cd ${GITHUB_WORKSPACE}/AIK
+          
+          # Unpack
           ./unpackimg.sh recovery.img
           
-          # 4. Ganti kernel di dalam folder split_img (Sesuai editan lu)
-          cd ${GITHUB_WORKSPACE}
-          cp zImage AIK/split_img/recovery.img-kernel
+          # Ganti kernel (tiban file lama di split_img)
+          cp zImage_new split_img/recovery.img-kernel
           
-          # 5. Repack lagi jadi image baru
-          cd AIK
+          # Repack
           ./repackimg.sh
           
-          # 6. Kasih nama unik pake timestamp (Sesuai editan lu)
-          DATE_TIME=$(date +"%d%b_%I_%M%p")
+          # 4. Pindahin hasil keluar dan kasih nama
+          DATE_TIME=$(TZ='Asia/Jakarta' date +"%d%b_%I_%M%p")
           mv image-new.img ../TWRP-A02-${DATE_TIME}.img
 
       - name: Upload Repacked Recovery
