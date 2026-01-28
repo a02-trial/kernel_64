@@ -53,8 +53,10 @@ jobs:
           EOF
 
           # 4. Copy zImage hasil build ke folder AnyKernel
-          # Sesuaikan path 'out/arch/arm/boot/zImage' dengan hasil build lu
-          cp ${GITHUB_WORKSPACE}/zImage AnyKernel/zImage
+          echo $(pwd)
+          ls
+          cd ${GITHUB_WORKSPACE}
+          cp zImage AnyKernel/.
           
           # 5. Zip folder AnyKernel jadi file siap flash
           cd AnyKernel
