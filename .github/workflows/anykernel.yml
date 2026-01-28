@@ -60,11 +60,11 @@ jobs:
           
           # 5. Zip folder AnyKernel jadi file siap flash
           cd AnyKernel
-          zip -r9 ../AnyKernel3-A02-Kernnel.zip * -x .git README.md
+          zip -r9 ../AnyKernel3-A02-Kernel.zip * -x .git README.md
           cd ..
 
       - name: Upload Flashable Kernel
         uses: actions/upload-artifact@v4
         with:
           name: AnyKernel3-A02
-          path: AnyKernel3-A02.zip
+          path: AnyKernel3-A02-Kernel.zip
