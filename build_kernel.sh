@@ -62,10 +62,15 @@ grep "return 0;" drivers/input/touchscreen/mediatek/mtk_tpd.c || echo "WADUH GAG
 # Cek hasil suntikan config
 grep "CONFIG_LOCALVERSION" arch/arm/configs/a02_defconfig
 
+# Fix TTY Selection
 sed -i '351,363d' drivers/tty/vt/selection.c
-# sed -i '/int set_selection(const struct tiocl_selection __user \*v,$/,/}/d' drivers/tty/vt/selection.c
 
-sed -i 's/static void \*persistent_ram_vmap(phys_addr_t start, size_t size.*/void *persistent_ram_vmap(phys_addr_t start, size_t size, unsigned int memtype)/g' fs/pstore/ram_core.c
+# Fix PStore - Pake cara nomor baris yang paling sakti
+sed -i '410,411c\void *persistent_ram_vmap(phys_addr_t start, size_t size, unsigned int memtype)' fs/pstore/ram_core.c
+
+# Fix Touch Suspend/Resume - Biar gak double kurung kurawal
+sed -i '/static int tpd_suspend(struct device \*dev)/,/^{/c\static int tpd_suspend(struct device *dev) { return 0; }' drivers/input/touchscreen/mediatek/mtk_tpd.c
+sed -i '/static int tpd_resume(struct device \*dev)/,/^{/c\static int tpd_resume(struct device *dev) { return 0; }' drivers/input/touchscreen/mediatek/mtk_tpd.c
 
 # =============================================================================================================================
 # =============================================================================================================================
