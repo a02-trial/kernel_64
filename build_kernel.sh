@@ -75,6 +75,8 @@ sed -i '/static void \*persistent_ram_vmap(phys_addr_t start, size_t size/,/)/c\
 sed -i '/static int tpd_suspend(struct device \*dev)/,/^{/c\static int tpd_suspend(struct device *dev) { return 0; }' drivers/input/touchscreen/mediatek/mtk_tpd.c
 sed -i '/static int tpd_resume(struct device \*dev)/,/^{/c\static int tpd_resume(struct device *dev) { return 0; }' drivers/input/touchscreen/mediatek/mtk_tpd.c
 
+sed -i 's/ram_console_buffer/NULL/g' drivers/samsung/sec_reboot.c
+
 # =============================================================================================================================
 # =============================================================================================================================
 # =============================================================================================================================
