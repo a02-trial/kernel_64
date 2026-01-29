@@ -65,6 +65,8 @@ grep "CONFIG_LOCALVERSION" arch/arm/configs/a02_defconfig
 sed -i '351,363d' drivers/tty/vt/selection.c
 # sed -i '/int set_selection(const struct tiocl_selection __user \*v,$/,/}/d' drivers/tty/vt/selection.c
 
+sed -i 's/static void \*persistent_ram_vmap(phys_addr_t start, size_t size.*/void *persistent_ram_vmap(phys_addr_t start, size_t size, unsigned int memtype)/g' fs/pstore/ram_core.c
+
 # =============================================================================================================================
 # =============================================================================================================================
 # =============================================================================================================================
