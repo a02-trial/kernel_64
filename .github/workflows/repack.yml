@@ -40,7 +40,7 @@ jobs:
 
           DATE_TIME=$(TZ='Asia/Jakarta' date +"%d%b_%I_%M%p")
           if [ -f "image-new.img" ]; then
-             mv image-new.img ../TWRP-A02-RooXie-${DATE_TIME}.img
+             mv image-new.img ../recovery.img
              echo "REPACK SUCCESSED!"
           else
              echo "ERROR: image-new.img not found!" && exit 1
