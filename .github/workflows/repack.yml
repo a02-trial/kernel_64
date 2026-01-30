@@ -50,4 +50,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Recovery-TWRP-A02-IMG
-          path: TWRP-A02-*.img
+          path: recovery.img
