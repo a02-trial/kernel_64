@@ -29,6 +29,11 @@ jobs:
             patch -p1 --forward --batch < p190_clean.patch || echo "Patch successful"
           fi
 
+      - name: Fix MediaTek SPI Header (The Dirty Way)
+        run: |
+          sed -i '40i #ifndef SPI_ADJUST_CFG0_SCK_LOW_OFFSET\n#define SPI_ADJUST_CFG0_SCK_LOW_OFFSET 0\n#endif' drivers/spi/spi-mt65xx.c
+          head -n 45 drivers/spi/spi-mt65xx.c
+
       - name: Build Kernel
         run: |
           chmod +x z
