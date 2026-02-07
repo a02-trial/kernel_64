@@ -8,6 +8,8 @@ jobs:
     steps:
       - name: Checkout Source Kernel
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install Toolchain & Dependencies
         run: |
@@ -16,13 +18,10 @@ jobs:
 
       - name: Apply Upstream Patch (v187 to v190)
         run: |
-          # Ambil data stable
           git remote add stable https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git
-          git fetch stable tag v4.14.190 --no-tags --depth 1
-          
-          # Bikin dan pasang patch (Sama kayak yang kita lakuin di Codespaces)
+          git fetch stable tag v4.14.187 tag v4.14.190 --no-tags --depth 1
           git diff v4.14.187 v4.14.190 -- arch/arm/ drivers/ include/ kernel/ mm/ net/ sound/ Makefile > p190_clean.patch
-          patch -p1 --forward --batch < p190_clean.patch || echo "Some patches skipped"
+          patch -p1 --forward --batch < p190_clean.patch || echo "Beberapa bagian diskip, aman Bre!"
 
       - name: Build Kernel
         run: |
