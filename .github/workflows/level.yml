@@ -14,14 +14,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y bc build-essential flex bison libssl-dev libelf-dev gcc-arm-linux-gnueabi
 
-      - name: Apply Upstream Patch (v186 to v190)
+      - name: Apply Upstream Patch (v187 to v190)
         run: |
           # Ambil data stable
           git remote add stable https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git
           git fetch stable tag v4.14.190 --no-tags --depth 1
           
           # Bikin dan pasang patch (Sama kayak yang kita lakuin di Codespaces)
-          git diff v4.14.186 v4.14.190 -- arch/arm/ drivers/ include/ kernel/ mm/ net/ sound/ Makefile > p190_clean.patch
+          git diff v4.14.187 v4.14.190 -- arch/arm/ drivers/ include/ kernel/ mm/ net/ sound/ Makefile > p190_clean.patch
           patch -p1 --forward --batch < p190_clean.patch || echo "Some patches skipped"
 
       - name: Build Kernel
