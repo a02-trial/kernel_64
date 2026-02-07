@@ -1,6 +1,6 @@
 name: Build Up
 on:
-  workflow_dispatch: # Biar bisa klik tombol "Run" manual dari web GitHub
+  workflow_dispatch:
 
 jobs:
   build:
@@ -21,7 +21,7 @@ jobs:
           git remote add stable https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git
           git fetch stable tag v4.14.187 tag v4.14.190 --no-tags --depth 1
           git diff v4.14.187 v4.14.190 -- arch/arm/ drivers/ include/ kernel/ mm/ net/ sound/ Makefile > p190_clean.patch
-          patch -p1 --forward --batch < p190_clean.patch || echo "Beberapa bagian diskip, aman Bre!"
+          patch -p1 --forward --batch < p190_clean.patch
 
       - name: Build Kernel
         run: |
@@ -32,4 +32,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: _RooXie-v190-
-          path: arch/arm/boot/zImage
+          path: out/arch/arm/boot/zImage
