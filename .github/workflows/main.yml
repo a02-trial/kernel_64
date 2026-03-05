@@ -14,10 +14,12 @@ jobs:
       - name: Start Building RooXie Kernel for SM-A022F
         run: |
           cd ${GITHUB_WORKSPACE}
+          sudo apt update && sudo apt upgrade -y
+          sudo apt install -y build-essential bc bison flex libssl-dev libelf-dev libncurses-dev git openssl python3-dev python3-pip ccache zip unzip tar
           export KBUILD_BUILD_USER="${{ github.actor }}"
           export KBUILD_BUILD_HOST="${{ github.event.inputs.DEVICE_NAME }}"
-          chmod +x build_kernel.sh
-          ./build_kernel.sh
+          chmod +x z
+          ./z
 
       - name: Set Properties
         id: props
