@@ -642,6 +642,12 @@ int ili_sleep_handler(int mode)
 
 int ili_fw_upgrade_handler(void *data)
 {
+	struct ilitek_ts_data *ilits = (struct ilitek_ts_data *)data; 
+
+	if (ilits->boot) {
+		return 0; 
+	}
+	
 	int ret = 0;
 
 	atomic_set(&ilits->fw_stat, START);
