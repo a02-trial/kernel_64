@@ -13,6 +13,6 @@ export KCFLAGS=-w
 export CONFIG_SECTION_MISMATCH_WARN_ONLY=y
 export CFLAGS_WARN=-Wunused-but-set-variable
 export xxx="KCFLAGS=-w CONFIG_SECTION_MISMATCH_WARN_ONLY=y CFLAGS_WARN=-Wunused-but-set-variable ARCH=arm CC=clang HOSTCC=clang CROSS_COMPILE=arm-linux-androideabi-"
-
+sed -i 's/ilits->input_dev/ilits->input/g' drivers/input/touchscreen/ili9881x/ili9881x.c
 make O=out $xxx a02_defconfig
 make O=out $xxx -j"$(nproc --all)" 2>&1 | tee build.log
