@@ -859,6 +859,7 @@ static int ilitek_tp_pm_resume(struct device *dev)
 	complete(&ilits->pm_completion);
 	/* [FIX] resume-latency: wake up SPI PLL immediately on pm_resume
 	 * so touch is responsive as soon as screen turns on, not 5-7s later */
+	usleep_range(5 * 1000, 5 * 1000); /* [FIX] 5ms delay - let SPI PLL stabilize before first transaction */
 	ilits->pll_clk_wakeup = true;
 	return 0;
 }
