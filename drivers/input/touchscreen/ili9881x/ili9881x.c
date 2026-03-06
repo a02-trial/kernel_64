@@ -645,39 +645,34 @@ int ili_fw_upgrade_handler(void *data)
 	struct ilitek_ts_data *ilits = (struct ilitek_ts_data *)data; 
 	int ret = 0;
 
+	/* GSI HACK: Kunci Utama dari Dev Pro */
+	/* Kalau statusnya bukan 'force upgrade', jangan ganggu proses resume */
+	if (ilits->boot && ilits->fw_update_stat != FW_STAT_FORCED) {
+		input_info(true, ilits->dev, "GSI Hack: Resume detected, bypassing heavy firmware check\n");
+		goto skip_heavy_stuff;
+	}
+
 	atomic_set(&ilits->fw_stat, START);
-
 	ilits->fw_update_stat = FW_STAT_INIT;
-
-	/* --- GSI HACK: KITA MATIKAN PROSES UPGRADE YANG BIKIN DELAY --- */
-	/* ret = ili_fw_upgrade(ilits->fw_open); <--- KASIH COMMENT/MATIKAN INI */
-	ret = 0; // Kita paksa hasilnya selalu sukses (0) agar tidak masuk ke blok FAIL
-	/* ------------------------------------------------------------- */
+	
+	/* Biang kerok delay kita matikan di sini */
+	/* ret = ili_fw_upgrade(ilits->fw_open); */
+	ret = 0; 
 
 	if (ret != 0) {
-		input_info(true, ilits->dev, "%s FW upgrade fail\n", __func__);
-		ilits->fw_update_stat = FW_UPDATE_FAIL;
+		// ... bagian fail ...
 	} else {
-		input_info(true, ilits->dev, "%s FW upgrade pass\n", __func__);
-#if CHARGER_NOTIFIER_CALLBACK
-#if KERNEL_VERSION(4, 1, 0) <= LINUX_VERSION_CODE
-		/* add_for_charger_start */
-		if ((ilits->usb_plug_status) && (ilits->actual_tp_mode != P5_X_FW_TEST_MODE)) {
-			ret = ili_ic_func_ctrl("plug", !ilits->usb_plug_status);
-			if (ret < 0)
-				input_err(true, ilits->dev, "%sWrite plug in failed\n", __func__);
-		}
-		/* add_for_charger_end  */
-#endif
-#endif
+		input_info(true, ilits->dev, "GSI Hack: FW check skipped\n");
 		ilits->fw_update_stat = FW_UPDATE_PASS;
 	}
 
-	/* BAGIAN INI SANGAT PENTING BIAR GAK BOOTLOOP */
+skip_heavy_stuff:
+
+	/* Bagian ini HARUS JALAN supaya GAK BOOTLOOP */
 	if (!ilits->boot) {
 		ilits->boot = true;
-		input_info(true, ilits->dev, "%s Registre touch to input subsystem\n", __func__);
-		ili_input_register(); // <--- Ini harus jalan pas booting!
+		input_info(true, ilits->dev, "GSI Hack: Initializing input device\n");
+		ili_input_register();
 		ili_wq_ctrl(WQ_ESD, ENABLE);
 		ili_wq_ctrl(WQ_BAT, ENABLE);
 	}
