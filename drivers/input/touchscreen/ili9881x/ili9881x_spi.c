@@ -393,6 +393,7 @@ static int ili_spi_wrapper(u8 *txbuf, u32 wlen, u8 *rxbuf, u32 rlen, bool spi_ir
 		if ((ilits->pll_clk_wakeup == true) && (ilits->tp_suspend == true)) {
 #endif
 			ret = ili_spi_pll_clk_wakeup();
+			ilits->pll_clk_wakeup = false; /* [FIX] reset after wakeup so we don't send dummy on every write */
 			if (ret < 0) {
 				input_err(true, ilits->dev, "%s Wakeup pll clk error\n", __func__);
 				break;
