@@ -76,7 +76,7 @@ void ili_resume_by_ddi(void)
 	ili_reset_ctrl(ilits->reset);
 	ili_ice_mode_ctrl(ENABLE, OFF);
 	ilits->ddi_rest_done = true;
-	usleep_range(5 * 1000, 5 * 1000);
+	mdelay(5);
 	queue_work(resume_by_ddi_wq, &(resume_by_ddi_work));
 
 	mutex_unlock(&ilits->touch_mutex);
@@ -611,7 +611,7 @@ int ili_sleep_handler(int mode)
 		ili_wq_ctrl(WQ_ESD, ENABLE);
 		ili_wq_ctrl(WQ_BAT, ENABLE);
 
-		msleep(ilits->rst_edge_delay);//resume, after 10ms enable irq , for INT noisy
+		mdelay(ilits->rst_edge_delay);//resume, after 10ms enable irq , for INT noisy
 
 		set_current_ic_mode(SET_MODE_NORMAL);
 
