@@ -89,6 +89,17 @@
 #include <linux/of_gpio.h>
 #endif
 
+#ifdef CONFIG_FB
+#include <linux/notifier.h>
+#include <linux/fb.h>
+#else
+#include <linux/earlysuspend.h>
+#endif
+
+#ifdef CONFIG_DRM_MSM
+#include <linux/msm_drm_notify.h>
+#endif
+
 #include "ili9881x_sec_fn.h"
 
 #ifdef CONFIG_MTK_SPI
@@ -1115,9 +1126,7 @@ struct ilitek_ts_data {
 	u32 area_edge;
 
 	bool enable_settings_aot;
-	bool enable_sysinput_enabled;
 	bool support_ear_detect;
-	bool prox_lp_scan_enabled;
 	bool support_spay_gesture_mode;
 
 	struct delayed_work work_read_info;
