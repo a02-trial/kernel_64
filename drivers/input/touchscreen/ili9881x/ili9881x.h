@@ -921,6 +921,12 @@ struct ilitek_ts_data {
 	struct pinctrl_state *pins_on_state;
 	struct pinctrl_state *pins_off_state;
 
+#ifdef CONFIG_FB
+	struct notifier_block notifier_fb;
+#else
+	struct early_suspend early_suspend;
+#endif
+
 #if CHARGER_NOTIFIER_CALLBACK
 #if KERNEL_VERSION(4, 1, 0) <= LINUX_VERSION_CODE
 /* add_for_charger_start */
