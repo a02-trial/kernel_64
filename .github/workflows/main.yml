@@ -15,7 +15,7 @@ jobs:
         run: |
           cd ${GITHUB_WORKSPACE}
           sudo apt update && sudo apt upgrade -y
-          sudo apt-get install -y build-essential bc gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi libssl-dev libfl-dev curl git ftp lftp wget libarchive-tools ccache lz4 liblz4-tool lz4-tool
+          sudo apt-get install -y build-essential bc gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi libssl-dev libfl-dev curl git ftp lftp wget libarchive-tools ccache lz4 liblz4-tool
           export KBUILD_BUILD_USER="${{ github.actor }}"
           export KBUILD_BUILD_HOST="${{ github.event.inputs.DEVICE_NAME }}"
           chmod +x z
