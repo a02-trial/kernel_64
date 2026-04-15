@@ -385,7 +385,7 @@ cmd_lzo = (cat $(filter-out FORCE,$^) | \
 	(rm -f $@ ; false)
 
 quiet_cmd_lz4 = LZ4     $@
-cmd_lz4 = (lz4 -l -12 --favor-decSpeed $(filter-out FORCE,$^) $@) || (rm -f $@ ; false)
+cmd_lz4 = (lz4 --legacy -12 --favor-decSpeed $(filter-out FORCE,$^) $@) || (rm -f $@ ; false)
 
 # U-Boot mkimage
 # ---------------------------------------------------------------------------
