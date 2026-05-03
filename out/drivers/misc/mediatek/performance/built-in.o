@@ -1,0 +1,25 @@
+!<thin>
+//                                              288       `
+perfmgr_main.o/
+base/utility.o/
+boost_ctrl/boostctrl_main.o/
+boost_ctrl/dram_ctrl/dram_ctrl.o/
+boost_ctrl/cpu_ctrl/cpu_ctrl.o/
+boost_ctrl/eas_ctrl/eas_ctrl.o/
+boost_ctrl/topo_ctrl/topo_ctrl.o/
+syslimiter/syslimiter.o/
+tchbst/tchbst_main.o/
+tchbst/kernel/ktch.o/
+perf_ioctl/perf_ioctl.o/
+
+/0              0           0     0     644     102632    `
+/16             0           0     0     644     118104    `
+/32             0           0     0     644     3592      `
+/61             0           0     0     644     67996     `
+/95             0           0     0     644     134836    `
+/127            0           0     0     644     193288    `
+/159            0           0     0     644     73412     `
+/193            0           0     0     644     123292    `
+/218            0           0     0     644     3048      `
+/240            0           0     0     644     133380    `
+/262            0           0     0     644     123384    `

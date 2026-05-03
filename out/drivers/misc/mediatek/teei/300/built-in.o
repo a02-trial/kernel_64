@@ -1,0 +1,55 @@
+!<thin>
+//                                              604       `
+tee/tee_core.o/
+tee/tee_shm.o/
+tee/tee_shm_pool.o/
+tee/tee_client_api.o/
+tee/soter/core.o/
+tee/soter/call.o/
+tz_driver/teei_client_main.o/
+tz_driver/fdrv.o/
+tz_driver/backward_driver.o/
+tz_driver/irq_register.o/
+tz_driver/notify_queue.o/
+tz_driver/teei_fp.o/
+tz_driver/teei_smc_call.o/
+tz_driver/tz_log.o/
+tz_driver/switch_queue.o/
+tz_driver/teei_keymaster.o/
+tz_driver/teei_cancel_cmd.o/
+tz_driver/teei_client_transfer_data.o/
+tz_driver/sysfs.o/
+tz_driver/teei_task_link.o/
+tz_vfs/vfsFun.o/
+tz_vfs/fp_vendor.o/
+teei_fp/fp_func.o/
+ut_keymaster/ut_keymaster.o/
+tz_dcih/tz_dcih.o/
+tz_dcih/tz_dcih_test.o/
+
+/0              0           0     0     644     186440    `
+/16             0           0     0     644     103848    `
+/31             0           0     0     644     88060     `
+/51             0           0     0     644     119660    `
+/73             0           0     0     644     97840     `
+/91             0           0     0     644     24888     `
+/109            0           0     0     644     149228    `
+/139            0           0     0     644     15552     `
+/157            0           0     0     644     20756     `
+/186            0           0     0     644     17568     `
+/212            0           0     0     644     17036     `
+/238            0           0     0     644     6660      `
+/259           /0           0     0     644     8856      `
+/286            0           0     0     644     108396    `
+/306            0           0     0     644     102348    `
+/332            0           0     0     644     6000      `
+/360            0           0     0     644     5320      `
+/389            0           0     0     644     37564     `
+/428            0           0     0     644     119504    `
+/447            0           0     0     644     12676     `
+/475            0           0     0     644     118036    `
+/492            0           0     0     644     6520      `
+/512            0           0     0     644     116916    `
+/531            0           0     0     644     106464    `
+/560            0           0     0     644     76424     `
+/579            0           0     0     644     77172     `

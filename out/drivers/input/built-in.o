@@ -1,0 +1,63 @@
+!<thin>
+//                                              718       `
+input.o/
+input-compat.o/
+input-mt.o/
+ff-core.o/
+sec_cmd.o/
+sec_tsp_log.o/
+ff-memless.o/
+input-leds.o/
+evdev.o/
+keyboard/atkbd.o/
+keyboard/mediatek/kpd.o/
+keyboard/mediatek/mt6739/hal_kpd.o/
+joystick/xpad.o/
+tablet/acecad.o/
+tablet/aiptek.o/
+tablet/gtco.o/
+tablet/hanwang.o/
+tablet/kbtab.o/
+touchscreen/of_touchscreen.o/
+touchscreen/ili9881x/ili9881x.o/
+touchscreen/ili9881x/ili9881x_spi.o/
+touchscreen/ili9881x/ili9881x_init.o/
+touchscreen/ili9881x/ili9881x_ic.o/
+touchscreen/ili9881x/ili9881x_touch.o/
+touchscreen/ili9881x/ili9881x_mp.o/
+touchscreen/ili9881x/ili9881x_hostdl.o/
+touchscreen/ili9881x/ili9881x_node.o/
+touchscreen/ili9881x/ili9881x_sec_fn.o/
+touchscreen/ili9881x/ili9881x_sec_fn_test.o/
+misc/uinput.o/
+
+/0              0           0     0     644     265356    `
+/9              0           0     0     644     91840     `
+/25             0           0     0     644     113244    `
+/37             0           0     0     644     100876    `
+/48             0           0     0     644     120820    `
+/59             0           0     0     644     112584    `
+/74             0           0     0     644     110212    `
+/88             0           0     0     644     97672     `
+/102            0           0     0     644     211280    `
+/111            0           0     0     644     160472    `
+/129            0           0     0     644     294768    `
+/154            0           0     0     644     266424    `
+/190            0           0     0     644     182584    `
+/207            0           0     0     644     115928    `
+/224            0           0     0     644     183628    `
+/241            0           0     0     644     125828    `
+/256            0           0     0     644     124592    `
+/274            0           0     0     644     114316    `
+/290            0           0     0     644     99936     `
+/320            0           0     0     644     309972    `
+/353            0           0     0     644     267408    `
+/390           /0           0     0     644     305564    `
+/428            0           0     0     644     326912    `
+/464            0           0     0     644     362028    `
+/503            0           0     0     644     495788    `
+/539            0           0     0     644     305900    `
+/579           /0           0     0     644     536620    `
+/617            0           0     0     644     330056    `
+/657            0           0     0     644     220368    `
+/702            0           0     0     644     154804    `

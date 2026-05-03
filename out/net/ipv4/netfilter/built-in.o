@@ -1,0 +1,50 @@
+!<thin>
+//                                              434       `
+nf_conntrack_l3proto_ipv4.o/
+nf_conntrack_proto_icmp.o/
+nf_nat_l3proto_ipv4.o/
+nf_nat_proto_icmp.o/
+nf_defrag_ipv4.o/
+nf_socket_ipv4.o/
+nf_log_ipv4.o/
+nf_reject_ipv4.o/
+nf_nat_h323.o/
+nf_nat_pptp.o/
+nf_nat_masquerade_ipv4.o/
+nf_nat_proto_gre.o/
+ip_tables.o/
+iptable_filter.o/
+iptable_mangle.o/
+iptable_nat.o/
+iptable_raw.o/
+iptable_security.o/
+ipt_ah.o/
+ipt_MASQUERADE.o/
+ipt_REJECT.o/
+arp_tables.o/
+arpt_mangle.o/
+arptable_filter.o/
+/0              0           0     0     644     234312    `
+/29             0           0     0     644     204956    `
+/56             0           0     0     644     222608    `
+/79             0           0     0     644     191248    `
+/100            0           0     0     644     202736    `
+/118            0           0     0     644     210124    `
+/136            0           0     0     644     212032    `
+/151            0           0     0     644     208044    `
+/169            0           0     0     644     242616    `
+/184            0           0     0     644     211948    `
+/199            0           0     0     644     201960    `
+/225            0           0     0     644     193036    `
+/245            0           0     0     644     276240    `
+/258            0           0     0     644     191124    `
+/276            0           0     0     644     189844    `
+/294            0           0     0     644     194176    `
+/309            0           0     0     644     188032    `
+/324            0           0     0     644     188124    `
+/344            0           0     0     644     147872    `
+/354            0           0     0     644     190352    `
+/372            0           0     0     644     187720    `
+/386            0           0     0     644     257712    `
+/400            0           0     0     644     176292    `
+/415            0           0     0     644     148072    `

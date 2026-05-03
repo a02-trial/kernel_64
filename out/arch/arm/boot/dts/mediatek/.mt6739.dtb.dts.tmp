@@ -251,7 +251,21 @@
    alignment = <0 0x200000>;
    alloc-ranges = <0 0x40000000 0 0x38000000>;
   };
-# 257 "../arch/arm/boot/dts/mediatek/mt6739.dts"
+
+  soter-shared-mem {
+   compatible = "microtrust,shared_mem";
+   no-map;
+
+
+
+
+
+   size = <0 0x200000>;
+   alignment = <0 0x200000>;
+
+   alloc-ranges = <0 0x40000000 0 0x50000000>;
+  };
+
  };
 
  gic: interrupt-controller@0c000000 {

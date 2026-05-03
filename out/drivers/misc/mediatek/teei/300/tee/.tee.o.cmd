@@ -1,0 +1,1 @@
+cmd_drivers/misc/mediatek/teei/300/tee/tee.o :=  rm -f drivers/misc/mediatek/teei/300/tee/tee.o; arm-linux-androideabi-ar rcSTPD drivers/misc/mediatek/teei/300/tee/tee.o drivers/misc/mediatek/teei/300/tee/tee_core.o drivers/misc/mediatek/teei/300/tee/tee_shm.o drivers/misc/mediatek/teei/300/tee/tee_shm_pool.o drivers/misc/mediatek/teei/300/tee/tee_client_api.o 

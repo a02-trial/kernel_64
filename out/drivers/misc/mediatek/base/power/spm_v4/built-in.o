@@ -1,0 +1,44 @@
+!<thin>
+//                                              384       `
+mtk_idle.o/
+mtk_sleep.o/
+mtk_spm_init.o/
+mtk_spm.o/
+mtk_spm_dpidle.o/
+mtk_idle_profile.o/
+mtk_spm_fs.o/
+mtk_spm_internal.o/
+mtk_spm_resource_req.o/
+mtk_spm_sleep.o/
+mtk_spm_sodi.o/
+mtk_spm_sodi3p0.o/
+mtk_spm_vcorefs.o/
+mtk_lp_sysfs.o/
+mtk_lp_kernfs.o/
+mtk_idle_sysfs.o/
+mtk_lp_sysfs_procfs.o/
+mtk_idle_mt6739.o/
+mtk_spm_dpidle_mt6739.o/
+mtk_spm_sleep_mt6739.o/
+mtk_spm_sodi_mt6739.o/
+/0              0           0     0     644     228484    `
+/12             0           0     0     644     118064    `
+/25             0           0     0     644     3996      `
+/41             0           0     0     644     153572    `
+/52             0           0     0     644     135788    `
+/70             0           0     0     644     45532     `
+/90             0           0     0     644     137588    `
+/104            0           0     0     644     26692     `
+/124            0           0     0     644     18912     `
+/148           /0           0     0     644     118896    `
+/165            0           0     0     644     125188    `
+/181            0           0     0     644     109468    `
+/200            0           0     0     644     134272    `
+/219            0           0     0     644     8644      `
+/235           /0           0     0     644     79216     `
+/252            0           0     0     644     71532     `
+/270            0           0     0     644     71840     `
+/293            0           0     0     644     31776     `
+/312            0           0     0     644     181472    `
+/337            0           0     0     644     187488    `
+/361            0           0     0     644     17172     `

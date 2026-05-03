@@ -1,0 +1,40 @@
+!<thin>
+//                                              422       `
+hdmi.o/
+backlight/lcd.o/
+backlight/backlight.o/
+fbdev/core/fb_cmdline.o/
+fbdev/core/fb_notify.o/
+fbdev/core/fbmem.o/
+fbdev/core/fbmon.o/
+fbdev/core/fbcmap.o/
+fbdev/core/fbsysfs.o/
+fbdev/core/modedb.o/
+fbdev/core/fbcvt.o/
+fbdev/core/fb_defio.o/
+fbdev/core/cfbfillrect.o/
+fbdev/core/cfbcopyarea.o/
+fbdev/core/cfbimgblt.o/
+fbdev/core/sysfillrect.o/
+fbdev/core/syscopyarea.o/
+fbdev/core/sysimgblt.o/
+fbdev/core/fb_sys_fops.o/
+/0              0           0     0     644     116496    `
+/8              0           0     0     644     113028    `
+/25             0           0     0     644     131368    `
+/48             0           0     0     644     7828      `
+/73             0           0     0     644     82472     `
+/97             0           0     0     644     184404    `
+/117            0           0     0     644     139716    `
+/137            0           0     0     644     124392    `
+/158            0           0     0     644     119012    `
+/180            0           0     0     644     135696    `
+/201            0           0     0     644     13876     `
+/221            0           0     0     644     131056    `
+/244            0           0     0     644     111240    `
+/270            0           0     0     644     113936    `
+/296            0           0     0     644     102360    `
+/320            0           0     0     644     104028    `
+/346            0           0     0     644     103340    `
+/372            0           0     0     644     101148    `
+/396            0           0     0     644     101412    `

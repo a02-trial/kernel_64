@@ -23,7 +23,7 @@
 	.code	32                      @ @main
 main:
 .Lfunc_begin0:
-	.file	1 "/home/runner/work/a022f_kernel/a022f_kernel/out/../kernel/bounds.c"
+	.file	1 "/workspaces/a022f_kernel/out/../kernel/bounds.c"
 	.loc	1 17 0                  @ ../kernel/bounds.c:17:0
 	.fnstart
 	.cfi_sections .debug_frame
@@ -159,11 +159,11 @@ main:
 .Linfo_string1:
 	.asciz	"../kernel/bounds.c"    @ string offset=155
 .Linfo_string2:
-	.asciz	"/home/runner/work/a022f_kernel/a022f_kernel/out" @ string offset=174
+	.asciz	"/workspaces/a022f_kernel/out" @ string offset=174
 .Linfo_string3:
-	.asciz	"main"                  @ string offset=222
+	.asciz	"main"                  @ string offset=203
 .Linfo_string4:
-	.asciz	"int"                   @ string offset=227
+	.asciz	"int"                   @ string offset=208
 	.ident	"Android (6443078 based on r383902) clang version 11.0.1 (https://android.googlesource.com/toolchain/llvm-project b397f81060ce6d701042b782172ed13bee898b79)"
 	.section	".note.GNU-stack","",%progbits
 	.section	.debug_line,"",%progbits

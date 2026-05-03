@@ -1,0 +1,49 @@
+!<thin>
+//                                              384       `
+usbstring.o/
+config.o/
+epautoconf.o/
+composite.o/
+functions.o/
+configfs.o/
+u_f.o/
+udc/core.o/
+udc/trace.o/
+function/f_acm.o/
+function/u_serial.o/
+function/f_serial.o/
+function/u_ether.o/
+function/f_rndis.o/
+function/rndis.o/
+function/f_fs.o/
+function/f_midi.o/
+function/f_hid.o/
+function/f_dm.o/
+function/f_mtp.o/
+function/f_ptp.o/
+function/f_audio_source.o/
+function/f_accessory.o/
+
+/0              0           0     0     644     6076      `
+/13             0           0     0     644     103680    `
+/23             0           0     0     644     88660     `
+/37             0           0     0     644     200944    `
+/50             0           0     0     644     99824     `
+/63             0           0     0     644     226844    `
+/75             0           0     0     644     8368      `
+/82             0           0     0     644     235440    `
+/94             0           0     0     644     155944    `
+/107            0           0     0     644     116560    `
+/125            0           0     0     644     161072    `
+/146            0           0     0     644     102596    `
+/167            0           0     0     644     256484    `
+/187            0           0     0     644     201476    `
+/207            0           0     0     644     200964    `
+/225            0           0     0     644     315584    `
+/242            0           0     0     644     156756    `
+/261            0           0     0     644     160040    `
+/279            0           0     0     644     109472    `
+/296            0           0     0     644     243640    `
+/314            0           0     0     644     92436     `
+/332            0           0     0     644     151508    `
+/359            0           0     0     644     200024    `

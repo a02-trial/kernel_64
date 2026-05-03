@@ -1,0 +1,10 @@
+!<thin>
+//                                              72        `
+regulator/regulator.o/
+gpio/gpio.o/
+mclk/mclk.o/
+imgsensor_cfg_table.o/
+/0              0           0     0     644     94492     `
+/23             0           0     0     644     93500     `
+/36             0           0     0     644     89728     `
+/49             0           0     0     644     8380      `

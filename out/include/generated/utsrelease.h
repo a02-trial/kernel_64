@@ -1,1 +1,1 @@
-#define UTS_RELEASE "4.14.186-RooXie_SM-A022F+"
+#define UTS_RELEASE "4.14.186_Rawon_SM-A022F+"

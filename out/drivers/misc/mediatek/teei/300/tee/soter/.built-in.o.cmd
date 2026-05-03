@@ -1,0 +1,1 @@
+cmd_drivers/misc/mediatek/teei/300/tee/soter/built-in.o :=   rm -f drivers/misc/mediatek/teei/300/tee/soter/built-in.o; arm-linux-androideabi-ar rcSTPD drivers/misc/mediatek/teei/300/tee/soter/built-in.o drivers/misc/mediatek/teei/300/tee/soter/soter.o 

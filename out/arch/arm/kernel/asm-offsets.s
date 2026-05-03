@@ -28,7 +28,7 @@
 	.code	32                      @ @main
 main:
 .Lfunc_begin0:
-	.file	1 "/home/runner/work/a022f_kernel/a022f_kernel/out/../arch/arm/kernel/asm-offsets.c"
+	.file	1 "/workspaces/a022f_kernel/out/../arch/arm/kernel/asm-offsets.c"
 	.loc	1 60 0                  @ ../arch/arm/kernel/asm-offsets.c:60:0
 	.fnstart
 	.cfi_sections .debug_frame
@@ -638,11 +638,11 @@ main:
 .Linfo_string1:
 	.asciz	"../arch/arm/kernel/asm-offsets.c" @ string offset=155
 .Linfo_string2:
-	.asciz	"/home/runner/work/a022f_kernel/a022f_kernel/out" @ string offset=188
+	.asciz	"/workspaces/a022f_kernel/out" @ string offset=188
 .Linfo_string3:
-	.asciz	"main"                  @ string offset=236
+	.asciz	"main"                  @ string offset=217
 .Linfo_string4:
-	.asciz	"int"                   @ string offset=241
+	.asciz	"int"                   @ string offset=222
 	.ident	"Android (6443078 based on r383902) clang version 11.0.1 (https://android.googlesource.com/toolchain/llvm-project b397f81060ce6d701042b782172ed13bee898b79)"
 	.section	".note.GNU-stack","",%progbits
 	.section	.debug_line,"",%progbits
