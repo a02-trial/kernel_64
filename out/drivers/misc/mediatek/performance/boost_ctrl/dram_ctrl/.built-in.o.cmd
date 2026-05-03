@@ -1,1 +1,0 @@
-cmd_drivers/misc/mediatek/performance/boost_ctrl/dram_ctrl/built-in.o :=   rm -f drivers/misc/mediatek/performance/boost_ctrl/dram_ctrl/built-in.o; arm-linux-androideabi-ar rcSTPD drivers/misc/mediatek/performance/boost_ctrl/dram_ctrl/built-in.o drivers/misc/mediatek/performance/boost_ctrl/dram_ctrl/dram_ctrl.o 

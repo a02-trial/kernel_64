@@ -1,3 +1,0 @@
-kernel/mm/zpool.ko
-kernel/mm/zsmalloc.ko
-kernel/mm/sec_mm/sec_mm.ko

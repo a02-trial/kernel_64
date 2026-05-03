@@ -1,1 +1,0 @@
-cmd_drivers/misc/mediatek/ext_gic/mt6739/built-in.o :=   rm -f drivers/misc/mediatek/ext_gic/mt6739/built-in.o; arm-linux-androideabi-ar rcSTPD drivers/misc/mediatek/ext_gic/mt6739/built-in.o drivers/misc/mediatek/ext_gic/mt6739/plat_sw_mode.o 

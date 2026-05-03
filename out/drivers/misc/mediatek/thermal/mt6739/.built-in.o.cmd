@@ -1,1 +1,0 @@
-cmd_drivers/misc/mediatek/thermal/mt6739/built-in.o :=   rm -f drivers/misc/mediatek/thermal/mt6739/built-in.o; arm-linux-androideabi-ar rcSTPD drivers/misc/mediatek/thermal/mt6739/built-in.o drivers/misc/mediatek/thermal/mt6739/src/built-in.o 

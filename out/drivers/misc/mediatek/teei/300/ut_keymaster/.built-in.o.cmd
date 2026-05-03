@@ -1,1 +1,0 @@
-cmd_drivers/misc/mediatek/teei/300/ut_keymaster/built-in.o :=   rm -f drivers/misc/mediatek/teei/300/ut_keymaster/built-in.o; arm-linux-androideabi-ar rcSTPD drivers/misc/mediatek/teei/300/ut_keymaster/built-in.o drivers/misc/mediatek/teei/300/ut_keymaster/ut_keymaster.o 

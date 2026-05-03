@@ -1,1 +1,0 @@
-cmd_drivers/misc/mediatek/cqdma/built-in.o :=   rm -f drivers/misc/mediatek/cqdma/built-in.o; arm-linux-androideabi-ar rcSTPD drivers/misc/mediatek/cqdma/built-in.o drivers/misc/mediatek/cqdma/cqdma.o 

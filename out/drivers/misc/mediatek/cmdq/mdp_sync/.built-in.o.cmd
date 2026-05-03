@@ -1,1 +1,0 @@
-cmd_drivers/misc/mediatek/cmdq/mdp_sync/built-in.o :=   rm -f drivers/misc/mediatek/cmdq/mdp_sync/built-in.o; arm-linux-androideabi-ar rcSTPD drivers/misc/mediatek/cmdq/mdp_sync/built-in.o drivers/misc/mediatek/cmdq/mdp_sync/mdp_fence.o 

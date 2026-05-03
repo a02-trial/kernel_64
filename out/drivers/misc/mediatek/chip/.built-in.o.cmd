@@ -1,1 +1,0 @@
-cmd_drivers/misc/mediatek/chip/built-in.o :=   rm -f drivers/misc/mediatek/chip/built-in.o; arm-linux-androideabi-ar rcSTPD drivers/misc/mediatek/chip/built-in.o drivers/misc/mediatek/chip/CHIP_COMMON.o drivers/misc/mediatek/chip/mt6739/built-in.o 

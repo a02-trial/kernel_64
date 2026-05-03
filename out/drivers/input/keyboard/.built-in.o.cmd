@@ -1,1 +1,0 @@
-cmd_drivers/input/keyboard/built-in.o :=   rm -f drivers/input/keyboard/built-in.o; arm-linux-androideabi-ar rcSTPD drivers/input/keyboard/built-in.o drivers/input/keyboard/atkbd.o drivers/input/keyboard/mediatek/built-in.o 

@@ -1,1 +1,0 @@
-cmd_drivers/misc/mediatek/lens/main/common/lc898217afb/built-in.o :=   rm -f drivers/misc/mediatek/lens/main/common/lc898217afb/built-in.o; arm-linux-androideabi-ar rcSTPD drivers/misc/mediatek/lens/main/common/lc898217afb/built-in.o drivers/misc/mediatek/lens/main/common/lc898217afb/LC898217AFB.o 

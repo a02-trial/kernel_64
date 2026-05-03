@@ -1,1 +1,0 @@
-cmd_drivers/misc/mediatek/btif/common/built-in.o :=   rm -f drivers/misc/mediatek/btif/common/built-in.o; arm-linux-androideabi-ar rcSTPD drivers/misc/mediatek/btif/common/built-in.o drivers/misc/mediatek/btif/common/btif.o 

@@ -1,1 +1,0 @@
-cmd_drivers/misc/mediatek/teei/300/tz_vfs/built-in.o :=   rm -f drivers/misc/mediatek/teei/300/tz_vfs/built-in.o; arm-linux-androideabi-ar rcSTPD drivers/misc/mediatek/teei/300/tz_vfs/built-in.o drivers/misc/mediatek/teei/300/tz_vfs/vfsFun.o drivers/misc/mediatek/teei/300/tz_vfs/fp_vendor.o 

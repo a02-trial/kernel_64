@@ -1,1 +1,0 @@
-cmd_drivers/misc/mediatek/teei/300/tz_dcih/built-in.o :=   rm -f drivers/misc/mediatek/teei/300/tz_dcih/built-in.o; arm-linux-androideabi-ar rcSTPD drivers/misc/mediatek/teei/300/tz_dcih/built-in.o drivers/misc/mediatek/teei/300/tz_dcih/tz_dcih.o drivers/misc/mediatek/teei/300/tz_dcih/tz_dcih_test.o 

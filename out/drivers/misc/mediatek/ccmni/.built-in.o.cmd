@@ -1,1 +1,0 @@
-cmd_drivers/misc/mediatek/ccmni/built-in.o :=   rm -f drivers/misc/mediatek/ccmni/built-in.o; arm-linux-androideabi-ar rcSTPD drivers/misc/mediatek/ccmni/built-in.o drivers/misc/mediatek/ccmni/eccmni.o 

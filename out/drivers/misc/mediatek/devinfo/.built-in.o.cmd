@@ -1,1 +1,0 @@
-cmd_drivers/misc/mediatek/devinfo/built-in.o :=   rm -f drivers/misc/mediatek/devinfo/built-in.o; arm-linux-androideabi-ar rcSTPD drivers/misc/mediatek/devinfo/built-in.o drivers/misc/mediatek/devinfo/devinfo.o 

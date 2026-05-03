@@ -1,1 +1,0 @@
-cmd_drivers/misc/mediatek/tee_sanity/built-in.o :=   rm -f drivers/misc/mediatek/tee_sanity/built-in.o; arm-linux-androideabi-ar rcSTPD drivers/misc/mediatek/tee_sanity/built-in.o drivers/misc/mediatek/tee_sanity/tee_sanity.o 

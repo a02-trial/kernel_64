@@ -1,1 +1,0 @@
-cmd_drivers/misc/mediatek/boot/BOOT_COMMON.o :=  rm -f drivers/misc/mediatek/boot/BOOT_COMMON.o; arm-linux-androideabi-ar rcSTPD drivers/misc/mediatek/boot/BOOT_COMMON.o drivers/misc/mediatek/boot/mtk_boot_common.o drivers/misc/mediatek/boot/mtk_boot.o 
