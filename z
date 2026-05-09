@@ -6,6 +6,11 @@ export PATH="$(pwd)/toolchain/clang/bin:${PWD}/toolchain/gcc/bin:${PATH}"
 rm -rf out
 mkdir -p out
 
+sudo fallocate -l 8G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+
 export ARCH=arm
 export CC=clang
 export HOSTCC=clang
