@@ -6,11 +6,6 @@ export PATH="$(pwd)/toolchain/clang/bin:${PWD}/toolchain/gcc/bin:${PATH}"
 rm -rf out
 mkdir -p out
 
-sudo fallocate -l 8G /swapfile
-sudo chmod 600 /swapfile
-sudo mkswap /swapfile
-sudo swapon /swapfile
-
 export ARCH=arm
 export CC=clang
 export HOSTCC=clang
@@ -20,4 +15,4 @@ export CONFIG_SECTION_MISMATCH_WARN_ONLY=y
 export CFLAGS_WARN=-Wunused-but-set-variable
 export xxx="KCFLAGS=-w CONFIG_SECTION_MISMATCH_WARN_ONLY=y CFLAGS_WARN=-Wunused-but-set-variable ARCH=arm CC=clang HOSTCC=clang CROSS_COMPILE=arm-linux-androideabi-"
 make O=out $xxx a022m_defconfig
-make O=out $xxx -j"$(nproc --all)" 2>&1 | tee build.log
+make O=out $xxx -j2 --all)" 2>&1 | tee build.log
