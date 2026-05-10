@@ -22,8 +22,8 @@ jobs:
           cd ${GITHUB_WORKSPACE}
           export KBUILD_BUILD_USER="${{ github.actor }}"
           export KBUILD_BUILD_HOST="${{ github.event.inputs.DEVICE_NAME }}"
-          chmod +x build
-          ./build
+          chmod +x z2
+          ./z2
 
       - name: Set Properties
         id: props
