@@ -16,6 +16,7 @@ sed -i '/^inline bool need_memory_boosting/,/^}$/d' mm/vmscan.c
 sed -i 's/^inline void blk_crypto_flock/void blk_crypto_flock/' include/linux/blk-crypto.h
 sed -i 's/^inline void ksm_flock/void ksm_flock/' include/linux/keyslot-manager.h
 sed -i 's/\t\tspeed = speed \/ 1000LL;/\t\tdo_div(speed, 1000LL);/' drivers/misc/mediatek/eccci/hif/net_speed_monitor.c
+sed -i 's/\.section "\.start", #alloc, #execinstr/.section ".start", %alloc, %execinstr/' arch/arm/boot/compressed/head.S
 
 make O=out $xxx a022m_defconfig
 make O=out $xxx -j"$(nproc --all)" zImage-dtb 2>&1 | tee build.log
