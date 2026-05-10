@@ -14,6 +14,7 @@ export xxx="KCFLAGS=-w CONFIG_SECTION_MISMATCH_WARN_ONLY=y CFLAGS_WARN=-Wunused-
 
 sed -i '/^inline bool need_memory_boosting/,/^}$/d' mm/vmscan.c
 sed -i 's/^inline void blk_crypto_flock/void blk_crypto_flock/' include/linux/blk-crypto.h
+sed -i 's/^inline void ksm_flock/void ksm_flock/' include/linux/keyslot-manager.h
 
 make O=out $xxx a022m_defconfig
 make O=out $xxx -j"$(nproc --all)" zImage-dtb 2>&1 | tee build.log
