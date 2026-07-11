@@ -2937,6 +2937,16 @@ void nvt_ts_early_resume(struct device *dev)
 		ts->power_status = LP_MODE_EXIT;
 		nvt_ts_lcd_reset_ctrl(false);
 		mutex_unlock(&ts->lock);
+
+		/* [FIX] resume-latency: give the controller a short window to
+		 * stabilize after leaving LP mode before touch recovery resumes.
+		 */
+		if (ts->platdata->resume_lp_delay > 0) {
+			input_info(true, &ts->client->dev,
+				"%s: wait %u ms for LP exit stabilization\n",
+				__func__, ts->platdata->resume_lp_delay);
+			msleep(ts->platdata->resume_lp_delay);
+		}
 	}
 }
 
@@ -2976,6 +2986,17 @@ int32_t nvt_ts_resume(struct device *dev)
 #if NVT_TOUCH_SUPPORT_HW_RST
 	gpio_set_value(ts->reset_gpio, 1);
 #endif
+
+	/* [FIX] resume-latency: allow the controller to become responsive
+	 * after the reset/PLL wake-up sequence before firmware restore and
+	 * IRQ re-enable.
+	 */
+	if (ts->platdata->resume_lp_delay > 0) {
+		input_info(true, &ts->client->dev,
+			"%s: wait %u ms before firmware restore\n",
+			__func__, ts->platdata->resume_lp_delay);
+		msleep(ts->platdata->resume_lp_delay);
+	}
 
 	if (nvt_update_firmware(ts->platdata->firmware_name)) {
 		input_err(true, &ts->client->dev,"download firmware failed, ignore check fw state\n");
