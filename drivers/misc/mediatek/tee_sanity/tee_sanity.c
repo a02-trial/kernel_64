@@ -30,14 +30,12 @@ static u64 boot_to_kernel_ns;
 
 void mtk_set_prefer_bigcore(struct task_struct *current_task)
 {
-#ifdef SCHED_PREFER_BIG
-    	sched_set_cpuprefer(current_task->pid, SCHED_PREFER_BIG);
-#endif
+	sched_set_cpuprefer(current->pid, SCHED_PREFER_BIG);
 }
 
 void mtk_set_task_basic_util(struct task_struct *current_task)
 {
-	set_task_util_min_pct(current_task->pid, TEE_TASK_MIN_UTIL);
+	set_task_util_min_pct(current->pid, TEE_TASK_MIN_UTIL);
 }
 
 static void set_boot_to_kernel_time(void)
