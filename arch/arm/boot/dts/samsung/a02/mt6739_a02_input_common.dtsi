@@ -161,10 +161,10 @@
 		novatek,lcdid2-gpio = <&pio 10 0x0>;
 		novatek,lcdid3-gpio = <&pio 86 0x0>;
 		novatek,lcdid = <1 3 5>;	// CSOT a-Si, BOE a-Si CSOT LTPS
-		novatek,resume_lp_delay = <0 15 0 15 0 32>;	// CSOT a-Si, BOE a-Si CSOT LTPS
+		novatek,resume_lp_delay = <0 15 0 15 0 15>;	// lebih konservatif untuk panel A02
 		novatek,lcdtype = <0 0x0aa240 0 0x2a6240 0 0x1af240>;
-		novatek,fw_name = "", "tsp_novatek/nt36525_a02_csot.bin", "", "tsp_novatek/nt36525_a02_boe.bin", "", "tsp_novatek/nt36575_a02_ltps.bin";
-		novatek,fw_name_mp = "", "tsp_novatek/nt36525_a02_mp_csot.bin", "", "tsp_novatek/nt36525_a02_mp_boe.bin", "", "tsp_novatek/nt36575_a02_mp_ltps.bin";
+		novatek,fw_name = "tsp_novatek/nt36525_a02_csot.bin", "tsp_novatek/nt36525_a02_csot.bin", "tsp_novatek/nt36525_a02_boe.bin", "tsp_novatek/nt36525_a02_boe.bin", "tsp_novatek/nt36525_a02_csot.bin", "tsp_novatek/nt36525_a02_csot.bin";
+		novatek,fw_name_mp = "tsp_novatek/nt36525_a02_mp_csot.bin", "tsp_novatek/nt36525_a02_mp_csot.bin", "tsp_novatek/nt36525_a02_mp_boe.bin", "tsp_novatek/nt36525_a02_mp_boe.bin", "tsp_novatek/nt36525_a02_mp_csot.bin", "tsp_novatek/nt36525_a02_mp_csot.bin";
 		novatek,regulator_lcd_vdd = "gpio_lcd_en_1p8";
 		novatek,regulator_lcd_reset = "gpio_lcd_rst";
 		novatek,regulator_lcd_bl = "gpio_lcd_bl_en";
