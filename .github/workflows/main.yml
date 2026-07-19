@@ -39,9 +39,9 @@ jobs:
       - name: Make Zip
         run: |
           cd ${GITHUB_WORKSPACE}
-          cd out/arch/arm/boot
+          cd out/arch/arm64/boot
           export DEVICE_NAME=SM-A022F
-          mv zImage-dtb boot.img-kernel
+          mv Image boot.img-kernel
           zip -r9 ${DEVICE_NAME}-${{ steps.props.outputs.date }}.zip boot.img-kernel
           cp *.zip ${{ github.workspace }}/.
         
@@ -62,6 +62,6 @@ jobs:
       
       - name: Link of Release
         run: |
-          echo "Enjoy your Newly Built Kernel"
+          echo "Enjoy your Newly Built 64-bit Kernel"
           echo "https://github.com/${GITHUB_REPOSITORY}/releases/tag/${{ github.run_id }}-${{ steps.props.outputs.date }}"     
         
