@@ -46,7 +46,7 @@ static u32 __initdata sec_extra_info_base = SEC_EXTRA_INFO_BASE;
 static u32 __initdata sec_extra_info_size = SZ_64K;
 
 DEFINE_PER_CPU(unsigned char, coreregs_stored);
-#ifdef CONFIG_MACH_MT6739
+#ifndef CONFIG_ARM64
 DEFINE_PER_CPU(struct pt_regs, sec_debug_core_reg);
 DEFINE_PER_CPU(sec_debug_mmu_reg_t, sec_debug_mmu_reg);
 #else
@@ -59,7 +59,7 @@ module_param_named(enable, sec_debug_level.en.kernel_fault, ushort, 0644);
 module_param_named(enable_user, sec_debug_level.en.user_fault, ushort, 0644);
 module_param_named(level, sec_debug_level.uint_val, uint, 0644);
 
-#ifdef CONFIG_MACH_MT6739
+#ifndef CONFIG_ARM64
 void sec_debug_save_core_reg(void *v_regs)
 {
 	struct pt_regs *regs = (struct pt_regs *)v_regs;
@@ -217,7 +217,7 @@ void sec_debug_save_mmu_reg(sec_debug_mmu_reg_t *mmu_reg)
 
 void sec_debug_init_mmu(void *unused)
 {
-#ifdef CONFIG_MACH_MT6739
+#ifndef CONFIG_ARM64
 	sec_debug_save_mmu_reg(&per_cpu(sec_debug_mmu_reg, raw_smp_processor_id()));
 #else
 	sec_debug_save_mmu_reg(&per_cpu(sec_aarch64_mmu_reg, raw_smp_processor_id()));
@@ -245,7 +245,7 @@ int sec_save_context(int cpu, void *v_regs)
 	local_irq_save(flags);
 	sec_debug_save_core_reg(regs);
 
-#ifdef CONFIG_MACH_MT6739
+#ifndef CONFIG_ARM64
 	if (cpu == _THIS_CPU) {
 		sec_debug_save_mmu_reg(&per_cpu(sec_debug_mmu_reg, smp_processor_id()));
 	} else {
