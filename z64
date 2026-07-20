@@ -15,4 +15,6 @@ export CONFIG_SECTION_MISMATCH_WARN_ONLY=y
 export CFLAGS_WARN=-Wunused-but-set-variable
 export xxx="KCFLAGS=-w CONFIG_SECTION_MISMATCH_WARN_ONLY=y CFLAGS_WARN=-Wunused-but-set-variable ARCH=arm64 CC=clang HOSTCC=clang CROSS_COMPILE=aarch64-linux-android-"
 make O=out $xxx a02_64_defconfig
-make O=out $xxx -j"$(nproc --all)" zImage dts 2>&1 | tee build.log
+# arm64 gak punya target "zImage" (itu punya arch/arm/, 32-bit).
+# Target yang bener buat arm64: Image.gz-dtb (MTK biasa pakai ini, kernel+dtb jadi satu)
+make O=out $xxx -j"$(nproc --all)" Image.gz-dtb dtbs 2>&1 | tee build.log
