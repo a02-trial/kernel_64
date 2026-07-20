@@ -41,7 +41,7 @@ jobs:
           cd ${GITHUB_WORKSPACE}
           cd out/arch/arm64/boot
           export DEVICE_NAME=SM-A022F
-          mv Image boot.img-kernel
+          mv zImage boot.img-kernel
           zip -r9 ${DEVICE_NAME}-${{ steps.props.outputs.date }}.zip boot.img-kernel
           cp *.zip ${{ github.workspace }}/.
         
