@@ -30,9 +30,7 @@
 	defined(CONFIG_MACH_MT6765) || defined(CONFIG_MACH_MT6761) || \
 	defined(CONFIG_MACH_MT6771) || defined(CONFIG_MACH_MT3967) || \
 	defined(CONFIG_MACH_MT6768) || defined(CONFIG_MACH_MT8168) || \
-	defined(CONFIG_MACH_MT6885) || defined(CONFIG_MACH_MT6785) || \
-	defined(CONFIG_MACH_MT6873) || defined(CONFIG_MACH_MT6853) || \
-	defined(CONFIG_MACH_MT6833)
+	defined(CONFIG_MACH_MT6885) || defined(CONFIG_MACH_MT6785)
 
 #include <ddp_clkmgr.h>
 #endif
@@ -43,8 +41,7 @@
 #if defined(CONFIG_MACH_MT6758) || defined(CONFIG_MACH_MT6765) || \
 	defined(CONFIG_MACH_MT6761) || defined(CONFIG_MACH_MT6771) || \
 	defined(CONFIG_MACH_MT3967) || defined(CONFIG_MACH_MT6768) || \
-	defined(CONFIG_MACH_MT6885) || defined(CONFIG_MACH_MT6785) || \
-	defined(CONFIG_MACH_MT6873)
+	defined(CONFIG_MACH_MT6885) || defined(CONFIG_MACH_MT6785)
 
 #include <mtk_leds_drv.h>
 #include <mtk_leds_sw.h>
@@ -660,8 +657,7 @@ static int ddp_pwm_power_on(enum DISP_MODULE_ENUM module, void *handle)
 	ddp_clk_prepare_enable(ddp_get_module_clk_id(module));
 	ddp_clk_prepare_enable(TOP_MUX_DISP_PWM);
 #elif defined(CONFIG_MACH_MT3967) || defined(CONFIG_MACH_MT6785) || \
-	defined(CONFIG_MACH_MT6885) || defined(CONFIG_MACH_MT6873) || \
-	defined(CONFIG_MACH_MT6853) || defined(CONFIG_MACH_MT6833)
+	defined(CONFIG_MACH_MT6885)
 	ddp_clk_prepare_enable(ddp_get_module_clk_id(module));
 	ddp_clk_prepare_enable(CLK_MUX_DISP_PWM);
 #else
@@ -722,8 +718,7 @@ static int ddp_pwm_power_off(enum DISP_MODULE_ENUM module, void *handle)
 	ddp_clk_disable_unprepare(ddp_get_module_clk_id(module));
 	ddp_clk_disable_unprepare(TOP_MUX_DISP_PWM);
 #elif defined(CONFIG_MACH_MT3967) || defined(CONFIG_MACH_MT6785) || \
-	defined(CONFIG_MACH_MT6885) || defined(CONFIG_MACH_MT6873) || \
-	defined(CONFIG_MACH_MT6853) || defined(CONFIG_MACH_MT6833)
+	defined(CONFIG_MACH_MT6885)
 	ddp_clk_disable_unprepare(ddp_get_module_clk_id(module));
 	ddp_clk_disable_unprepare(CLK_MUX_DISP_PWM);
 #else
@@ -800,8 +795,7 @@ bool disp_pwm_is_osc(void)
 	defined(CONFIG_MACH_MT6761) || defined(CONFIG_MACH_MT6771) || \
 	defined(CONFIG_MACH_MT3967) || defined(CONFIG_MACH_MT6768) || \
 	defined(CONFIG_MACH_MT8168) || defined(CONFIG_MACH_MT6885) || \
-	defined(CONFIG_MACH_MT6785) || defined(CONFIG_MACH_MT6873) || \
-	defined(CONFIG_MACH_MT6853) || defined(CONFIG_MACH_MT6833)
+	defined(CONFIG_MACH_MT6785)
 
 	is_osc = disp_pwm_mux_is_osc();
 #endif

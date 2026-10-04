@@ -166,6 +166,7 @@ enum power_supply_ext_property {
 #if defined(CONFIG_WIRELESS_TX_MODE)
 	POWER_SUPPLY_EXT_PROP_WIRELESS_TX_AVG_CURR,
 #endif
+	POWER_SUPPLY_EXT_PROP_WIRELESS_2ND_DONE,
 	POWER_SUPPLY_EXT_PROP_CURRENT_MEASURE,
 #if defined(CONFIG_DIRECT_CHARGING)
 	POWER_SUPPLY_EXT_PROP_DIRECT_CHARGER_MODE,
@@ -205,17 +206,11 @@ enum power_supply_ext_property {
 	POWER_SUPPLY_EXT_PROP_PROP_FILTER_CFG,
 	POWER_SUPPLY_EXT_PROP_ENABLE_HW_FACTORY_MODE,
 	POWER_SUPPLY_EXT_PROP_IB_MODE,
+	POWER_SUPPLY_EXT_PROP_IS_SLATE_MODE,
 	POWER_SUPPLY_EXT_PROP_OB_MODE_CABLE_REMOVED,
 	POWER_SUPPLY_EXT_PROP_BATT_F_MODE,
 	POWER_SUPPLY_EXT_PROP_BATT_VSYS,
 	POWER_SUPPLY_EXT_PROP_PMIC_BAT_VOLTAGE,
-	POWER_SUPPLY_EXT_PROP_RP_LEVEL,
-#if defined(CONFIG_DISCRETE_CHARGER)
-	POWER_SUPPLY_EXT_PROP_FLASH_STATE,
-#endif
-	POWER_SUPPLY_EXT_PROP_SRCCAP,
-	POWER_SUPPLY_EXT_PROP_BUCK_STATE,
-	POWER_SUPPLY_EXT_PROP_MIX_LIMIT,
 };
 
 enum rx_device_type {
@@ -618,9 +613,6 @@ typedef struct sec_age_data {
 	unsigned int recharge_condition_vcell;
 	unsigned int full_condition_vcell;
 	unsigned int full_condition_soc;
-#if defined(CONFIG_BATTERY_AGE_FORECAST_B2B)
-	unsigned int max_charging_current;
-#endif
 } sec_age_data_t;
 #endif
 
@@ -741,15 +733,13 @@ static inline struct power_supply *get_power_supply_by_name(char *name)
 	cable_type == SEC_BATTERY_CABLE_9V_ERR || \
 	cable_type == SEC_BATTERY_CABLE_9V_TA || \
 	cable_type == SEC_BATTERY_CABLE_9V_UNKNOWN || \
-	cable_type == SEC_BATTERY_CABLE_12V_TA || \
-	cable_type == SEC_BATTERY_CABLE_9V_POGO)
+	cable_type == SEC_BATTERY_CABLE_12V_TA)
 
 #define is_hv_wire_9v_type(cable_type) ( \
 	cable_type == SEC_BATTERY_CABLE_9V_ERR || \
 	cable_type == SEC_BATTERY_CABLE_9V_TA || \
 	cable_type == SEC_BATTERY_CABLE_9V_UNKNOWN || \
-	cable_type == SEC_BATTERY_CABLE_QC20 || \
-	cable_type == SEC_BATTERY_CABLE_9V_POGO)
+	cable_type == SEC_BATTERY_CABLE_QC20)
 
 #define is_hv_wire_12v_type(cable_type) ( \
 	cable_type == SEC_BATTERY_CABLE_12V_TA || \

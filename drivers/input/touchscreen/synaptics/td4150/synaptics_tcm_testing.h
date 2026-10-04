@@ -68,6 +68,7 @@ enum test_code {
 	TEST_FW_CRC = 0xC0,
 	TEST_CHECK_CONNECT = 0xC1,
 	TEST_SENSITIVITY = 0xC2,
+	TEST_FACE_DELTA = 195,
 };
 
 struct testing_hcd {
@@ -100,7 +101,8 @@ struct testing_hcd {
 int testing_run_prod_test_item(struct testing_hcd *sec_fn_test, enum test_code test_code);
 
 /* test limit for the device id checking */
-static const char *device_id_limit = "3618";
+/* need to check*/
+//static const char *device_id_limit = "3618";
 
 /* test limit for the config id checking */
 static const char config_id_limit[16] = {

@@ -16,9 +16,10 @@
 
 #include "ged_type.h"
 
-#define	GED_GPU_INFO_CAPABILITY 20
-#define GED_GPU_INFO_RUNTIME 21
-
+enum GED_GPU_INFO_TYPE {
+	GED_GPU_INFO_CAPABILITY = 20,
+	GED_GPU_INFO_RUNTIME,
+};
 
 GED_ERROR ged_hal_init(void);
 

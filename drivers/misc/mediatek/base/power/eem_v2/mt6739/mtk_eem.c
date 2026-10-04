@@ -1522,15 +1522,9 @@ static enum hrtimer_restart eem_log_timer_func(struct hrtimer *timer)
 static int eem_volt_thread_handler(void *data)
 {
 	struct eem_ctrl *ctrl = (struct eem_ctrl *)data;
-	struct eem_det *det;
+	struct eem_det *det = id_to_eem_det(ctrl->det_id);
 
 	FUNC_ENTER(FUNC_LV_HELP);
-	if (ctrl == NULL)
-		return 0;
-
-	det = id_to_eem_det(ctrl->det_id);
-	if (det == NULL)
-		return 0;
 	#ifdef __KERNEL__
 	do {
 		wait_event_interruptible(ctrl->wq, ctrl->volt_update);

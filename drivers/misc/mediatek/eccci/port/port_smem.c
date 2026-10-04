@@ -17,7 +17,6 @@
 #include <linux/wait.h>
 #include <linux/module.h>
 #include <linux/poll.h>
-#include <linux/kmemleak.h>
 #ifdef CONFIG_COMPAT
 #include <linux/compat.h>
 #endif
@@ -26,81 +25,6 @@
 #include "port_smem.h"
 
 #define TAG SMEM
-
-#ifdef DEBUG_FOR_CCB
-static struct buffer_header *s_ccb_ctl_head_tbl;
-static unsigned int *s_dl_last_w;
-static unsigned int s_dl_active_bitmap;
-
-static unsigned int dl_active_scan(void)
-{
-	unsigned int i;
-	struct buffer_header *ptr;
-	unsigned int bit_mask;
-
-	if (!s_ccb_ctl_head_tbl)
-		return 0;
-	if (!s_dl_last_w)
-		return 0;
-	ptr = s_ccb_ctl_head_tbl;
-	bit_mask = 0;
-
-	for (i = 0; i < ccb_configs_len; i++) {
-		if ((s_dl_last_w[i] != ptr[i].dl_write_index) ||
-			(ptr[i].dl_read_index != ptr[i].dl_write_index)) {
-			bit_mask |= 1 << i;
-			s_dl_last_w[i] = ptr[i].dl_write_index;
-		}
-	}
-	return bit_mask;
-}
-
-static inline int append_ccb_str(char buf[], int offset, int size,
-				unsigned int id, unsigned int w, unsigned int r)
-{
-	int ret;
-
-	if (!buf)
-		return 0;
-
-	ret = snprintf(&buf[offset], size - offset, "[%u]w:%u-r:%u,", id, w, r);
-	if (ret > 0)
-		return ret + offset;
-	return 0;
-}
-
-static void ccb_fifo_peek(struct buffer_header *ptr)
-{
-	unsigned int i, r, w, wakeup_map = 0;
-	int offset = 0;
-	char *out_buf;
-
-	out_buf = kmalloc(4096, GFP_ATOMIC);
-
-	for (i = 0; i < ccb_configs_len; i++) {
-		if (ptr[i].dl_read_index != ptr[i].dl_write_index) {
-			r = ptr[i].dl_read_index;
-			w = ptr[i].dl_write_index;
-			wakeup_map |= 1 << i;
-			offset = append_ccb_str(out_buf, offset, 4096, i, w, r);
-		}
-	}
-
-	if (out_buf) {
-		CCCI_NORMAL_LOG(0, "CCB", "Wakeup peek:0x%x %s\r\n", wakeup_map,
-				out_buf);
-		kfree(out_buf);
-	} else
-		CCCI_NORMAL_LOG(0, "CCB", "Wakeup peek bitmap: 0x%x\r\n",
-					wakeup_map);
-}
-
-void mtk_ccci_ccb_info_peek(void)
-{
-	if (s_ccb_ctl_head_tbl)
-		ccb_fifo_peek(s_ccb_ctl_head_tbl);
-}
-#endif
 
 static enum hrtimer_restart smem_tx_timer_func(struct hrtimer *timer)
 {
@@ -166,7 +90,7 @@ static void collect_ccb_info(int md_id, struct ccci_smem_port *smem_port)
 	/* refresh all CCB users' address, except the first one,
 	 * because user's size has been re-calculated above
 	 */
-	if (SMEM_USER_CCB_END - SMEM_USER_CCB_START >= 1) {
+	if (SMEM_USER_CCB_END - SMEM_USER_CCB_START >= 1)
 		for (i = SMEM_USER_CCB_START + 1;
 			 i <= SMEM_USER_CCB_END; i++) {
 			curr = ccci_md_get_smem_by_user_id(md_id, i);
@@ -186,14 +110,6 @@ static void collect_ccb_info(int md_id, struct ccci_smem_port *smem_port)
 				(unsigned int)curr->base_md_view_phy);
 			}
 		}
-#ifdef DEBUG_FOR_CCB
-		curr = ccci_md_get_smem_by_user_id(md_id,
-						SMEM_USER_RAW_CCB_CTRL);
-		if (curr)
-			s_ccb_ctl_head_tbl =
-				(struct buffer_header *)curr->base_ap_view_vir;
-#endif
-	}
 }
 
 int port_smem_tx_nofity(struct port_t *port, unsigned int user_data)
@@ -233,11 +149,6 @@ int port_smem_rx_poll(struct port_t *port, unsigned int user_data)
 		"before wait event, bitmask=%x\n", user_data);
 #ifdef DEBUG_FOR_CCB
 	idx = smem_port->poll_save_idx;
-	if (idx >= CCB_POLL_PTR_MAX - 2) {
-		CCCI_ERROR_LOG(md_id, TAG,
-			"invalid idx = %d\n", idx);
-		return -EFAULT;
-	}
 	smem_port->last_poll_time[idx] = local_clock();
 	smem_port->last_in[idx].al_id = buf[0].dl_alloc_index;
 	smem_port->last_in[idx].fr_id = buf[0].dl_free_index;
@@ -333,7 +244,6 @@ int port_smem_rx_wakeup(struct port_t *port)
 	__pm_wakeup_event(&port->rx_wakelock, jiffies_to_msecs(HZ));
 	CCCI_DEBUG_LOG(md_id, TAG, "wakeup port.\n");
 #ifdef DEBUG_FOR_CCB
-	s_dl_active_bitmap |= dl_active_scan();
 	smem_port->last_rx_wk_time = local_clock();
 #endif
 	wake_up_all(&smem_port->rx_wq);
@@ -350,13 +260,11 @@ void __iomem *get_smem_start_addr(int md_id,
 	if (smem_region) {
 		addr = smem_region->base_ap_view_vir;
 
-		#if (MD_GENERATION < 6297)
 		/* dbm addr returned to user should
 		 * step over Guard pattern header
 		 */
 		if (user_id == SMEM_USER_RAW_DBM)
 			addr += CCCI_SMEM_SIZE_DBM_GUARD;
-		#endif
 
 		if (size_o)
 			*size_o = smem_region->size;
@@ -483,7 +391,7 @@ long port_ccb_ioctl(struct port_t *port, unsigned int cmd, unsigned long arg)
 		/* use user_id as input param, which is the array index,
 		 * and it will override user space's ID value
 		 */
-		if (in_ccb.user_id >= ccb_configs_len) {
+		if (in_ccb.user_id > ccb_configs_len) {
 			ret = -EINVAL;
 			break;
 		}
@@ -512,8 +420,68 @@ long port_smem_ioctl(struct port_t *port, unsigned int cmd, unsigned long arg)
 	unsigned int data;
 	struct ccci_smem_port *smem_port =
 		(struct ccci_smem_port *)port->private_data;
+	unsigned char *ptr;
+	struct ccci_ccb_debug debug_in, debug_out;
+	struct ccci_smem_region *ccb_dhl =
+		ccci_md_get_smem_by_user_id(md_id, SMEM_USER_CCB_DHL);
+
+	ptr = NULL;
 
 	switch (cmd) {
+	case CCCI_IOC_GET_CCB_DEBUG_VAL:
+		if ((smem_port->addr_phy == 0)
+			|| (smem_port->length == 0)) {
+			ret = -EFAULT;
+			break;
+		}
+		if (copy_from_user(&debug_in, (void __user *)arg,
+			sizeof(struct ccci_ccb_debug))) {
+			CCCI_ERROR_LOG(md_id, TAG,
+				"set user_id fail: copy_from_user fail!\n");
+		} else {
+			CCCI_DEBUG_LOG(md_id, TAG,
+				"get buf_num=%d, page_num=%d\n",
+				debug_in.buffer_id, debug_in.page_id);
+		}
+		memset(&debug_out, 0, sizeof(debug_out));
+		if (debug_in.buffer_id == 0) {
+			if (debug_in.page_id >= (ccb_configs[0].ul_buff_size /
+				ccb_configs[0].ul_page_size)) {
+				CCCI_ERROR_LOG(md_id, TAG,
+					"Invalid page ID %d for buffer 0 !!\n", debug_in.page_id);
+				ret = -EIO;
+				break;
+			}
+			ptr = (char *)ccb_dhl->base_ap_view_vir +
+			ccb_configs[0].dl_buff_size +
+			debug_in.page_id*ccb_configs[0].ul_page_size + 8;
+			debug_out.value = *ptr;
+		} else if (debug_in.buffer_id == 1) {
+			if (debug_in.page_id >= (ccb_configs[1].ul_buff_size /
+				ccb_configs[1].ul_page_size)) {
+				CCCI_ERROR_LOG(md_id, TAG,
+					"Invalid page ID %d for buffer 0 !!\n", debug_in.page_id);
+				ret = -EIO;
+				break;
+			}
+			ptr  = (char *)ccb_dhl->base_ap_view_vir +
+			ccb_configs[0].dl_buff_size +
+			ccb_configs[0].ul_buff_size +
+			ccb_configs[1].dl_buff_size +
+			debug_in.page_id*ccb_configs[1].ul_page_size + 8;
+			debug_out.value = *ptr;
+		} else {
+			CCCI_ERROR_LOG(md_id, TAG, "wrong buffer num\n");
+			ret = -EIO;
+			 break;
+		}
+
+		if (copy_to_user((void __user *)arg, &debug_out,
+			sizeof(struct ccci_ccb_debug)))
+			CCCI_ERROR_LOG(md_id, TAG,
+				"copy_to_user ccb failed !!\n");
+
+		break;
 	case CCCI_IOC_SMEM_BASE:
 		smem_port = (struct ccci_smem_port *)port->private_data;
 		CCCI_NORMAL_LOG(md_id, TAG, "smem_port->addr_phy=%lx\n",
@@ -742,7 +710,6 @@ int port_smem_init(struct port_t *port)
 	port->minor += CCCI_SMEM_MINOR_BASE;
 	if (port->flags & PORT_F_WITH_CHAR_NODE) {
 		dev = kmalloc(sizeof(struct cdev), GFP_KERNEL);
-		kmemleak_ignore(dev);
 		if (unlikely(!dev)) {
 			CCCI_ERROR_LOG(port->md_id, CHAR,
 				"alloc smem char dev fail!!\n");
@@ -760,7 +727,6 @@ int port_smem_init(struct port_t *port)
 
 	port->private_data = smem_port =
 		kzalloc(sizeof(struct ccci_smem_port), GFP_KERNEL);
-	kmemleak_ignore(smem_port);
 	/*user ID is from 0*/
 	smem_port->user_id = port->minor - CCCI_SMEM_MINOR_BASE;
 	spin_lock_init(&smem_port->write_lock);
@@ -784,8 +750,6 @@ int port_smem_init(struct port_t *port)
 		(struct buffer_header *)ccb_ctl->base_ap_view_vir;
 	smem_port->poll_save_idx = 0;
 }
-	s_dl_last_w = kmalloc(sizeof(int) * ccb_configs_len, GFP_KERNEL);
-	kmemleak_ignore(s_dl_last_w);
 #endif
 	return 0;
 }
@@ -872,9 +836,6 @@ static void port_smem_dump_info(struct port_t *port, unsigned int flag)
 			smem_port->last_out[idx + 2].w_id);
 		idx += 3;
 	}
-	CCCI_NORMAL_LOG(0, "CCB", "CCB active bitmap:0x%x\r\n",
-			s_dl_active_bitmap);
-	s_dl_active_bitmap = 0;
 }
 #endif
 

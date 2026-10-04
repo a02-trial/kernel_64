@@ -42,8 +42,7 @@ static irqreturn_t mmc_gpio_cd_irqt(int irq, void *dev_id)
 	bool status;
 
 	status = mmc_gpio_get_cd(host) ? true : false;
-
-	if (status ^ ctx->status) {
+    if (status ^ ctx->status) {
 		pr_err("%s: slot status change detected (%d -> %d), GPIO_ACTIVE_%s\n",
 				mmc_hostname(host), ctx->status, status,
 				msdc_host->hw->cd_level ? "HIGH" : "LOW");
@@ -154,7 +153,7 @@ void mmc_gpiod_request_cd_irq(struct mmc_host *host)
 	 */
 	if (irq >= 0 && host->caps & MMC_CAP_NEEDS_POLL)
 		irq = -EINVAL;
-
+	
 	ret = mmc_gpio_get_cd(host);
 	if(ret < 0) {
 		pr_err("%s: getting card detection gpio failed \n", mmc_hostname(host));

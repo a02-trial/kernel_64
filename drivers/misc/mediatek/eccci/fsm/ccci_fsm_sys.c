@@ -20,14 +20,9 @@ struct mdee_info_collect mdee_collect;
 
 void fsm_sys_mdee_info_notify(char *buf)
 {
-	int ret = 0;
-
 	spin_lock(&mdee_collect.mdee_info_lock);
 	memset(mdee_collect.mdee_info, 0x0, AED_STR_LEN);
-	ret = snprintf(mdee_collect.mdee_info, AED_STR_LEN, "%s", buf);
-	if (ret < 0 || ret >= AED_STR_LEN)
-		CCCI_ERROR_LOG(-1, FSM,
-			"%s-%d:snprintf fail,ret = %d\n", __func__, __LINE__, ret);
+	snprintf(mdee_collect.mdee_info, AED_STR_LEN, "%s", buf);
 	spin_unlock(&mdee_collect.mdee_info_lock);
 }
 
@@ -90,12 +85,6 @@ static ssize_t ccci_mdee_info_show(char *buf)
 
 	spin_lock(&mdee_collect.mdee_info_lock);
 	curr = snprintf(buf, AED_STR_LEN, "%s\n", mdee_collect.mdee_info);
-	if (curr < 0 || curr >= AED_STR_LEN) {
-		CCCI_ERROR_LOG(-1, FSM,
-			"%s-%d:snprintf fail,curr = %d\n", __func__, __LINE__, curr);
-		spin_unlock(&mdee_collect.mdee_info_lock);
-		return -1;
-	}
 	spin_unlock(&mdee_collect.mdee_info_lock);
 
 	return curr;

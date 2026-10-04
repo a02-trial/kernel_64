@@ -12,7 +12,6 @@
  */
 
 #include <linux/err.h>
-#include <linux/export.h>
 #include <linux/mutex.h>
 #include <linux/slab.h>
 #include <linux/string.h>
@@ -230,7 +229,6 @@ out:
 
 	return result;
 }
-EXPORT_SYMBOL(TEEC_InitializeContext);
 
 void TEEC_FinalizeContext(TEEC_Context *context)
 {
@@ -266,4 +264,3 @@ out_fini:
 out:
 	log_debug(tzdev_teec, "Exit, context = %pK result = %x origin = %u\n", context, result, origin);
 }
-EXPORT_SYMBOL(TEEC_FinalizeContext);

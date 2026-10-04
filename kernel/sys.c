@@ -72,13 +72,6 @@
 #include <linux/uaccess.h>
 #include <asm/io.h>
 #include <asm/unistd.h>
-#ifdef CONFIG_MTK_TASK_TURBO
-#include <mt-plat/turbo_common.h>
-#endif
-
-#ifdef CONFIG_SECURITY_DEFEX
-#include <linux/defex.h>
-#endif
 
 #ifndef SET_UNALIGN_CTL
 # define SET_UNALIGN_CTL(a, b)	(-EINVAL)
@@ -121,12 +114,6 @@
 #endif
 #ifndef SET_FP_MODE
 # define SET_FP_MODE(a,b)	(-EINVAL)
-#endif
-#ifndef SET_TAGGED_ADDR_CTRL
-# define SET_TAGGED_ADDR_CTRL(a)	(-EINVAL)
-#endif
-#ifndef GET_TAGGED_ADDR_CTRL
-# define GET_TAGGED_ADDR_CTRL()		(-EINVAL)
 #endif
 
 /*
@@ -782,11 +769,6 @@ SYSCALL_DEFINE1(setfsuid, uid_t, uid)
 	if (!uid_valid(kuid))
 		return old_fsuid;
 
-#ifdef CONFIG_SECURITY_DEFEX
-	if (task_defex_enforce(current, NULL, -__NR_setfsuid))
-		return old_fsuid;
-#endif
-
 	new = prepare_creds();
 	if (!new)
 		return old_fsuid;
@@ -825,11 +807,6 @@ SYSCALL_DEFINE1(setfsgid, gid_t, gid)
 	kgid = make_kgid(old->user_ns, gid);
 	if (!gid_valid(kgid))
 		return old_fsgid;
-
-#ifdef CONFIG_SECURITY_DEFEX
-	if (task_defex_enforce(current, NULL, -__NR_setfsgid))
-		return old_fsgid;
-#endif
 
 	new = prepare_creds();
 	if (!new)
@@ -2432,9 +2409,6 @@ SYSCALL_DEFINE5(prctl, int, option, unsigned long, arg2, unsigned long, arg3,
 			return -EFAULT;
 		set_task_comm(me, comm);
 		proc_comm_connector(me);
-#ifdef CONFIG_MTK_TASK_TURBO
-		sys_set_turbo_task(me);
-#endif
 		break;
 	case PR_GET_NAME:
 		get_task_comm(comm, me);
@@ -2583,16 +2557,6 @@ SYSCALL_DEFINE5(prctl, int, option, unsigned long, arg2, unsigned long, arg3,
 		break;
 	case PR_SET_VMA:
 		error = prctl_set_vma(arg2, arg3, arg4, arg5);
-		break;
-	case PR_SET_TAGGED_ADDR_CTRL:
-		if (arg3 || arg4 || arg5)
-			return -EINVAL;
-		error = SET_TAGGED_ADDR_CTRL(arg2);
-		break;
-	case PR_GET_TAGGED_ADDR_CTRL:
-		if (arg2 || arg3 || arg4 || arg5)
-			return -EINVAL;
-		error = GET_TAGGED_ADDR_CTRL();
 		break;
 	default:
 		error = -EINVAL;

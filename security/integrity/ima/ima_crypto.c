@@ -293,11 +293,8 @@ static int ima_calc_file_hash_atfm(struct file *file,
 		rbuf_len = min_t(loff_t, i_size - offset, rbuf_size[active]);
 		rc = integrity_kernel_read(file, offset, rbuf[active],
 					   rbuf_len);
-		if (rc != rbuf_len) {
-			if (rc >= 0)
-				rc = -EINVAL;
+		if (rc != rbuf_len)
 			goto out3;
-		}
 
 		if (rbuf[1] && offset) {
 			/* Using two buffers, and it is not the first
@@ -432,7 +429,7 @@ int ima_calc_file_hash(struct file *file, struct ima_digest_data *hash)
 	loff_t i_size;
 	int rc;
 	struct file *f = file;
-	bool new_file_instance = false, modified_mode = false;
+	bool new_file_instance = false, modified_flags = false;
 
 	/*
 	 * For consistency, fail file's opened with the O_DIRECT flag on
@@ -452,13 +449,13 @@ int ima_calc_file_hash(struct file *file, struct ima_digest_data *hash)
 		f = dentry_open(&file->f_path, flags, file->f_cred);
 		if (IS_ERR(f)) {
 			/*
-			 * Cannot open the file again, lets modify f_mode
+			 * Cannot open the file again, lets modify f_flags
 			 * of original and continue
 			 */
 			pr_info_ratelimited("Unable to reopen file for reading.\n");
 			f = file;
-			f->f_mode |= FMODE_READ;
-			modified_mode = true;
+			f->f_flags |= FMODE_READ;
+			modified_flags = true;
 		} else {
 			new_file_instance = true;
 		}
@@ -476,8 +473,8 @@ int ima_calc_file_hash(struct file *file, struct ima_digest_data *hash)
 out:
 	if (new_file_instance)
 		fput(f);
-	else if (modified_mode)
-		f->f_mode &= ~FMODE_READ;
+	else if (modified_flags)
+		f->f_flags &= ~FMODE_READ;
 	return rc;
 }
 

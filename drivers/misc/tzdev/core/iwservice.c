@@ -21,7 +21,6 @@
 struct iw_service_channel {
 	uint32_t cpu_mask;
 	uint32_t user_cpu_mask;
-	uint32_t cpu_freq[NR_CPUS];
 } __attribute__((__packed__));
 
 static struct iw_service_channel *iw_channel;
@@ -31,7 +30,7 @@ unsigned long tz_iwservice_get_cpu_mask(void)
 	if (!iw_channel)
 		return 0;
 
-	return (iw_channel->cpu_mask | iw_channel->user_cpu_mask);
+	return iw_channel->cpu_mask;
 }
 
 unsigned long tz_iwservice_get_user_cpu_mask(void)
@@ -40,14 +39,6 @@ unsigned long tz_iwservice_get_user_cpu_mask(void)
 		return 0;
 
 	return iw_channel->user_cpu_mask;
-}
-
-void tz_iwservice_set_cpu_freq(unsigned int cpu, unsigned int cpu_freq)
-{
-	if (!iw_channel)
-		return;
-
-	iw_channel->cpu_freq[cpu] = cpu_freq;
 }
 
 int tz_iwservice_init(void)

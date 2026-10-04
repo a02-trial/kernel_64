@@ -519,7 +519,7 @@ struct _GLUE_INFO_T {
 	struct task_struct *main_thread;
 	wait_queue_head_t waitq_rx;
 	struct task_struct *rx_thread;
-	KAL_WAKE_LOCK_T *rTimeoutWakeLock;
+	KAL_WAKE_LOCK_T rTimeoutWakeLock;
 
 	struct timer_list tickfn;
 
@@ -585,7 +585,7 @@ struct _GLUE_INFO_T {
 	UINT_32 u4ReqIeLength;
 	UINT_8 aucReqIe[CFG_CFG80211_IE_BUF_LEN];
 
-	KAL_WAKE_LOCK_T *rAhbIsrWakeLock;
+	KAL_WAKE_LOCK_T rAhbIsrWakeLock;
 
 #if CFG_SUPPORT_HOTSPOT_2_0
 	BOOLEAN fgIsDad;
@@ -713,7 +713,6 @@ enum TestModeCmdType {
 	TESTMODE_CMD_ID_SUSPEND = 101,
 	TESTMODE_CMD_ID_STR_CMD = 102,
 	TESTMODE_CMD_ID_RXFILTER = 103,
-	TESTMODE_CMD_ID_UPDATE_STA_PMKID = 1000,
 };
 #if CFG_SUPPORT_HOTSPOT_2_0
 enum Hs20CmdType {

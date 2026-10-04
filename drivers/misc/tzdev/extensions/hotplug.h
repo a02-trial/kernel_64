@@ -15,11 +15,6 @@
 #define __TZ_HOTPLUG_H__
 
 #include <linux/compiler.h>
-#include <linux/kconfig.h>
-
-#if IS_MODULE(CONFIG_TZDEV)
-int tz_hotplug_init(void);
-#endif
 
 #ifdef CONFIG_TZDEV_HOTPLUG
 void tz_hotplug_update_nwd_cpu_mask(unsigned long new_mask);

@@ -5,9 +5,6 @@ ifneq ($(KERNEL_OUT),)
     ccflags-y += -imacros $(KERNEL_OUT)/include/generated/autoconf.h
 endif
 
-ifndef TOP
-    TOP := $(srctree)/..
-endif
 
 # Force build fail on modpost warning
 KBUILD_MODPOST_FAIL_ON_WARNINGS := y
@@ -17,31 +14,20 @@ ccflags-y += \
     -I$(srctree)/drivers/misc/mediatek/connectivity/wmt_drv/common_main/include \
     -I$(srctree)/drivers/misc/mediatek/connectivity/wmt_drv/common_main/linux/include
 
-ifeq ($(ADAPTOR_OPTS),CONNAC2X2_SOC3_0)
-ccflags-y += -I$(TOP)/vendor/mediatek/kernel_modules/connectivity/conninfra/include
-ccflags-y += -I$(TOP)/vendor/mediatek/kernel_modules/connectivity/conninfra/debug_utility
-ccflags-y += -I$(TOP)/vendor/mediatek/kernel_modules/connectivity/conninfra/debug_utility/include
-ccflags-y += -I$(TOP)/vendor/mediatek/kernel_modules/connectivity/conninfra/debug_utility/connsyslog
-ccflags-y += -I$(TOP)/vendor/mediatek/kernel_modules/connectivity/conninfra/debug_utility/coredump
-endif
-
 ifneq ($(CONFIG_MTK_CONNSYS_DEDICATED_LOG_PATH),)
-ccflags-y += -DCONFIG_MTK_CONNSYS_DEDICATED_LOG_PATH
 ccflags-y += -I$(srctree)/drivers/misc/mediatek/connectivity/wmt_drv/debug_utility
 endif
 
 ifeq ($(CONFIG_MTK_CONN_LTE_IDC_SUPPORT),y)
-    ccflags-y += -DWMT_IDC_SUPPORT=1
+    ccflags-y += -D WMT_IDC_SUPPORT=1
 else
-    ccflags-y += -DWMT_IDC_SUPPORT=0
+    ccflags-y += -D WMT_IDC_SUPPORT=0
 endif
 
 ifeq ($(ADAPTOR_OPTS),CONNAC2X2_SOC3_0)
-ccflags-y += -DCFG_ANDORID_CONNINFRA_SUPPORT=1
-ccflags-y += -DCFG_ANDORID_CONNINFRA_COREDUMP_SUPPORT=1
+ccflags-y += -D CFG_ANDORID_CONNINFRA_SUPPORT=1
 else
-ccflags-y += -DCFG_ANDORID_CONNINFRA_SUPPORT=0
-ccflags-y += -DCFG_ANDORID_CONNINFRA_COREDUMP_SUPPORT=0
+ccflags-y += -D CFG_ANDORID_CONNINFRA_SUPPORT=0
 endif
 
 ccflags-y += -D MTK_WCN_WMT_STP_EXP_SYMBOL_ABSTRACT

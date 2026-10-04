@@ -1,7 +1,7 @@
 /*
  * s2mu005-private.h - Voltage regulator driver for the s2mu005
  *
- *  Copyright (C) 2015 Samsung Electrnoics
+ *  Copyright (C) 2017 Samsung Electrnoics
  *
  *
  * This program is free software; you can redistribute it and/or modify
@@ -145,8 +145,6 @@ enum s2mu005_reg {
 	S2MU005_REG_MUIC_LDOADC_VSETL = 0xBF,
 	S2MU005_REG_MUIC_LDOADC_VSETH = 0xC0,
 
-	S2MU005_REG_MUIC_RESERVED1 = 0xC1,
-
 	S2MU005_REG_END,
 };
 
@@ -212,6 +210,13 @@ struct s2mu005_dev {
 	struct mutex irqlock;
 	int irq_masks_cur[S2MU005_IRQ_GROUP_NR];
 	int irq_masks_cache[S2MU005_IRQ_GROUP_NR];
+
+#ifdef CONFIG_HIBERNATION
+	/* For hibernation */
+	u8 reg_pmic_dump[S2MU005_PMIC_REG_END];
+	u8 reg_muic_dump[S2MU005_MUIC_REG_END];
+	u8 reg_led_dump[S2MU005_LED_REG_END];
+#endif
 
 	/* pmic VER/REV register */
 	u8 pmic_rev;	/* pmic Rev */

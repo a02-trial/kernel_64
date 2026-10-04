@@ -48,8 +48,7 @@ static const char * const power_supply_type_text[] = {
 	"SMART_OTG", "SMART_NOTG", "POWER_SHARING",
 	"HV_Mains", "HV_Mains_12V", "HV_Prepare_Mains", "HV_ERR", "MHL_USB_100", "MHL_2000",
 	"HV_Unknown", "MDOCK_TA", "HMT_CONNECTED", "HMT_CHARGE", "Wireless_Pack", "Wireless_Pack_TA",
-	"Wireless_Stand", "HV_Wireless_Stand", "PDIC", "HV_Mains_CHG_LIMIT",
-	"HV_QC20", "HV_QC30", "POGO"
+	"Wireless_Stand", "HV_Wireless_Stand", "PDIC", "HV_Mains_CHG_LIMIT", "HV_QC20", "HV_QC30", "POGO"
 };
 
 static const char * const power_supply_status_text[] = {
@@ -80,6 +79,22 @@ static const char * const power_supply_scope_text[] = {
 	"Unknown", "System", "Device"
 };
 
+#define GET_POWER_SUPLAY_PROP(pwr_array, intv) ({ \
+       const char *pwr_sp; \
+       do { \
+               int max_idx = sizeof(pwr_array)/sizeof(const char *); \
+               if(intv >= max_idx) { \
+                       pr_notice("power_supply_show_property():error " #pwr_array "[max(%d-1)<=%d]\n", max_idx, intv); \
+                       pwr_sp = pwr_array[0]; \
+               } \
+               else { \
+                       pwr_sp = pwr_array[intv]; \
+               } \
+                pr_devel("pwr_spp=%s:%d\n", pwr_sp,intv); \
+       } while(0); \
+       pwr_sp; \
+})
+
 static ssize_t power_supply_show_property(struct device *dev,
 					  struct device_attribute *attr,
 					  char *buf) {
@@ -98,34 +113,35 @@ static ssize_t power_supply_show_property(struct device *dev,
 				dev_dbg(dev, "driver has no data for `%s' property\n",
 					attr->attr.name);
 			else if (ret != -ENODEV && ret != -EAGAIN)
-				dev_err_ratelimited(dev,
-					"driver failed to report `%s' property: %zd\n",
+				dev_err(dev, "driver failed to report `%s' property: %zd\n",
 					attr->attr.name, ret);
 			return ret;
 		}
 	}
 
+	dev_dbg(dev, "%s: [DEBUG] off = %d , value.intval = %d\n", __func__, off, value.intval);
+
 	if (off == POWER_SUPPLY_PROP_STATUS)
 		return sprintf(buf, "%s\n",
-			       power_supply_status_text[value.intval]);
+			       GET_POWER_SUPLAY_PROP(power_supply_status_text, value.intval));
 	else if (off == POWER_SUPPLY_PROP_CHARGE_TYPE)
 		return sprintf(buf, "%s\n",
-			       power_supply_charge_type_text[value.intval]);
+			       GET_POWER_SUPLAY_PROP(power_supply_charge_type_text, value.intval));
 	else if (off == POWER_SUPPLY_PROP_HEALTH)
 		return sprintf(buf, "%s\n",
-			       power_supply_health_text[value.intval]);
+			       GET_POWER_SUPLAY_PROP(power_supply_health_text, value.intval));
 	else if (off == POWER_SUPPLY_PROP_TECHNOLOGY)
 		return sprintf(buf, "%s\n",
-			       power_supply_technology_text[value.intval]);
+			       GET_POWER_SUPLAY_PROP(power_supply_technology_text, value.intval));
 	else if (off == POWER_SUPPLY_PROP_CAPACITY_LEVEL)
 		return sprintf(buf, "%s\n",
-			       power_supply_capacity_level_text[value.intval]);
+			       GET_POWER_SUPLAY_PROP(power_supply_capacity_level_text, value.intval));
 	else if (off == POWER_SUPPLY_PROP_TYPE)
 		return sprintf(buf, "%s\n",
-			       power_supply_type_text[value.intval]);
+			       GET_POWER_SUPLAY_PROP(power_supply_type_text, value.intval));
 	else if (off == POWER_SUPPLY_PROP_SCOPE)
 		return sprintf(buf, "%s\n",
-			       power_supply_scope_text[value.intval]);
+			       GET_POWER_SUPLAY_PROP(power_supply_scope_text, value.intval));
 	else if (off >= POWER_SUPPLY_PROP_MODEL_NAME)
 		return sprintf(buf, "%s\n", value.strval);
 

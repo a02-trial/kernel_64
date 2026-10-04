@@ -21,7 +21,6 @@
 #include <linux/vmalloc.h>
 #include <linux/bug.h>
 #include <linux/compiler.h>
-#include <linux/printk.h>
 #include <linux/sizes.h>
 #include <linux/spinlock.h>
 #include <linux/stacktrace.h>
@@ -42,6 +41,7 @@
 #include "../../../../kernel/sched/sched.h"
 #include "mrdump_mini.h"
 #include "mrdump_private.h"
+#include <mach/memory_layout.h>
 
 #define LOG_DEBUG(fmt, ...)			\
 	do {	\
@@ -597,15 +597,6 @@ void mrdump_mini_build_task_info(struct pt_regs *regs)
 	 */
 	trace.skip = 4;
 	save_stack_trace_tsk(cur, &trace);
-	if (regs) {
-		cur_proc->ke_frame.pc = (__u64) regs->reg_pc;
-		cur_proc->ke_frame.lr = (__u64) regs->reg_lr;
-	} else {
-		/* in case panic() is called without die */
-		/* Todo: a UT for this */
-		cur_proc->ke_frame.pc = ipanic_stack_entries[0];
-		cur_proc->ke_frame.lr = ipanic_stack_entries[1];
-	}
 	/* Skip the entries -
 	 * ipanic_save_current_tsk_info/save_stack_trace_tsk
 	 */
@@ -613,8 +604,6 @@ void mrdump_mini_build_task_info(struct pt_regs *regs)
 		off = strlen(cur_proc->backtrace);
 		plen = AEE_BACKTRACE_LENGTH - ALIGN(off, 8);
 		if (plen > 16) {
-			if (ipanic_stack_entries[i] != cur_proc->ke_frame.pc)
-				ipanic_stack_entries[i] -= 4;
 			sz = snprintf(symbol, 96, "[<%px>] %pS\n",
 				      (void *)ipanic_stack_entries[i],
 				      (void *)ipanic_stack_entries[i]);
@@ -627,6 +616,15 @@ void mrdump_mini_build_task_info(struct pt_regs *regs)
 				memcpy(cur_proc->backtrace + ALIGN(off, 8),
 						symbol, ALIGN(sz, 8));
 		}
+	}
+	if (regs) {
+		cur_proc->ke_frame.pc = (__u64) regs->reg_pc;
+		cur_proc->ke_frame.lr = (__u64) regs->reg_lr;
+	} else {
+		/* in case panic() is called without die */
+		/* Todo: a UT for this */
+		cur_proc->ke_frame.pc = ipanic_stack_entries[0];
+		cur_proc->ke_frame.lr = ipanic_stack_entries[1];
 	}
 	snprintf(cur_proc->ke_frame.pc_symbol, AEE_SZ_SYMBOL_S, "[<%px>] %pS",
 		 (void *)(unsigned long)cur_proc->ke_frame.pc,
@@ -754,6 +752,7 @@ void mrdump_mini_ke_cpu_regs(struct pt_regs *regs)
 	mrdump_mini_cpu_regs(cpu, regs, current, 1);
 	mrdump_mini_add_loads();
 	mrdump_mini_build_task_info(regs);
+	mrdump_modules_info(NULL, -1);
 	mrdump_mini_add_extra_misc();
 }
 EXPORT_SYMBOL(mrdump_mini_ke_cpu_regs);
@@ -826,12 +825,6 @@ static void mrdump_mini_build_elf_misc(void)
 	get_pidmap_aee_buffer(&misc.vaddr, &misc.size);
 	misc.start = 0;
 	mrdump_mini_add_misc(misc.vaddr, misc.size, misc.start, "_PIDMAP_");
-
-	memset_io(&misc, 0, sizeof(struct mrdump_mini_elf_misc));
-	misc.vaddr = (unsigned long)(void *)linux_banner;
-	misc.size = strlen(linux_banner);
-	misc.start = 0;
-	mrdump_mini_add_misc(misc.vaddr, misc.size, misc.start, "_VERSION_BR");
 }
 
 static void mrdump_mini_add_loads(void)
@@ -858,6 +851,8 @@ static void mrdump_mini_add_loads(void)
 						MRDUMP_MINI_SECTION_SIZE);
 			cpu = prstatus->pr_pid - 100;
 			mrdump_mini_add_tsk_ti(cpu, &regs, tsk, 1);
+			mrdump_mini_add_entry((unsigned long)cpu_rq(cpu),
+					MRDUMP_MINI_SECTION_SIZE);
 		} else if (prstatus->pr_pid <= AEE_MTK_CPU_NUMS) {
 			cpu = prstatus->pr_pid - 1;
 			mrdump_mini_add_tsk_ti(cpu, &regs, tsk, 0);
@@ -871,6 +866,8 @@ static void mrdump_mini_add_loads(void)
 		}
 	}
 
+	mrdump_mini_add_entry((unsigned long)__per_cpu_offset,
+			MRDUMP_MINI_SECTION_SIZE);
 	mrdump_mini_add_entry((unsigned long)&mem_map,
 			MRDUMP_MINI_SECTION_SIZE);
 	mrdump_mini_add_entry((unsigned long)mem_map, MRDUMP_MINI_SECTION_SIZE);
@@ -881,6 +878,8 @@ static void mrdump_mini_add_loads(void)
 				ti = (struct thread_info *)tsk->stack;
 			else
 				ti = NULL;
+			mrdump_mini_add_entry((unsigned long)cpu_rq(cpu),
+					MRDUMP_MINI_SECTION_SIZE);
 			mrdump_mini_add_entry((unsigned long)tsk,
 					MRDUMP_MINI_SECTION_SIZE);
 			mrdump_mini_add_entry((unsigned long)ti,
@@ -908,11 +907,14 @@ static void *remap_lowmem(phys_addr_t start, phys_addr_t size)
 	struct page **pages;
 	phys_addr_t page_start;
 	unsigned int page_count;
+	pgprot_t prot;
 	unsigned int i;
 	void *vaddr;
 
 	page_start = start - offset_in_page(start);
 	page_count = DIV_ROUND_UP(size + offset_in_page(start), PAGE_SIZE);
+
+	prot = pgprot_noncached(PAGE_KERNEL);
 
 	pages = kmalloc_array(page_count, sizeof(struct page *), GFP_KERNEL);
 	if (!pages) {
@@ -926,7 +928,7 @@ static void *remap_lowmem(phys_addr_t start, phys_addr_t size)
 
 		pages[i] = pfn_to_page(addr >> PAGE_SHIFT);
 	}
-	vaddr = vmap(pages, page_count, VM_MAP, PAGE_KERNEL);
+	vaddr = vmap(pages, page_count, VM_MAP, prot);
 	kfree(pages);
 	if (!vaddr) {
 		LOGE("%s: Failed to map %u pages\n", __func__, page_count);
@@ -967,7 +969,7 @@ static void __init mrdump_mini_elf_header_init(void)
 
 int mrdump_mini_init(void)
 {
-	int i, cpu;
+	int i;
 	unsigned long size, offset;
 	struct pt_regs regs;
 
@@ -1015,15 +1017,6 @@ int mrdump_mini_init(void)
 		  ((unsigned long) &kallsyms_addresses +
 		  (mrdump_cblock->machdesc.kallsyms.size / 2 - PAGE_SIZE)),
 		  mrdump_cblock->machdesc.kallsyms.size + 2 * PAGE_SIZE);
-	}
-
-	/* add __per_cpu_offset */
-	mrdump_mini_add_entry((unsigned long)__per_cpu_offset,
-			MRDUMP_MINI_SECTION_SIZE);
-
-	for (cpu = 0; cpu < AEE_MTK_CPU_NUMS; cpu++) {
-		mrdump_mini_add_entry((unsigned long)cpu_rq(cpu),
-				MRDUMP_MINI_SECTION_SIZE);
 	}
 
 	return 0;

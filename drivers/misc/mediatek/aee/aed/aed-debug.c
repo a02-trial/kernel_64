@@ -160,7 +160,6 @@ static ssize_t proc_generate_wdt_write(struct file *file,
 	unsigned int i = 0;
 	char msg[4];
 	unsigned char name[20] = { 0 };
-	int n;
 
 	if ((size < 2) || (size > sizeof(msg))) {
 		pr_notice("\n size = %zx\n", size);
@@ -207,9 +206,7 @@ static ssize_t proc_generate_wdt_write(struct file *file,
 
 	/* create kernel threads and bind on every cpu */
 	for (i = 0; i < nr_cpu_ids; i++) {
-		n = sprintf(name, "wd-test-%d", i);
-		if (n < 0 || n >= sizeof(name))
-			strncpy(name, "unknown error", sizeof(name));
+		sprintf(name, "wd-test-%d", i);
 		pr_notice("[WDK]thread name: %s\n", name);
 		wk_tsk[i] = kthread_create(kwdt_thread_test, NULL, name);
 		if (IS_ERR(wk_tsk[i])) {
@@ -333,9 +330,6 @@ static noinline void double_free(void)
 	char *p = kmalloc(32, GFP_KERNEL);
 	int i;
 
-	if (p == NULL)
-		return;
-
 	pr_info("test case : double free\n");
 	for (i = 0; i < 32; i++)
 		p[i] = (char)i;
@@ -364,8 +358,6 @@ static ssize_t proc_generate_oops_read(struct file *file,
 	char buffer[BUFSIZE];
 
 	len = snprintf(buffer, BUFSIZE, "Oops Generated!\n");
-	if (len <= 0)
-		pr_debug("%s: snprintf error\n", __func__);
 	if (copy_to_user(buf, buffer, len))
 		pr_notice("%s fail to output info.\n", __func__);
 
@@ -563,7 +555,6 @@ static ssize_t proc_generate_md32_read(struct file *file, char __user *buf,
 	char buffer[BUFSIZE];
 	int i;
 	char *ptr;
-	int len;
 
 	if ((*ppos)++)
 		return 0;
@@ -573,9 +564,7 @@ static ssize_t proc_generate_md32_read(struct file *file, char __user *buf,
 	for (i = 0; i < TEST_MD32_PHY_SIZE; i++)
 		ptr[i] = (i % 26) + 'a';
 
-	len = sprintf(buffer, "MD32 EE log here\n");
-	if (len <= 0)
-		pr_debug("%s: sprintf error\n", __func__);
+	sprintf(buffer, "MD32 EE log here\n");
 	aed_md32_exception((int *)buffer, (int)sizeof(buffer), (int *)ptr,
 			TEST_MD32_PHY_SIZE, __FILE__);
 	kfree(ptr);
@@ -598,7 +587,6 @@ static ssize_t proc_generate_scp_read(struct file *file,
 	char buffer[BUFSIZE];
 	int i;
 	char *ptr;
-	int len;
 
 	if ((*ppos)++)
 		return 0;
@@ -608,9 +596,7 @@ static ssize_t proc_generate_scp_read(struct file *file,
 	for (i = 0; i < TEST_SCP_PHY_SIZE; i++)
 		ptr[i] = (i % 26) + 'a';
 
-	len = sprintf(buffer, "SCP EE log here\n");
-	if (len <= 0)
-		pr_debug("%s: sprintf error\n", __func__);
+	sprintf(buffer, "SCP EE log here\n");
 	aed_scp_exception((int *)buffer, (int)sizeof(buffer), (int *)ptr,
 						TEST_SCP_PHY_SIZE, __FILE__);
 	kfree(ptr);
@@ -625,40 +611,6 @@ static ssize_t proc_generate_scp_write(struct file *file,
 	return 0;
 }
 
-static ssize_t proc_generate_adsp_read(struct file *file,
-					char __user *buf, size_t size,
-					loff_t *ppos)
-{
-#define TEST_ADSP_PHY_SIZE	65536
-	char buffer[BUFSIZE];
-	int i;
-	char *ptr;
-	int n;
-
-	if ((*ppos)++)
-		return 0;
-	ptr = kmalloc(TEST_ADSP_PHY_SIZE, GFP_KERNEL);
-	if (ptr == NULL)
-		return sprintf(buffer, "kmalloc fail\n");
-	for (i = 0; i < TEST_ADSP_PHY_SIZE; i++)
-		ptr[i] = (i % 26) + 'a';
-
-	n = sprintf(buffer, "ADSP EE log here\n");
-	if (n < 0 || n >= sizeof(buffer))
-		strncpy(buffer, "unknown error", sizeof(buffer));
-	aed_common_exception("adsp", (int *)buffer, (int)sizeof(buffer),
-				(int *)ptr, TEST_ADSP_PHY_SIZE, __FILE__);
-	kfree(ptr);
-
-	return sprintf(buffer, "ADSP EE Generated\n");
-}
-
-static ssize_t proc_generate_adsp_write(struct file *file,
-					const char __user *buf, size_t size,
-					loff_t *ppos)
-{
-	return 0;
-}
 
 static ssize_t proc_generate_kernel_notify_read(struct file *file,
 						char __user *buf, size_t size,
@@ -667,8 +619,6 @@ static ssize_t proc_generate_kernel_notify_read(struct file *file,
 	char buffer[BUFSIZE];
 	int len = snprintf(buffer, BUFSIZE,
 			   "Usage: write message with format \"R|W|E:Tag:You Message\" into this file to generate kernel warning\n");
-	if (len <= 0)
-		pr_debug("%s: snprintf error\n", __func__);
 	if (*ppos)
 		return 0;
 	if (copy_to_user(buf, buffer, len)) {
@@ -743,8 +693,6 @@ static ssize_t proc_generate_dal_read(struct file *file,
 		return 0;
 	aee_kernel_dal_show("Test for DAL\n");
 	len = sprintf(buffer, "DAL Generated\n");
-	if (len < 0 || len >= sizeof(buffer))
-		strncpy(buffer, "unknown error", sizeof(buffer));
 
 	return len;
 }
@@ -763,7 +711,6 @@ AED_FILE_OPS(generate_ee);
 AED_FILE_OPS(generate_combo);
 AED_FILE_OPS(generate_md32);
 AED_FILE_OPS(generate_scp);
-AED_FILE_OPS(generate_adsp);
 AED_FILE_OPS(generate_dal);
 
 int aed_proc_debug_init(struct proc_dir_entry *aed_proc_dir)
@@ -780,7 +727,6 @@ int aed_proc_debug_init(struct proc_dir_entry *aed_proc_dir)
 	AED_PROC_ENTRY(generate-combo, generate_combo, 0400);
 	AED_PROC_ENTRY(generate-md32, generate_md32, 0400);
 	AED_PROC_ENTRY(generate-scp, generate_scp, 0400);
-	AED_PROC_ENTRY(generate-adsp, generate_adsp, 0400);
 	AED_PROC_ENTRY(generate-dal, generate_dal, 0400);
 
 	return 0;
@@ -795,7 +741,6 @@ int aed_proc_debug_done(struct proc_dir_entry *aed_proc_dir)
 	remove_proc_entry("generate-combo", aed_proc_dir);
 	remove_proc_entry("generate-md32", aed_proc_dir);
 	remove_proc_entry("generate-scp", aed_proc_dir);
-	remove_proc_entry("generate-adsp", aed_proc_dir);
 	remove_proc_entry("generate-wdt", aed_proc_dir);
 	remove_proc_entry("generate-dal", aed_proc_dir);
 	return 0;

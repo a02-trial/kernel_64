@@ -236,8 +236,7 @@ static void ssusb_host_setup(struct ssusb_mtk *ssusb)
 	ssusb_host_enable(ssusb);
 
 	/* if port0 supports dual-role, works as host mode by default */
-	if (ssusb->dr_mode == USB_DR_MODE_HOST)
-		ssusb_set_vbus(&ssusb->otg_switch, 1);
+	ssusb_set_vbus(&ssusb->otg_switch, 1);
 }
 
 static void ssusb_host_cleanup(struct ssusb_mtk *ssusb)

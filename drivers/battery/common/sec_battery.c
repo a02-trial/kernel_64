@@ -136,7 +136,6 @@ char *sec_cable_type[SEC_BATTERY_CABLE_MAX] = {
 	"HV_WC_20_PREPARE",   /* 37 */
 	"PDIC_APDO",                /* 38 */
 	"POGO",                    /* 39 */
-	"9V_POGO",                 /* 40 */
 };
 
 char *sec_bat_charging_mode_str[] = {
@@ -207,16 +206,18 @@ char *sec_bat_rx_type_str[] = {
 	"SS Phone",
 	"SS Buds",
 };
+#if defined(CONFIG_USE_MUIC)
+extern int muic_afc_set_voltage(int vol);
+#endif
 //extern int muic_hv_charger_disable(bool en);
 
 static int sec_bat_check_afc_input_current(struct sec_battery_info *battery);
-static void sec_bat_set_rp_current(struct sec_battery_info *battery, int cable_type);
 
 #if !defined(CONFIG_SEC_FACTORY)
 #if !defined(CONFIG_ARCH_EXYNOS)
 #define SALE_CODE_STR_LEN		3
 static char sales_code_from_cmdline[SALE_CODE_STR_LEN+1];
-bool sales_code_is(char *str)
+bool sales_code_is(char* str)
 {
 	pr_info("%s: %s\n", __func__, sales_code_from_cmdline);
 	return !strncmp(sales_code_from_cmdline, str, SALE_CODE_STR_LEN + 1);
@@ -321,19 +322,6 @@ inline void battery_wakeup_source_init(struct device *dev, struct wakeup_source 
 	}
 #else
 	*ws = wakeup_source_register(NULL, name);
-#endif
-}
-
-void set_vbus_voltage(int vol)
-{
-#if IS_ENABLED(CONFIG_DISCRETE_CHARGER)
-#if defined(CONFIG_AFC_CHARGER)
-	afc_set_voltage(vol);
-#endif
-#else
-#if defined(CONFIG_USE_MUIC)
-	muic_afc_set_voltage(vol);
-#endif
 #endif
 }
 
@@ -481,42 +469,15 @@ void sec_bat_set_current_event(struct sec_battery_info *battery,
 	mutex_unlock(&battery->current_eventlock);
 }
 
-void sec_bat_set_temp_control_test(struct sec_battery_info *battery, bool temp_enable)
-{
-	if (temp_enable) {
-		if (battery->current_event & SEC_BAT_CURRENT_EVENT_TEMP_CTRL_TEST) {
-			pr_info("%s : BATT_TEMP_CONTROL_TEST already ENABLED\n", __func__);
-			return;
-		}
-		pr_info("%s : BATT_TEMP_CONTROL_TEST ENABLE\n", __func__);
-		sec_bat_set_current_event(battery, SEC_BAT_CURRENT_EVENT_TEMP_CTRL_TEST,
-			SEC_BAT_CURRENT_EVENT_TEMP_CTRL_TEST);
-		battery->pdata->usb_temp_check_type_backup = battery->pdata->usb_temp_check_type;
-		battery->pdata->usb_temp_check_type = SEC_BATTERY_TEMP_CHECK_NONE;
-		battery->overheatlimit_threshold_backup = battery->overheatlimit_threshold;
-		battery->overheatlimit_threshold = 990;
-		battery->overheatlimit_recovery_backup = battery->overheatlimit_recovery;
-		battery->overheatlimit_recovery = 980;
-	} else {
-		if (!(battery->current_event & SEC_BAT_CURRENT_EVENT_TEMP_CTRL_TEST)) {
-			pr_info("%s : BATT_TEMP_CONTROL_TEST already END\n", __func__);
-			return;
-		}
-		pr_info("%s : BATT_TEMP_CONTROL_TEST END\n", __func__);
-		sec_bat_set_current_event(battery, 0,
-			SEC_BAT_CURRENT_EVENT_TEMP_CTRL_TEST);
-		battery->pdata->usb_temp_check_type = battery->pdata->usb_temp_check_type_backup;
-		battery->overheatlimit_threshold = battery->overheatlimit_threshold_backup;
-		battery->overheatlimit_recovery = battery->overheatlimit_recovery_backup;
-	}
-}
-EXPORT_SYMBOL(sec_bat_set_temp_control_test);
-
 __visible_for_testing void sec_bat_change_default_current(struct sec_battery_info *battery,
 					int cable_type, int input, int output)
 {
-	bool do_set_vote = (battery->cable_type == cable_type || battery->wire_status == cable_type);
-
+#if defined(CONFIG_PDIC_NOTIFIER)
+	if (battery->pdic_info.sink_status.rp_currentlvl > RP_CURRENT_LEVEL_DEFAULT) {
+		sec_vote(battery->fcc_vote, VOTER_USB_100MA, false, 0);
+		sec_vote(battery->input_vote, VOTER_USB_100MA, false, 0);
+	}
+#endif
 #if defined(CONFIG_ENG_BATTERY_CONCEPT)
 	if (!battery->test_max_current)
 #endif
@@ -525,16 +486,12 @@ __visible_for_testing void sec_bat_change_default_current(struct sec_battery_inf
 	if (!battery->test_charge_current)
 #endif
 		battery->pdata->charging_current[cable_type].fast_charging_current = output;
-	pr_info("%s: cable_type: %d(%d,%d), input: %d, output: %d\n",
-			__func__, cable_type, battery->cable_type, battery->wire_status,
+	pr_info("%s: cable_type: %d input: %d output: %d\n",
+			__func__, cable_type,
 			battery->pdata->charging_current[cable_type].input_current_limit,
 			battery->pdata->charging_current[cable_type].fast_charging_current);
-	if (do_set_vote) {
-		sec_vote(battery->input_vote, VOTER_CABLE, true,
-			battery->pdata->charging_current[cable_type].input_current_limit);
-		sec_vote(battery->fcc_vote, VOTER_CABLE, true,
-			battery->pdata->charging_current[cable_type].fast_charging_current);
-	}
+	sec_vote(battery->fcc_vote, VOTER_CABLE, true, battery->pdata->charging_current[cable_type].fast_charging_current);
+	sec_vote(battery->input_vote, VOTER_CABLE, true, battery->pdata->charging_current[cable_type].input_current_limit);
 }
 
 static int sec_bat_get_wireless_current(struct sec_battery_info *battery)
@@ -576,48 +533,9 @@ static int sec_bat_get_wireless_current(struct sec_battery_info *battery)
 	return incurr;
 }
 
-static int sec_bat_get_siop_scenario_icl(struct sec_battery_info *battery, int icl, int scenario_idx, int type)
-{
-	int siop_icl = icl;
-
-	if (scenario_idx < 0)
-		return icl;
-
-	if (type >= SIOP_CURR_TYPE_MAX || type >= battery->pdata->siop_curr_type_num)
-		return icl;
-
-	siop_icl = battery->pdata->siop_table[scenario_idx].icl[type];
-	if (siop_icl == SIOP_DEFAULT || siop_icl > icl || siop_icl <= 0)
-		return icl;
-	pr_info("%s: scenario_idx(%d), type(%d), siop_icl(%d)\n",
-		__func__, scenario_idx, type, siop_icl);
-
-	return siop_icl;
-}
-
-static int sec_bat_get_siop_scenario_fcc(struct sec_battery_info *battery, int fcc, int scenario_idx, int type)
-{
-	int siop_fcc = fcc;
-
-	if (scenario_idx < 0)
-		return fcc;
-
-	if (type >= SIOP_CURR_TYPE_MAX || type >= battery->pdata->siop_curr_type_num)
-		return fcc;
-
-	siop_fcc = battery->pdata->siop_table[scenario_idx].fcc[type];
-	if (siop_fcc == SIOP_DEFAULT || siop_fcc > fcc || siop_fcc <= 0)
-		return fcc;
-	pr_info("%s: scenario_idx(%d), type(%d), siop_fcc(%d)\n",
-		__func__, scenario_idx, type, siop_fcc);
-
-	return siop_fcc;
-}
-
 static void sec_bat_get_charging_current_by_siop(struct sec_battery_info *battery)
 {
 	int input_current = INT_MAX, charging_current = INT_MAX;
-	int scenario_idx = -1;
 
 	if (battery->siop_level < 100) {
 		int max_charging_current;
@@ -641,34 +559,12 @@ static void sec_bat_get_charging_current_by_siop(struct sec_battery_info *batter
 		if (charging_current > max_charging_current)
 			charging_current = max_charging_current;
 
-		if (battery->pdata->siop_scenarios_num > 0) {
-			int i = 0;
-
-			for (i = 0; i < battery->pdata->siop_scenarios_num; ++i)
-				if (battery->siop_level == battery->pdata->siop_table[i].level) {
-					scenario_idx = i;
-					pr_info("%s: siop level(%d), scenario_idx(%d)\n",
-						__func__, battery->siop_level, scenario_idx);
-					break;
-				}
-		}
-
 		if (is_nv_wireless_type(battery->cable_type)) {
 			input_current = battery->pdata->siop_wireless_input_limit_current;
 			charging_current = battery->pdata->siop_wireless_charging_limit_current;
-
-			if (battery->pdata->siop_scenarios_num > 0) {
-				input_current = sec_bat_get_siop_scenario_icl(battery, input_current, scenario_idx, SIOP_CURR_TYPE_WPC_NV);
-				charging_current = sec_bat_get_siop_scenario_fcc(battery, charging_current, scenario_idx, SIOP_CURR_TYPE_WPC_NV);
-			}
 		} else if (is_hv_wireless_type(battery->cable_type)) {
 			input_current = battery->pdata->siop_hv_wireless_input_limit_current;
 			charging_current = battery->pdata->siop_hv_wireless_charging_limit_current;
-
-			if (battery->pdata->siop_scenarios_num > 0) {
-				input_current = sec_bat_get_siop_scenario_icl(battery, input_current, scenario_idx, SIOP_CURR_TYPE_WPC_HV);
-				charging_current = sec_bat_get_siop_scenario_fcc(battery, charging_current, scenario_idx, SIOP_CURR_TYPE_WPC_HV);
-			}
 		} else if (is_hv_wire_type(battery->cable_type) && is_hv_wire_type(battery->wire_status)) {
 			if (is_hv_wire_12v_type(battery->cable_type)) {
 				input_current = battery->pdata->siop_hv_12v_input_limit_current;
@@ -677,45 +573,22 @@ static void sec_bat_get_charging_current_by_siop(struct sec_battery_info *batter
 				/* 2 step(0) for hv_wire_type */
 				if (battery->siop_level == 0)
 					input_current = battery->pdata->siop_hv_input_limit_current_2nd;
-				else if (battery->siop_level == 20 && battery->pdata->input_current_by_siop_20 > 0)
-					input_current = battery->pdata->input_current_by_siop_20;
-			}
-
-			if (battery->pdata->siop_scenarios_num > 0) {
-				input_current = sec_bat_get_siop_scenario_icl(battery, input_current, scenario_idx, SIOP_CURR_TYPE_HV);
-				charging_current = sec_bat_get_siop_scenario_fcc(battery, charging_current, scenario_idx, SIOP_CURR_TYPE_HV);
 			}
 #if defined(CONFIG_PDIC_NOTIFIER)
 		} else if (is_pd_wire_type(battery->cable_type)) {
 			input_current = 6000 / battery->input_voltage;
-
-			if (is_pd_apdo_wire_type(battery->wire_status) && battery->pd_list.now_isApdo) {
-				if (battery->pdata->siop_scenarios_num > 0) {
-					input_current = sec_bat_get_siop_scenario_icl(battery, input_current, scenario_idx, SIOP_CURR_TYPE_APDO);
-					charging_current = sec_bat_get_siop_scenario_fcc(battery, charging_current, scenario_idx, SIOP_CURR_TYPE_APDO);
-				}
-			} else {
-				if (battery->pdata->siop_scenarios_num > 0) {
-					input_current = sec_bat_get_siop_scenario_icl(battery, input_current, scenario_idx, SIOP_CURR_TYPE_FPDO);
-					charging_current  = sec_bat_get_siop_scenario_fcc(battery, charging_current, scenario_idx, SIOP_CURR_TYPE_FPDO);
-				}
-			}
 #endif
 		} else {
 			input_current = battery->pdata->siop_input_limit_current;
-			if (battery->pdata->siop_scenarios_num > 0) {
-				input_current = sec_bat_get_siop_scenario_icl(battery, input_current, scenario_idx, SIOP_CURR_TYPE_NV);
-				charging_current = sec_bat_get_siop_scenario_fcc(battery, charging_current, scenario_idx, SIOP_CURR_TYPE_NV);
-			}
 		}
 		sec_vote(battery->input_vote, VOTER_SIOP, true, input_current);
 		sec_vote(battery->fcc_vote, VOTER_SIOP, true, charging_current);
-
-		pr_info("%s: incurr(%d), chgcurr(%d)\n", __func__, input_current, charging_current);
 	} else {
 		sec_vote(battery->fcc_vote, VOTER_SIOP, false, charging_current);
 		sec_vote(battery->input_vote, VOTER_SIOP, false, input_current);
 	}
+
+	pr_info("%s: incurr(%d), chgcurr(%d)\n", __func__, input_current, charging_current);
 }
 
 #if IS_ENABLED(CONFIG_USB_FACTORY_MODE)
@@ -790,7 +663,7 @@ static void sec_bat_usb_factory_clear(struct sec_battery_info *battery)
 #if defined(CONFIG_PDIC_NOTIFIER)
 static void sec_bat_change_pdo(struct sec_battery_info *battery, int vol)
 {
-	int target_pd_index = 0;
+	unsigned int target_pd_index = 0;
 
 	if (is_pd_wire_type(battery->wire_status)) {
 
@@ -800,10 +673,6 @@ static void sec_bat_change_pdo(struct sec_battery_info *battery, int vol)
 		} else {
 			/* select 5V PDO */
 			target_pd_index = 0;
-		}
-		if (target_pd_index < 0 || target_pd_index >= MAX_PDO_NUM) {
-			pr_info("%s: target_pd_index is wrong: %d\n", __func__, target_pd_index);
-			return;
 		}
 		pr_info("%s: target_pd_index: %d, now_pd_index: %d\n", __func__,
 			target_pd_index, battery->pd_list.now_pd_index);
@@ -817,8 +686,7 @@ static void sec_bat_change_pdo(struct sec_battery_info *battery, int vol)
 				sec_vote(battery->input_vote, VOTER_SELECT_PDO, true, battery->input_current);
 			}
 			battery->pdic_ps_rdy = false;
-			if (target_pd_index >= 0 && target_pd_index < MAX_PDO_NUM)
-				select_pdo(battery->pd_list.pd_info[target_pd_index].pdo_index);
+			select_pdo(battery->pd_list.pd_info[target_pd_index].pdo_index);
 		}
 	}
 }
@@ -826,7 +694,7 @@ static void sec_bat_change_pdo(struct sec_battery_info *battery, int vol)
 
 #if !defined(CONFIG_SEC_FACTORY)
 #if defined(CONFIG_SUPPORT_HV_CTRL)
-bool sec_bat_change_vbus(struct sec_battery_info *battery)
+static bool sec_bat_change_vbus(struct sec_battery_info *battery)
 {
 	unsigned int target_vbus = SEC_INPUT_VOLTAGE_0V;
 
@@ -834,9 +702,6 @@ bool sec_bat_change_vbus(struct sec_battery_info *battery)
 		return false;
 
 	if (battery->store_mode)
-		return false;
-
-	if (lpcharge)
 		return false;
 
 	if (is_hv_wire_type(battery->cable_type) &&
@@ -852,11 +717,7 @@ bool sec_bat_change_vbus(struct sec_battery_info *battery)
 			target_vbus = SEC_INPUT_VOLTAGE_0V;
 		else if (battery->vbus_chg_by_full)
 			target_vbus = SEC_INPUT_VOLTAGE_5V;
-#if defined(CONFIG_DISCRETE_CHARGER)
-		else if (battery->pdata->flash_state)
-			target_vbus = SEC_INPUT_VOLTAGE_5V;
-#endif
-		else if (battery->siop_level >= 100) {
+		else if (battery->siop_level >= 100 && !battery->lcd_status) {
 			if (is_hv_wire_12v_type(battery->cable_type))
 				target_vbus = SEC_INPUT_VOLTAGE_12V;
 			else
@@ -884,7 +745,9 @@ bool sec_bat_change_vbus(struct sec_battery_info *battery)
 
 			battery->chg_limit = false;
 			battery->vbus_chg_by_siop = target_vbus;
-			set_vbus_voltage(target_vbus);
+#if defined(CONFIG_USE_MUIC)
+			muic_afc_set_voltage(target_vbus);
+#endif
 
 			pr_info("%s: vbus set %dV by level(%d), Cable(%s, %s, %d, %d)\n",
 				__func__, target_vbus, battery->siop_level,
@@ -897,7 +760,7 @@ bool sec_bat_change_vbus(struct sec_battery_info *battery)
 	return false;
 }
 #else
-bool sec_bat_change_vbus(struct sec_battery_info *battery)
+static bool sec_bat_change_vbus(struct sec_battery_info *battery)
 {
 	return false;
 }
@@ -908,7 +771,7 @@ extern void select_pdo(int num);
 static bool sec_bat_change_vbus_pd(struct sec_battery_info *battery)
 {
 #if defined(CONFIG_SUPPORT_HV_CTRL)
-	int target_pd_index = 0;
+	unsigned int target_pd_index = 0;
 	int input_current;
 
 	if (battery->pdata->chg_temp_check_type == SEC_BATTERY_TEMP_CHECK_NONE)
@@ -917,23 +780,19 @@ static bool sec_bat_change_vbus_pd(struct sec_battery_info *battery)
 	if (battery->store_mode)
 		return false;
 
-	if (is_pd_wire_type(battery->cable_type)) {
+	if (battery->cable_type == SEC_BATTERY_CABLE_PDIC) {
 		if (battery->current_event & SEC_BAT_CURRENT_EVENT_SELECT_PDO) {
 			pr_info("%s: skip during current_event(0x%x)\n",
 				__func__, battery->current_event);
 			return false;
 		}
 
-		if ((battery->siop_level >= 100) && (!(battery->pdata->flash_state))) {
+		if (battery->siop_level >= 100) {
 			/* select PDO greater than 5V */
-			target_pd_index = battery->pd_list.num_fpdo - 1;
+			target_pd_index = battery->pd_list.max_pd_count - 1;
 		} else {
 			/* select 5V PDO */
 			target_pd_index = 0;
-		}
-		if (target_pd_index < 0 || target_pd_index >= MAX_PDO_NUM) {
-			pr_info("%s: target_pd_index is wrong: %d\n", __func__, target_pd_index);
-			return false;
 		}
 		pr_info("%s: target_pd_index: %d, now_pd_index: %d\n", __func__,
 			target_pd_index, battery->pd_list.now_pd_index);
@@ -945,8 +804,7 @@ static bool sec_bat_change_vbus_pd(struct sec_battery_info *battery)
 			sec_bat_set_current_event(battery, SEC_BAT_CURRENT_EVENT_SELECT_PDO,
 				SEC_BAT_CURRENT_EVENT_SELECT_PDO);
 			sec_vote(battery->input_vote, VOTER_SELECT_PDO, true, input_current);
-			if (target_pd_index >= 0 && target_pd_index < MAX_PDO_NUM)
-				select_pdo(battery->pd_list.pd_info[target_pd_index].pdo_index);
+			select_pdo(battery->pd_list.pd_info[target_pd_index].pdo_index);
 			return true;
 		}
 	}
@@ -988,12 +846,15 @@ static void sec_bat_get_input_current_in_power_list(struct sec_battery_info *bat
 	int pdo_num = battery->pdic_info.sink_status.current_pdo_num;
 	int max_input_current = 0;
 
+	if (is_pd_apdo_wire_type(battery->wire_status) && battery->pd_list.now_isApdo)
+		pdo_num = 1;
+
 	max_input_current = battery->pdata->charging_current[SEC_BATTERY_CABLE_PDIC].input_current_limit =
 		battery->pdic_info.sink_status.power_list[pdo_num].max_current;
 	battery->pdata->charging_current[SEC_BATTERY_CABLE_PDIC_APDO].input_current_limit =
 		battery->pdic_info.sink_status.power_list[pdo_num].max_current;
 
-	pr_info("%s:max_input_current : %dmA, %d\n", __func__, max_input_current, pdo_num);
+	pr_info("%s:max_input_current : %dmA\n", __func__, max_input_current);
 	sec_vote(battery->input_vote, VOTER_CABLE, true, max_input_current);
 }
 
@@ -1014,7 +875,7 @@ static void sec_bat_get_charging_current_in_power_list(struct sec_battery_info *
 		battery->pdata->max_charging_current : max_charging_current;
 	battery->pdata->charging_current[SEC_BATTERY_CABLE_PDIC].fast_charging_current = max_charging_current;
 
-#if defined(CONFIG_STEP_CHARGING) && defined(CONFIG_DIRECT_CHARGING)
+#if defined(CONFIG_STEP_CHARGING)
 	if (is_pd_apdo_wire_type(battery->wire_status) && !battery->pd_list.now_isApdo &&
 		battery->step_charging_status < 0)
 #else
@@ -1786,10 +1647,6 @@ static bool sec_bat_voltage_check(struct sec_battery_info *battery)
 		else
 			battery->charging_mode = SEC_BATTERY_CHARGING_2ND;
 		battery->is_recharging = true;
-		if (battery->pdata->chg_vbus_control_after_fullcharged && battery->vbus_chg_by_full) {
-			battery->vbus_chg_by_full = false;
-			set_vbus_voltage(SEC_INPUT_VOLTAGE_9V);
-		}
 #if defined(CONFIG_BATTERY_CISD)
 		battery->cisd.data[CISD_DATA_RECHARGING_COUNT]++;
 		battery->cisd.data[CISD_DATA_RECHARGING_COUNT_PER_DAY]++;
@@ -1884,9 +1741,8 @@ static bool sec_bat_set_aging_step(struct sec_battery_info *battery, int step)
 void sec_bat_aging_check(struct sec_battery_info *battery)
 {
 	int prev_step = battery->pdata->age_step;
-	int calc_step;
+	int calc_step = -1;
 	bool ret = 0;
-	static bool init; /* false */
 
 	if (battery->pdata->num_age_step <= 0 || battery->batt_cycle < 0)
 		return;
@@ -1901,10 +1757,9 @@ void sec_bat_aging_check(struct sec_battery_info *battery)
 			break;
 	}
 
-	if ((calc_step == prev_step) && init)
+	if (calc_step == prev_step)
 		return;
 
-	init = true;
 	ret = sec_bat_set_aging_step(battery, calc_step);
 	dev_info(battery->dev,
 		 "%s: %s change step (%d->%d), Cycle(%d)\n",
@@ -2191,7 +2046,8 @@ bool sec_bat_check_full(struct sec_battery_info *battery, int full_check_type)
 
 	case SEC_BATTERY_FULLCHARGED_FG_CURRENT:
 		if ((battery->current_now > 0 && battery->current_now <
-			battery->topoff_condition) &&
+			((battery->swelling_mode == false) ?
+				battery->pdata->full_check_current_1st : battery->topoff_condition)) &&
 			(battery->current_avg > 0 && battery->current_avg <
 			battery->topoff_condition)) {
 				battery->full_check_cnt++;
@@ -2312,7 +2168,7 @@ bool sec_bat_check_full(struct sec_battery_info *battery, int full_check_type)
 	}
 
 #if defined(CONFIG_BATTERY_CISD)
-	if (ret && (battery->current_event & SEC_BAT_CURRENT_EVENT_SWELLING_MODE)) {
+	if (ret && battery->swelling_mode) {
 		battery->cisd.data[CISD_DATA_SWELLING_FULL_CNT]++;
 		battery->cisd.data[CISD_DATA_SWELLING_FULL_CNT_PER_DAY]++;
 	}
@@ -2377,28 +2233,18 @@ static void sec_bat_do_fullcharged(
 #if defined(CONFIG_BATTERY_AGE_FORECAST)
 		sec_bat_aging_check(battery);
 #endif
-		if (!battery->pdata->chg_vbus_control_after_fullcharged) {
-			/* this concept is only for power-off charging mode*/
-			if (is_hv_wire_type(battery->cable_type) && is_hv_wire_type(battery->wire_status) &&
-				!battery->store_mode && (battery->cable_type != SEC_BATTERY_CABLE_QC30) &&
-				lpcharge && !battery->vbus_chg_by_full) {
-				/* vbus level : 9V --> 5V */
-				battery->vbus_chg_by_full = true;
-				battery->vbus_chg_by_siop = SEC_INPUT_VOLTAGE_5V;
-				set_vbus_voltage(SEC_INPUT_VOLTAGE_5V);
-				pr_info("%s: vbus is set 5V by 2nd full\n", __func__);
-			}
-		} else {
-			/* remove lpcharge condition for CEC & ErP */
-			if (is_hv_wire_type(battery->cable_type) && is_hv_wire_type(battery->wire_status) &&
-				!battery->store_mode && (battery->cable_type != SEC_BATTERY_CABLE_QC30) &&
-				 !battery->vbus_chg_by_full) {
-				/* vbus level : 9V --> 5V */
-				battery->vbus_chg_by_full = true;
-				battery->vbus_chg_by_siop = SEC_INPUT_VOLTAGE_5V;
-				set_vbus_voltage(SEC_INPUT_VOLTAGE_5V);
-				pr_info("%s: vbus is set 5V by 2nd full\n", __func__);
-			}
+
+		/* this concept is only for power-off charging mode*/
+		if (is_hv_wire_type(battery->cable_type) && is_hv_wire_type(battery->wire_status) &&
+			!battery->store_mode && (battery->cable_type != SEC_BATTERY_CABLE_QC30) &&
+			lpcharge && !battery->vbus_chg_by_full) {
+			/* vbus level : 9V --> 5V */
+			battery->vbus_chg_by_full = true;
+			battery->vbus_chg_by_siop = SEC_INPUT_VOLTAGE_5V;
+#if defined(CONFIG_USE_MUIC)
+			muic_afc_set_voltage(SEC_INPUT_VOLTAGE_5V);
+#endif
+			pr_info("%s: vbus is set 5V by 2nd full\n", __func__);
 		}
 
 		value.intval = POWER_SUPPLY_STATUS_FULL;
@@ -2448,55 +2294,6 @@ static bool sec_bat_fullcharged_check(struct sec_battery_info *battery)
 	return true;
 }
 
-int sec_bat_get_dctp_info(struct sec_battery_info *battery)
-{
-#if defined(CONFIG_DIRECT_CHARGING)
-	union power_supply_propval value = {0, };
-	int dchg_temp = 0;
-
-	switch (battery->pdata->dchg_thermal_source) {
-	case SEC_BATTERY_THERMAL_SOURCE_CHG_ADC:
-		psy_do_property(battery->pdata->charger_name, get,
-			POWER_SUPPLY_PROP_TEMP, value);
-
-		dchg_temp = sec_bat_get_direct_chg_temp_adc(battery,
-				value.intval, battery->pdata->adc_check_count, battery->pdata->dchg_temp_check_type);
-		break;
-	case SEC_BATTERY_THERMAL_SOURCE_CALLBACK:
-	case SEC_BATTERY_THERMAL_SOURCE_ADC:
-		if (battery->pdata->dctp_by_cgtp)
-			dchg_temp = battery->chg_temp;
-		else
-			dchg_temp = 0;
-		break;
-	case SEC_BATTERY_THERMAL_SOURCE_FG:
-		psy_do_property(battery->pdata->charger_name, get,
-			POWER_SUPPLY_PROP_TEMP, value);
-		dchg_temp = value.intval;
-		break;
-	default:
-		break;
-	}
-
-	return dchg_temp;
-#else
-	return 0;
-#endif
-}
-
-int sec_bat_adjust_temperature(struct sec_battery_info *battery,
-	int read_temp, int prev_temp)
-{
-	int ret = read_temp;
-
-	if ((read_temp - prev_temp) > battery->pdata->batt_temp_adj_gap_inc)
-		ret = prev_temp + battery->pdata->batt_temp_adj_gap_inc;
-
-	pr_info("%s: read: %d, prev: %d, now: %d\n",
-			__func__, read_temp, prev_temp, ret);
-	return ret;
-}
-
 static void sec_bat_get_temperature_info(struct sec_battery_info *battery)
 {
 	union power_supply_propval value = {0, };
@@ -2507,7 +2304,7 @@ static void sec_bat_get_temperature_info(struct sec_battery_info *battery)
 	case SEC_BATTERY_THERMAL_SOURCE_FG:
 		psy_do_property(battery->pdata->fuelgauge_name, get,
 			POWER_SUPPLY_PROP_TEMP, value);
-		battery->raw_bat_temp = value.intval;
+		battery->temperature = value.intval;
 
 		psy_do_property(battery->pdata->fuelgauge_name, get,
 			POWER_SUPPLY_PROP_TEMP_AMBIENT, value);
@@ -2517,14 +2314,14 @@ static void sec_bat_get_temperature_info(struct sec_battery_info *battery)
 		psy_do_property(battery->pdata->fuelgauge_name, get,
 			POWER_SUPPLY_PROP_TEMP, value);
 
-		battery->raw_bat_temp = sec_bat_get_fg_temp_adc(battery, value.intval);
+		battery->temperature = sec_bat_get_fg_temp_adc(battery, value.intval);
 		battery->temper_amb = battery->temperature;
 		break;
 	case SEC_BATTERY_THERMAL_SOURCE_CALLBACK:
 		if (battery->pdata->get_temperature_callback) {
 			battery->pdata->get_temperature_callback(
 				POWER_SUPPLY_PROP_TEMP, &value);
-			battery->raw_bat_temp = value.intval;
+			battery->temperature = value.intval;
 			psy_do_property(battery->pdata->fuelgauge_name, set,
 				POWER_SUPPLY_PROP_TEMP, value);
 
@@ -2538,22 +2335,16 @@ static void sec_bat_get_temperature_info(struct sec_battery_info *battery)
 	case SEC_BATTERY_THERMAL_SOURCE_ADC:
 		if (sec_bat_get_value_by_adc(battery,
 				SEC_BAT_ADC_CHANNEL_TEMP, &value, battery->pdata->temp_check_type)) {
-			battery->raw_bat_temp = value.intval;
+			battery->temperature = value.intval;
 			battery->temper_amb = value.intval;
 		} else {
-			battery->raw_bat_temp = 0;
+			battery->temperature = 0;
 			battery->temper_amb = 0;
 		}
 		break;
 	default:
 		break;
 	}
-
-	if (battery->pdata->batt_temp_adj_gap_inc)
-		battery->temperature = sec_bat_adjust_temperature(battery,
-			battery->raw_bat_temp, battery->temperature);
-	else
-		battery->temperature = battery->raw_bat_temp;
 
 	/* get usb thm info */
 	switch (battery->pdata->usb_thermal_source) {
@@ -2595,8 +2386,31 @@ static void sec_bat_get_temperature_info(struct sec_battery_info *battery)
 		break;
 	}
 
-	if (is_pd_apdo_wire_type(battery->wire_status))
-		battery->dchg_temp = sec_bat_get_dctp_info(battery);
+#if defined(CONFIG_DIRECT_CHARGING)
+	if (is_pd_apdo_wire_type(battery->wire_status)) {
+		switch (battery->pdata->dchg_thermal_source) {
+		case SEC_BATTERY_THERMAL_SOURCE_CHG_ADC:
+			psy_do_property(battery->pdata->charger_name, get,
+				POWER_SUPPLY_PROP_TEMP, value);
+
+			battery->dchg_temp = sec_bat_get_direct_chg_temp_adc(battery,
+								value.intval, battery->pdata->adc_check_count);
+			break;
+		case SEC_BATTERY_THERMAL_SOURCE_CALLBACK:
+		case SEC_BATTERY_THERMAL_SOURCE_ADC:
+			break;
+		case SEC_BATTERY_THERMAL_SOURCE_FG:
+			psy_do_property(battery->pdata->charger_name, get,
+				POWER_SUPPLY_PROP_TEMP, value);
+			battery->dchg_temp = value.intval;
+			break;
+		default:
+			break;
+		}
+	}
+#else
+	battery->dchg_temp = 0;
+#endif
 
 	/* get wpc thm info */
 	switch (battery->pdata->wpc_thermal_source) {
@@ -2805,7 +2619,7 @@ void sec_bat_get_battery_info(struct sec_battery_info *battery)
 
 	/* check abnormal status for wireless charging */
 	if (!(battery->current_event & SEC_BAT_CURRENT_EVENT_SKIP_HEATING_CONTROL) &&
-		(is_wireless_type(battery->cable_type) || battery->wc_tx_enable)) {
+		(is_wireless_type(battery->cable_type) ||battery->wc_tx_enable)) {
 		value.intval = (battery->status == POWER_SUPPLY_STATUS_FULL) ?
 			100 : battery->capacity;
 		psy_do_property(battery->pdata->wireless_charger_name, set,
@@ -2852,12 +2666,12 @@ void sec_bat_get_battery_info(struct sec_battery_info *battery)
 		battery->current_avg, battery->current_adc);
 #else
 	pr_info("%s:Vnow(%dmV),Vavg(%dmV),Inow(%dmA),Iavg(%dmA),Isysavg(%dmA),Imax(%dmA),Ichg(%dmA),SOC(%d%%),"
-		"Tbat(%d),Tusb(%d),Tchg(%d),Twpc(%d),Tdchg(%d),Tblkt(%d)\n", __func__,
+		"Tbat(%d),Tusb(%d),Tchg(%d),Twpc(%d),Tdchg(%d)\n", __func__,
 		battery->voltage_now, battery->voltage_avg, battery->current_now,
 		battery->current_avg, battery->current_sys_avg,
 		battery->current_max, battery->charging_current,
 		battery->capacity, battery->temperature,
-		battery->usb_temp, battery->chg_temp, battery->wpc_temp, battery->dchg_temp, battery->blkt_temp
+		battery->usb_temp, battery->chg_temp, battery->wpc_temp, battery->dchg_temp
 	);
 #endif
 #if defined(CONFIG_SEC_COMMON)
@@ -3680,28 +3494,9 @@ static void sec_bat_calculate_safety_time(struct sec_battery_info *battery)
 	unsigned long long expired_time = battery->expired_time;
 	struct timespec ts = {0, };
 	int curr = 0;
-	int input_power = 0;
-	int charging_power = battery->charging_current *
-		(battery->pdata->chg_float_voltage / battery->pdata->chg_float_voltage_conv);
+	int input_power = battery->current_max * battery->input_voltage * 1000;
+	int charging_power = battery->charging_current * (battery->pdata->chg_float_voltage / battery->pdata->chg_float_voltage_conv);
 	static int discharging_cnt = 0;
-#if IS_ENABLED(CONFIG_DIRECT_CHARGING)
-	int direct_chg_done = 0;
-	union power_supply_propval value = {0,};
-#endif
-
-#if IS_ENABLED(CONFIG_DIRECT_CHARGING)
-	psy_do_property(battery->pdata->charger_name, get,
-					POWER_SUPPLY_EXT_PROP_DIRECT_DONE, value);
-	direct_chg_done = value.intval;
-
-	if (is_pd_apdo_wire_type(battery->cable_type) && !battery->chg_limit &&
-		(battery->pd_list.now_isApdo || direct_chg_done))
-		input_power = battery->pd_max_charge_power * 1000;
-	else
-		input_power = battery->current_max * battery->input_voltage * 1000;
-#else
-	input_power = battery->current_max * battery->input_voltage * 1000;
-#endif
 
 	if (battery->current_avg < 0) {
 		discharging_cnt++;
@@ -3939,15 +3734,10 @@ continue_monitor:
 skip_current_monitor:
 	psy_do_property(battery->pdata->charger_name, get,
 		POWER_SUPPLY_EXT_PROP_MONITOR_WORK, val);
-	psy_do_property(battery->pdata->fuelgauge_name, get,
-		POWER_SUPPLY_EXT_PROP_MONITOR_WORK, val);
 
 	pr_info("%s: Status(%s), mode(%s), Health(%s), Cable(%s, %s, %d, %d), rp(%d), level(%d%%), lcd(%d), slate_mode(%d), store_mode(%d)"
 #if defined(CONFIG_AFC_CHARGER_MODE)
 		", HV(%s, %d), sleep_mode(%d)"
-#endif
-#if defined(CONFIG_DISCRETE_CHARGER)
-		", flash_state(%d)"
 #endif
 #if defined(CONFIG_BATTERY_AGE_FORECAST)
 #if defined(CONFIG_BATTERY_AGE_FORECAST_DETACHABLE)
@@ -3975,9 +3765,6 @@ skip_current_monitor:
 		 battery->store_mode
 #if defined(CONFIG_AFC_CHARGER_MODE)
 		, battery->hv_chg_name, battery->vbus_chg_by_siop, sleep_mode
-#endif
-#if defined(CONFIG_DISCRETE_CHARGER)
-		, battery->pdata->flash_state
 #endif
 #if defined(CONFIG_BATTERY_AGE_FORECAST)
 		, battery->batt_cycle
@@ -4076,22 +3863,22 @@ static enum alarmtimer_restart sec_bat_alarm(struct alarm *alarm, ktime_t now)
 	return ALARMTIMER_NORESTART;
 }
 
-static void sec_bat_check_input_voltage(struct sec_battery_info *battery, int cable_type)
+static void sec_bat_check_input_voltage(struct sec_battery_info *battery)
 {
 	unsigned int voltage = 0;
-	int input_current = battery->pdata->charging_current[cable_type].input_current_limit;
+	int input_current = battery->pdata->charging_current[battery->cable_type].input_current_limit;
 
-	if (is_pd_wire_type(cable_type)) {
+	if (is_pd_wire_type(battery->cable_type)) {
 		battery->max_charge_power = battery->pd_max_charge_power;
 		return;
 	}
-	else if (is_hv_wire_12v_type(cable_type))
+	else if (is_hv_wire_12v_type(battery->cable_type))
 		voltage = SEC_INPUT_VOLTAGE_12V;
-	else if (is_hv_wire_9v_type(cable_type))
+	else if (is_hv_wire_9v_type(battery->cable_type))
 		voltage = SEC_INPUT_VOLTAGE_9V;
-	else if (is_hv_wireless_type(cable_type) ||
-			cable_type == SEC_BATTERY_CABLE_PREPARE_WIRELESS_HV ||
-			cable_type == SEC_BATTERY_CABLE_PREPARE_WIRELESS_20)
+	else if (is_hv_wireless_type(battery->cable_type) ||
+			battery->cable_type == SEC_BATTERY_CABLE_PREPARE_WIRELESS_HV ||
+			battery->cable_type == SEC_BATTERY_CABLE_PREPARE_WIRELESS_20)
 		voltage = SEC_INPUT_VOLTAGE_10V;
 	else
 		voltage = SEC_INPUT_VOLTAGE_5V;
@@ -4118,7 +3905,9 @@ static void sec_bat_wpc_tx_work(struct work_struct *work)
 	case NO_DEV:
 		if (is_hv_wire_type(battery->wire_status)) {
 			pr_info("@Tx_Mode %s : charging voltage change(9V -> 5V).\n", __func__);
-			set_vbus_voltage(SEC_INPUT_VOLTAGE_5V);
+#if defined(CONFIG_USE_MUIC)
+			muic_afc_set_voltage(SEC_INPUT_VOLTAGE_5V);
+#endif
 			break;
 		}
 
@@ -4162,7 +3951,9 @@ static void sec_bat_wpc_tx_work(struct work_struct *work)
 
 		if (is_hv_wire_type(battery->wire_status)) {
 			pr_info("@Tx_Mode %s : charging voltage change(9V -> 5V).\n", __func__);
-			set_vbus_voltage(SEC_INPUT_VOLTAGE_5V);
+#if defined(CONFIG_USE_MUIC)
+			muic_afc_set_voltage(SEC_INPUT_VOLTAGE_5V);
+#endif
 			break;
 #if defined(CONFIG_PDIC_NOTIFIER)
 		} else if (is_pd_wire_type(battery->wire_status) && battery->hv_pdo) {
@@ -4188,7 +3979,9 @@ static void sec_bat_wpc_tx_work(struct work_struct *work)
 	case OTHER_DEV:
 		 if (battery->wire_status == SEC_BATTERY_CABLE_HV_TA_CHG_LIMIT) {
 			pr_info("@Tx_Mode %s : charging voltage change(5V -> 9V)\n", __func__);
-			set_vbus_voltage(SEC_INPUT_VOLTAGE_9V);
+#if defined(CONFIG_USE_MUIC)
+			muic_afc_set_voltage(SEC_INPUT_VOLTAGE_9V);
+#endif
 			break;
 #if defined(CONFIG_PDIC_NOTIFIER)
 		} else if (is_pd_wire_type(battery->wire_status) && !battery->hv_pdo) {
@@ -4437,14 +4230,15 @@ static int sec_bat_choose_cable_type(struct sec_battery_info *battery)
 					POWER_SUPPLY_PROP_CHARGE_EMPTY, val);
 			}
 		}
-	} else if (battery->pogo_status) {
+	}
+	else if (battery->pogo_status) {
 		int pogo_current, wire_current;
 
 		current_cable_type = SEC_BATTERY_CABLE_POGO;
 
 		if (battery->wire_status != SEC_BATTERY_CABLE_NONE) {
 			pogo_current = battery->pdata->charging_current[current_cable_type].input_current_limit;
-			pogo_current *= SEC_INPUT_VOLTAGE_5V;
+			pogo_current = pogo_current * SEC_INPUT_VOLTAGE_5V;
 
 			if (battery->wire_status == SEC_BATTERY_CABLE_PDIC) {
 				if (pogo_current < battery->pd_max_charge_power)
@@ -4464,7 +4258,8 @@ static int sec_bat_choose_cable_type(struct sec_battery_info *battery)
 					current_cable_type = battery->wire_status;
 			}
 		}
-	} else
+	}
+	else
 		current_cable_type = battery->wire_status;
 	return current_cable_type;
 }
@@ -4500,24 +4295,6 @@ static void sec_bat_cable_work(struct work_struct *work)
 		sec_bat_reset_step_charging(battery);
 #endif
 #endif
-		/* BUCK OFF for 0A SRCCAP in USB IF AUTH */
-		if (battery->pdic_info.sink_status.power_list[battery->pdic_info.sink_status.current_pdo_num].max_current == 0)
-			sec_vote(battery->chgen_vote, VOTER_SRCCAP_ERR, true, SEC_BAT_CHG_MODE_BUCK_OFF);
-		else
-			sec_vote(battery->chgen_vote, VOTER_SRCCAP_ERR, false, 0);
-
-		if (battery->pdata->pd_comm_cap)
-			if (!battery->pd_list.pd_info[battery->pd_list.now_pd_index].comm_capable
-				|| !battery->pd_list.pd_info[battery->pd_list.now_pd_index].suspend) {
-					pr_info("%s : clear suspend event now_pd_index:%d, comm:%d, suspend:%d\n", __func__,
-						battery->pd_list.now_pd_index,
-						battery->pd_list.pd_info[battery->pd_list.now_pd_index].comm_capable,
-						battery->pd_list.pd_info[battery->pd_list.now_pd_index].suspend);
-					sec_bat_set_current_event(battery, 0, SEC_BAT_CURRENT_EVENT_USB_SUSPENDED);
-					sec_vote(battery->chgen_vote, VOTER_SUSPEND, false, 0);
-					sec_vote(battery->fcc_vote, VOTER_USB_100MA, false, 0);
-					sec_vote(battery->input_vote, VOTER_USB_100MA, false, 0);
-			}
 	}
 #endif
 
@@ -4548,9 +4325,8 @@ static void sec_bat_cable_work(struct work_struct *work)
 	}
 
 	/* to clear this value when cable type switched without dettach */
-	if ((is_wired_type(battery->cable_type) && is_wireless_type(current_cable_type))
-		|| (is_wireless_type(battery->cable_type) && is_wired_type(current_cable_type))
-		|| (battery->muic_cable_type == ATTACHED_DEV_AFC_CHARGER_DISABLED_MUIC))
+	if ((is_wired_type(battery->cable_type) && is_wireless_type(current_cable_type)) ||
+		(is_wireless_type(battery->cable_type) && is_wired_type(current_cable_type)))
 		battery->max_charge_power = 0;
 
 	if (current_cable_type == SEC_BATTERY_CABLE_HV_TA_CHG_LIMIT)
@@ -4558,6 +4334,11 @@ static void sec_bat_cable_work(struct work_struct *work)
 
 	prev_cable_type = battery->cable_type;
 	battery->cable_type = current_cable_type;
+	if ((!is_nocharge_type(battery->cable_type) && battery->cable_type != SEC_BATTERY_CABLE_USB) ||
+		lpcharge) {
+		sec_vote(battery->fcc_vote, VOTER_USB_100MA, false, 0);
+		sec_vote(battery->input_vote, VOTER_USB_100MA, false, 0);
+	}
 
 	if (battery->cable_type != SEC_BATTERY_CABLE_WIRELESS_FAKE) {
 		/* set online(cable type) */
@@ -4566,7 +4347,6 @@ static void sec_bat_cable_work(struct work_struct *work)
 			POWER_SUPPLY_PROP_ONLINE, val);
 		psy_do_property(battery->pdata->fuelgauge_name, set,
 			POWER_SUPPLY_PROP_ONLINE, val);
-		sec_vote_refresh(battery->chgen_vote);
 	}
 
 	/* need to move to wireless set property */
@@ -4614,6 +4394,7 @@ static void sec_bat_cable_work(struct work_struct *work)
 		battery->thermal_zone = BAT_THERMAL_NORMAL;
 		battery->chg_limit = false;
 		battery->mix_limit = false;
+		battery->swelling_mode = false;
 		battery->chg_limit_recovery_cable = SEC_BATTERY_CABLE_NONE;
 		battery->wc_heating_start_time = 0;
 		battery->health = POWER_SUPPLY_HEALTH_GOOD;
@@ -4692,6 +4473,8 @@ static void sec_bat_cable_work(struct work_struct *work)
 			sec_vote(battery->fcc_vote, j, false, 0);
 			sec_vote(battery->fv_vote, j, false, 0);
 		}
+
+		battery->swelling_mode = SWELLING_MODE_NONE;
 		sec_bat_set_charging_status(battery,
 			POWER_SUPPLY_STATUS_DISCHARGING);
 	} else if (battery->current_event & SEC_BAT_CURRENT_EVENT_USB_SUSPENDED) {
@@ -4705,6 +4488,7 @@ static void sec_bat_cable_work(struct work_struct *work)
 		battery->is_sysovlo = false;
 		battery->is_vbatovlo = false;
 		battery->is_abnormal_temp = false;
+		battery->swelling_mode = SWELLING_MODE_NONE;
 		sec_bat_set_charging_status(battery,
 			POWER_SUPPLY_STATUS_DISCHARGING);
 		if (battery->current_event & SEC_BAT_CURRENT_EVENT_USB_SUSPENDED) {
@@ -4728,9 +4512,10 @@ static void sec_bat_cable_work(struct work_struct *work)
 				POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN, val);
 #endif
 		dev_info(battery->dev,
-			"%s: c: %d, ov: %d, at: %d, cb: %d, tz: %d\n", __func__,
+			"%s: c: %d, ov: %d, at: %d, cb: %d, sm: %d\n", __func__,
 			battery->cable_type, battery->is_vbatovlo, battery->is_abnormal_temp,
-			battery->charging_block, battery->thermal_zone);
+			battery->charging_block, battery->swelling_mode);
+
 		if (battery->pdata->full_check_type !=
 				SEC_BATTERY_FULLCHARGED_NONE)
 			battery->charging_mode =
@@ -4786,20 +4571,13 @@ static void sec_bat_cable_work(struct work_struct *work)
 		/* to init battery type current when wireless charging -> battery case */
 		sec_vote_refresh(battery->input_vote);
 		if (battery->status != POWER_SUPPLY_STATUS_DISCHARGING)
-			sec_bat_check_input_voltage(battery, battery->cable_type);
+			sec_bat_check_input_voltage(battery);
 		set_wireless_otg_input_current(battery);
 		input_current = battery->pdata->charging_current[current_cable_type].input_current_limit;
 		charging_current = battery->pdata->charging_current[current_cable_type].fast_charging_current;
 		sec_vote(battery->fcc_vote, VOTER_CABLE, true, charging_current);
 		sec_vote(battery->input_vote, VOTER_CABLE, true, input_current);
 	}
-
-	if ((!is_nocharge_type(battery->cable_type) && battery->cable_type != SEC_BATTERY_CABLE_USB) ||
-		lpcharge) {
-		sec_vote(battery->fcc_vote, VOTER_USB_100MA, false, 0);
-		sec_vote(battery->input_vote, VOTER_USB_100MA, false, 0);
-	}
-
 	if (clear_afc_evt) {
 		cancel_delayed_work(&battery->afc_work);
 		__pm_relax(battery->afc_ws);
@@ -4870,131 +4648,6 @@ static void sec_bat_afc_work(struct work_struct *work)
 	__pm_relax(battery->afc_ws);
 }
 
-static void sec_bat_handle_bc12_connection(struct sec_battery_info *battery)
-{
-	mutex_lock(&battery->bc12_notylock);
-
-	battery->wire_status = battery->bc12_cable;
-
-	dev_info(battery->dev,
-			"%s: current_cable(%d), wc_status(%d), wire_status(%d)\n",
-			__func__, battery->bc12_cable, battery->wc_status,
-			battery->wire_status);
-
-#if defined(CONFIG_DISCRETE_CHARGER)
-	if (is_hv_wire_type(battery->bc12_cable)) {
-		sec_bat_set_current_event(battery, 0,
-			SEC_BAT_CURRENT_EVENT_AFC | SEC_BAT_CURRENT_EVENT_AICL);
-		sec_vote(battery->input_vote, VOTER_AICL, false, 0);
-		sec_vote(battery->input_vote, VOTER_VBUS_CHANGE, false, 0);
-	}
-	if (battery->bc12_cable == SEC_BATTERY_CABLE_NONE) {
-#if IS_ENABLED(CONFIG_USB_FACTORY_MODE)
-		sec_bat_usb_factory_clear(battery);
-#endif
-#if defined(CONFIG_MUIC_NOTIFIER)
-		battery->muic_cable_type = ATTACHED_DEV_NONE_MUIC;
-#endif
-#if defined(CONFIG_PDIC_NOTIFIER)
-		battery->init_src_cap = false;
-		battery->pdic_info.sink_status.rp_currentlvl = RP_CURRENT_LEVEL_NONE;
-#endif
-	}
-#if defined(CONFIG_PDIC_NOTIFIER)
-	else if (battery->cable_type != battery->bc12_cable &&
-		battery->pdic_info.sink_status.rp_currentlvl >= RP_CURRENT_LEVEL_DEFAULT &&
-		(battery->bc12_cable == SEC_BATTERY_CABLE_USB ||
-			battery->bc12_cable == SEC_BATTERY_CABLE_TA)) {
-		sec_bat_set_rp_current(battery, battery->bc12_cable);
-	}
-#endif
-	else if ((battery->bc12_cable == SEC_BATTERY_CABLE_TIMEOUT) &&
-			(!battery->init_src_cap))
-		/*
-		 * showing charging icon and noti(no sound, vi, haptic) only
-		 * if slow insertion is detected by BC1.2
-		 */
-		sec_bat_set_misc_event(battery, BATT_MISC_EVENT_TIMEOUT_OPEN_TYPE,
-						BATT_MISC_EVENT_TIMEOUT_OPEN_TYPE);
-#endif
-
-	/* cable is attached or detached
-	 * if battery->bc12_cable is minus value,
-	 * check cable by sec_bat_get_cable_type()
-	 * although SEC_BATTERY_CABLE_SOURCE_EXTERNAL is set
-	 * (0 is SEC_BATTERY_CABLE_UNKNOWN)
-	 */
-	if ((battery->bc12_cable >= 0) &&
-		(battery->bc12_cable < SEC_BATTERY_CABLE_MAX) &&
-		(battery->pdata->cable_source_type &
-		SEC_BATTERY_CABLE_SOURCE_EXTERNAL)) {
-
-		__pm_stay_awake(battery->cable_ws);
-			queue_delayed_work(battery->monitor_wqueue,
-				&battery->cable_work, 0);
-	} else {
-		if (sec_bat_get_cable_type(battery,
-					battery->pdata->cable_source_type)) {
-			__pm_stay_awake(battery->cable_ws);
-				queue_delayed_work(battery->monitor_wqueue,
-					&battery->cable_work, 0);
-		}
-	}
-	mutex_unlock(&battery->bc12_notylock);
-} /* sec_bat_handle_bc12_connection */
-
-static void sec_bat_hv_disable_work(struct work_struct *work)
-{
-	struct sec_battery_info *battery = container_of(work,
-				struct sec_battery_info, hv_disable_work.work);
-
-	dev_info(battery->dev, "%s: start\n", __func__);
-#if defined(CONFIG_MUIC_NOTIFIER)
-	if (is_pd_wire_type(battery->cable_type)) {
-#if defined(CONFIG_PDIC_NOTIFIER)
-		pr_info("hv_disable_work\n");
-		if (battery->pd_disable_by_afc_option) { 
-			battery->update_pd_list = true;
-			pr_info("%s: update pd list\n", __func__);
-			sec_bat_set_current_event(battery,
-					SEC_BAT_CURRENT_EVENT_HV_DISABLE, SEC_BAT_CURRENT_EVENT_HV_DISABLE);
-			if (battery->pdic_info.sink_status.current_pdo_num != 1) {
-				sec_bat_set_current_event(battery, SEC_BAT_CURRENT_EVENT_SELECT_PDO,
-					SEC_BAT_CURRENT_EVENT_SELECT_PDO);
-				sec_vote(battery->input_vote, VOTER_SELECT_PDO, true,
-					battery->pdata->select_pd_input_current);
-			}
-			select_pdo(1);
-		} else if (battery->current_event & SEC_BAT_CURRENT_EVENT_HV_DISABLE) {
-			int target_pd_index = battery->pd_list.num_fpdo - 1;
-
-			if (target_pd_index < 0 || target_pd_index >= MAX_PDO_NUM) {
-				pr_info("%s: target_pd_index is wrong: %d\n",
-					__func__, target_pd_index);
-				__pm_relax(battery->hv_disable_ws);
-				return;
-			}
-			battery->update_pd_list = true;
-			pr_info("%s: update pd list\n", __func__);
-			sec_bat_set_current_event(battery,
-				0, SEC_BAT_CURRENT_EVENT_HV_DISABLE);
-			if (battery->pdic_info.sink_status.current_pdo_num !=
-				battery->pd_list.pd_info[target_pd_index].pdo_index) {
-				sec_bat_set_current_event(battery, SEC_BAT_CURRENT_EVENT_SELECT_PDO,
-					SEC_BAT_CURRENT_EVENT_SELECT_PDO);
-				sec_vote(battery->input_vote, VOTER_SELECT_PDO, true,
-					battery->pdata->select_pd_input_current);
-			}
-			if (target_pd_index >= 0 && target_pd_index < MAX_PDO_NUM)
-				select_pdo(battery->pd_list.pd_info[target_pd_index].pdo_index);
-		}
-#endif
-	}
-	__pm_relax(battery->hv_disable_ws);
-	dev_info(battery->dev, "%s: end\n", __func__);
-#endif
-}
-
 static int sec_bat_set_property(struct power_supply *psy,
 				enum power_supply_property psp,
 				const union power_supply_propval *val)
@@ -5025,32 +4678,68 @@ static int sec_bat_set_property(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_ONLINE:
 		current_cable_type = val->intval;
+#if !defined(CONFIG_PDIC_NOTIFIER)
+#if defined(CONFIG_MUIC_NOTIFIER)
+		if (battery->muic_cable_type != ATTACHED_DEV_SMARTDOCK_TA_MUIC) {
+#endif
+			if ((current_cable_type == SEC_BATTERY_CABLE_SMART_OTG) ||
+				(current_cable_type == SEC_BATTERY_CABLE_SMART_NOTG)) {
+				break;
+			}
+#if defined(CONFIG_MUIC_NOTIFIER)
+		}
+#endif
+#endif
 
 		if (current_cable_type < 0) {
 			dev_info(battery->dev,
 					"%s: ignore event(%d)\n",
 					__func__, current_cable_type);
+		} else if (current_cable_type == SEC_BATTERY_CABLE_OTG) {
+			battery->charging_mode = SEC_BATTERY_CHARGING_NONE;
+			battery->is_recharging = false;
+			sec_bat_set_charging_status(battery,
+					POWER_SUPPLY_STATUS_DISCHARGING);
+			battery->cable_type = current_cable_type;
+			__pm_stay_awake(battery->monitor_ws);
+			queue_delayed_work(battery->monitor_wqueue,
+				&battery->monitor_work, 0);
+			break;
 		} else {
-			if (current_cable_type == SEC_BATTERY_CABLE_OTG)
-				dev_info(battery->dev,
-						"%s: OTG is operating\n", __func__);
-			battery->bc12_cable = current_cable_type;
-#if defined(CONFIG_DISCRETE_CHARGER)
-			if ((battery->bc12_cable != SEC_BATTERY_CABLE_TIMEOUT) &&
-				(battery->misc_event & BATT_MISC_EVENT_TIMEOUT_OPEN_TYPE))
-				sec_bat_set_misc_event(battery, 0,
-					BATT_MISC_EVENT_TIMEOUT_OPEN_TYPE);
-			/* Skip notify from BC1.2 if PDIC is attached already */
-			if ((is_pd_wire_type(battery->wire_status) || battery->init_src_cap) &&
-				(battery->bc12_cable != SEC_BATTERY_CABLE_NONE)) {
-				if (lpcharge)
-					break;
-				else if (battery->usb_thm_status == USB_THM_NORMAL &&
-						!(battery->misc_event & BATT_MISC_EVENT_TEMP_HICCUP_TYPE))
-					break;
-			}
+			battery->wire_status = current_cable_type;
+			if (is_nocharge_type(battery->wire_status) &&
+				(battery->wc_status != SEC_WIRELESS_PAD_NONE))
+				current_cable_type = SEC_BATTERY_CABLE_WIRELESS;
+		}
+		dev_info(battery->dev,
+				"%s: current_cable(%d), wc_status(%d), wire_status(%d)\n",
+				__func__, current_cable_type, battery->wc_status,
+				battery->wire_status);
+#if IS_ENABLED(CONFIG_USB_FACTORY_MODE)
+		if (current_cable_type == SEC_BATTERY_CABLE_NONE)
+			sec_bat_usb_factory_clear(battery);
 #endif
-			sec_bat_handle_bc12_connection(battery);
+		/* cable is attached or detached
+		 * if current_cable_type is minus value,
+		 * check cable by sec_bat_get_cable_type()
+		 * although SEC_BATTERY_CABLE_SOURCE_EXTERNAL is set
+		 * (0 is SEC_BATTERY_CABLE_UNKNOWN)
+		 */
+		if ((current_cable_type >= 0) &&
+			(current_cable_type < SEC_BATTERY_CABLE_MAX) &&
+			(battery->pdata->cable_source_type &
+			SEC_BATTERY_CABLE_SOURCE_EXTERNAL)) {
+
+			__pm_stay_awake(battery->cable_ws);
+				queue_delayed_work(battery->monitor_wqueue,
+					&battery->cable_work,0);
+		} else {
+			if (sec_bat_get_cable_type(battery,
+						battery->pdata->cable_source_type)) {
+				__pm_stay_awake(battery->cable_ws);
+					queue_delayed_work(battery->monitor_wqueue,
+						&battery->cable_work,0);
+			}
 		}
 		break;
 	case POWER_SUPPLY_PROP_CAPACITY:
@@ -5202,8 +4891,8 @@ static int sec_bat_set_property(struct power_supply *psy,
 					sec_bat_set_misc_event(battery, 0, BATT_MISC_EVENT_TIMEOUT_OPEN_TYPE);
 					sec_bat_set_current_event(battery, SEC_BAT_CURRENT_EVENT_USB_SUSPENDED, SEC_BAT_CURRENT_EVENT_USB_STATE);
 					sec_vote(battery->chgen_vote, VOTER_SUSPEND, true, SEC_BAT_CHG_MODE_BUCK_OFF);
-					sec_vote(battery->fcc_vote, VOTER_USB_100MA, true, 100);
-					sec_vote(battery->input_vote, VOTER_USB_100MA, true, 100);
+					sec_vote(battery->fcc_vote, VOTER_USB_100MA, false, 0); // need to check
+					sec_vote(battery->input_vote, VOTER_USB_100MA, false, 0); // need to check
 					cable_work_delay = 500;
 				}
 
@@ -5221,28 +4910,8 @@ static int sec_bat_set_property(struct power_supply *psy,
 #if defined(CONFIG_MUIC_NOTIFIER)
 			pr_info("HV wired charging mode is %s\n",
 					(val->intval == CH_MODE_AFC_DISABLE_VAL ? "Disabled" : "Enabled"));
-
-			if (is_pd_wire_type(battery->cable_type)) {
-				unsigned int hv_delay = 0;
-				__pm_stay_awake(battery->hv_disable_ws);
-
-				if (val->intval == CH_MODE_AFC_DISABLE_VAL)
-					battery->pd_disable_by_afc_option = true;
-				else
-					battery->pd_disable_by_afc_option = false;
-
-				if (battery->current_event & SEC_BAT_CURRENT_EVENT_SELECT_PDO)
-					hv_delay = 1000;
-				queue_delayed_work(battery->monitor_wqueue,
-						&battery->hv_disable_work, msecs_to_jiffies(hv_delay));
-			} else {
-				if (val->intval == CH_MODE_AFC_DISABLE_VAL)
-					sec_bat_set_current_event(battery,
-						SEC_BAT_CURRENT_EVENT_HV_DISABLE, SEC_BAT_CURRENT_EVENT_HV_DISABLE);
-				else if (battery->current_event & SEC_BAT_CURRENT_EVENT_HV_DISABLE)
-					sec_bat_set_current_event(battery,
-						0, SEC_BAT_CURRENT_EVENT_HV_DISABLE);
-			}
+			sec_bat_set_current_event(battery, (val->intval == CH_MODE_AFC_DISABLE_VAL ?
+				SEC_BAT_CURRENT_EVENT_HV_DISABLE : 0), SEC_BAT_CURRENT_EVENT_HV_DISABLE);
 #endif
 			break;
 		case POWER_SUPPLY_EXT_PROP_WC_CONTROL:
@@ -5327,53 +4996,6 @@ static int sec_bat_set_property(struct power_supply *psy,
 			queue_delayed_work(battery->monitor_wqueue, &battery->monitor_work, 0);
 			break;
 #endif
-#if defined(CONFIG_DISCRETE_CHARGER)
-#if defined(CONFIG_SUPPORT_HV_CTRL)
-		case POWER_SUPPLY_EXT_PROP_FLASH_STATE:
-			battery->pdata->flash_state = val->intval;
-			if (is_hv_wire_type(battery->cable_type) &&
-				(battery->cable_type != SEC_BATTERY_CABLE_QC30)) {
-				if (val->intval)
-					pr_info("%s: Flash on: (9V -> 5V).\n",
-						__func__);
-				else
-					pr_info("%s: Flash off: (5V -> 9V).\n",
-						__func__);
-#if !defined(CONFIG_SEC_FACTORY)
-				sec_bat_change_vbus(battery);
-#else
-				if (val->intval)
-					set_vbus_voltage(SEC_INPUT_VOLTAGE_5V);
-				else
-					set_vbus_voltage(SEC_INPUT_VOLTAGE_9V);
-#endif
-			}
-#if defined(CONFIG_PDIC_NOTIFIER)
-			else if (is_pd_wire_type(battery->wire_status)) {
-				if (val->intval)
-					pr_info("%s: Flash on: pdo (9V -> 5V).\n",
-						__func__);
-				else
-					pr_info("%s: Flash off: pdo (5V -> 9V).\n",
-						__func__);
-#if !defined(CONFIG_SEC_FACTORY)
-				sec_bat_change_vbus_pd(battery);
-#else
-				if (val->intval)
-					sec_bat_change_pdo(battery, SEC_INPUT_VOLTAGE_5V);
-				else
-					sec_bat_change_pdo(battery, SEC_INPUT_VOLTAGE_9V);
-#endif
-			}
-#endif
-			break;
-#endif
-#endif
-		case POWER_SUPPLY_EXT_PROP_SRCCAP:
-			pr_info("%s: set init_src_cap(%d->%d)",
-				__func__, battery->init_src_cap, val->intval);
-			battery->init_src_cap = true;
-			break;
 		default:
 			return -EINVAL;
 		}
@@ -5421,14 +5043,10 @@ static int sec_bat_get_property(struct power_supply *psy,
 		}
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_TYPE:
-	{
-		unsigned int input_current = battery->pdata->charging_current[battery->cable_type].input_current_limit;
 		if (is_nocharge_type(battery->cable_type)) {
 			val->intval = POWER_SUPPLY_CHARGE_TYPE_NONE;
-		} else if (is_hv_wire_type(battery->cable_type) || is_pd_wire_type(battery->cable_type) || is_wireless_type(battery->cable_type)) {
+		} else if (is_hv_wire_type(battery->cable_type) || is_pd_wire_type(battery->cable_type)) {
 			val->intval = POWER_SUPPLY_CHARGE_TYPE_FAST;
-		} else if (input_current <= SLOW_CHARGING_CURRENT_STANDARD) {
-			val->intval = POWER_SUPPLY_CHARGE_TYPE_SLOW;
 		} else {
 			psy_do_property(battery->pdata->charger_name, get,
 				POWER_SUPPLY_PROP_CHARGE_TYPE, value);
@@ -5440,7 +5058,6 @@ static int sec_bat_get_property(struct power_supply *psy,
 			else
 				val->intval = value.intval;
 		}
-	}
 		break;
 	case POWER_SUPPLY_PROP_HEALTH:
 		if ((battery->health == POWER_SUPPLY_HEALTH_DC_ERR) && lpcharge)
@@ -5561,7 +5178,7 @@ static int sec_bat_get_property(struct power_supply *psy,
 		val->intval = ttf_display(battery);
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_CONTROL_LIMIT:
-		if (battery->current_event & SEC_BAT_CURRENT_EVENT_SWELLING_MODE)
+		if (battery->swelling_mode)
 			val->intval = 1;
 		else
 			val->intval = 0;
@@ -5617,24 +5234,8 @@ static int sec_bat_get_property(struct power_supply *psy,
 #endif
 		case POWER_SUPPLY_EXT_PROP_CHARGE_UNO_CONTROL:
 			break;
-#if defined(CONFIG_PDIC_NOTIFIER)
-		case POWER_SUPPLY_EXT_PROP_RP_LEVEL:
-			val->intval =
-				battery->pdic_info.sink_status.rp_currentlvl;
-			break;
-#endif
-#if defined(CONFIG_DISCRETE_CHARGER)
-		case POWER_SUPPLY_EXT_PROP_FLASH_STATE:
-			val->intval = battery->pdata->flash_state;
-			break;
-#endif
-#if defined(CONFIG_PDIC_NOTIFIER)
-		case POWER_SUPPLY_EXT_PROP_SRCCAP:
-			val->intval = battery->init_src_cap;
-			break;
-#endif
-		case POWER_SUPPLY_EXT_PROP_MIX_LIMIT:
-			val->intval = battery->mix_limit;
+		case POWER_SUPPLY_EXT_PROP_IS_SLATE_MODE:
+			val->intval = is_slate_mode(battery);
 			break;
 		default:
 			return -EINVAL;
@@ -5714,7 +5315,6 @@ static int sec_ac_get_property(struct power_supply *psy,
 		case SEC_BATTERY_CABLE_SMART_OTG:
 		case SEC_BATTERY_CABLE_SMART_NOTG:
 		case SEC_BATTERY_CABLE_POGO:
-		case SEC_BATTERY_CABLE_9V_POGO:
 		case SEC_BATTERY_CABLE_PDIC_APDO:
 			val->intval = 1;
 			break;
@@ -5786,7 +5386,9 @@ void sec_wireless_set_tx_enable(struct sec_battery_info *battery, bool wc_tx_ena
 #else
 		if (is_hv_wire_type(battery->wire_status)) {
 #endif
-			set_vbus_voltage(SEC_INPUT_VOLTAGE_5V);
+#if defined(CONFIG_USE_MUIC)
+			muic_afc_set_voltage(SEC_INPUT_VOLTAGE_5V);
+#endif
 #if defined(CONFIG_PDIC_NOTIFIER)
 		} else if (is_pd_wire_type(battery->wire_status) && battery->hv_pdo) {
 			pr_info("@Tx_Mode %s: PD charnge pdo (9V -> 5V). Because Tx Start.\n", __func__);
@@ -5838,7 +5440,9 @@ void sec_wireless_set_tx_enable(struct sec_battery_info *battery, bool wc_tx_ena
 			BATT_TX_EVENT_WIRELESS_ALL_MASK);
 
 		if (is_hv_wire_type(battery->cable_type)) {
-			set_vbus_voltage(SEC_INPUT_VOLTAGE_9V);
+#if defined(CONFIG_USE_MUIC)
+			muic_afc_set_voltage(SEC_INPUT_VOLTAGE_9V);
+#endif
 		}
 
 		cancel_delayed_work(&battery->wpc_tx_work);
@@ -6031,7 +5635,9 @@ static int sec_wireless_set_property(struct power_supply *psy,
 
 					if (is_hv_wire_type(battery->wire_status)) {
 						pr_info("@Tx_Mode %s : charging voltage change(9V -> 5V).\n", __func__);
-						set_vbus_voltage(SEC_INPUT_VOLTAGE_5V);
+#if defined(CONFIG_USE_MUIC)
+						muic_afc_set_voltage(SEC_INPUT_VOLTAGE_5V);
+#endif
 						break; /* do not set buck off/uno off untill vbus level get real 5V */
 #if defined(CONFIG_PDIC_NOTIFIER)
 					} else if (is_pd_wire_type(battery->wire_status) && battery->hv_pdo) {
@@ -6094,7 +5700,6 @@ static int sec_wireless_set_property(struct power_supply *psy,
 	return 0;
 }
 
-#if defined(CONFIG_USE_POGO)
 static int sec_pogo_get_property(struct power_supply *psy,
 		enum power_supply_property psp,
 		union power_supply_propval *val)
@@ -6104,10 +5709,14 @@ static int sec_pogo_get_property(struct power_supply *psy,
 	if (psp != POWER_SUPPLY_PROP_ONLINE)
 		return -EINVAL;
 
-	val->intval =
-		(battery->cable_type == SEC_BATTERY_CABLE_POGO ||
-			battery->cable_type == SEC_BATTERY_CABLE_9V_POGO) ? 1 : 0;
+#if defined(CONFIG_USE_POGO)
+	val->intval = battery->pogo_status;
 	pr_info("%s: POGO online : %d\n", __func__, val->intval);
+#else
+	val->intval = 0;
+	battery->pogo_status = 0;
+	pr_info("%s: POGO not supported\n", __func__);
+#endif
 
 	return 0;
 }
@@ -6120,12 +5729,17 @@ static int sec_pogo_set_property(struct power_supply *psy,
 
 	switch (psp) {
 	case POWER_SUPPLY_PROP_ONLINE:
+#if defined(CONFIG_USE_POGO)
 		battery->pogo_status = val->intval;
 
 		__pm_stay_awake(battery->cable_ws);
 		queue_delayed_work(battery->monitor_wqueue,
 			&battery->cable_work, 0);
 		pr_info("%s: pogo_status : %d\n", __func__, battery->pogo_status);
+#else
+		battery->pogo_status = 0;
+		pr_info("%s: POGO not supported\n", __func__);
+#endif
 		break;
 	default:
 		return -EINVAL;
@@ -6133,7 +5747,6 @@ static int sec_pogo_set_property(struct power_supply *psy,
 
 	return 0;
 }
-#endif
 
 #if defined(CONFIG_USB_TYPEC_MANAGER_NOTIFIER) || defined(CONFIG_MUIC_NOTIFIER)
 static int sec_bat_cable_check(struct sec_battery_info *battery,
@@ -6205,12 +5818,7 @@ static int sec_bat_cable_check(struct sec_battery_info *battery,
 	case ATTACHED_DEV_UNOFFICIAL_ID_TA_MUIC:
 	case ATTACHED_DEV_UNOFFICIAL_ID_ANY_MUIC:
 	case ATTACHED_DEV_UNSUPPORTED_ID_VB_MUIC:
-	case ATTACHED_DEV_AFC_CHARGER_DISABLED_MUIC: 
 		current_cable_type = SEC_BATTERY_CABLE_TA;
-		break;
-	case ATTACHED_DEV_POGO_DOCK_MUIC:
-	case ATTACHED_DEV_POGO_DOCK_5V_MUIC:
-		current_cable_type = SEC_BATTERY_CABLE_POGO;
 		break;
 	case ATTACHED_DEV_AFC_CHARGER_5V_MUIC:
 	case ATTACHED_DEV_QC_CHARGER_5V_MUIC:
@@ -6243,9 +5851,6 @@ static int sec_bat_cable_check(struct sec_battery_info *battery,
 		if ((battery->cable_type == SEC_BATTERY_CABLE_TA) ||
 				(battery->cable_type == SEC_BATTERY_CABLE_NONE))
 			battery->cisd.cable_data[CISD_CABLE_AFC]++;
-		break;
-	case ATTACHED_DEV_POGO_DOCK_9V_MUIC:
-		current_cable_type = SEC_BATTERY_CABLE_9V_POGO;
 		break;
 #if defined(CONFIG_MUIC_HV_12V)
 	case ATTACHED_DEV_AFC_CHARGER_12V_MUIC:
@@ -6387,7 +5992,7 @@ static void sec_bat_set_rp_current(struct sec_battery_info *battery, int cable_t
 	pr_info("%s:(%d)\n", __func__, battery->pdic_info.sink_status.rp_currentlvl);
 	battery->max_charge_power = 0;
 	if (battery->status != POWER_SUPPLY_STATUS_DISCHARGING)
-		sec_bat_check_input_voltage(battery, cable_type);
+		sec_bat_check_input_voltage(battery);
 	sec_vote(battery->input_vote, VOTER_AICL, false, 0);
 }
 #endif
@@ -6399,7 +6004,6 @@ static int make_pd_list(struct sec_battery_info *battery)
 	int pd_list_index = 0, temp_power = 0, num_pd_list = 0, pd_list_select = 0;
 	int pd_charging_charge_power = battery->current_event & SEC_BAT_CURRENT_EVENT_HV_DISABLE ?
 		battery->pdata->nv_charge_power : battery->pdata->pd_charging_charge_power;
-	bool isUpdated = false;
 #if defined(CONFIG_DIRECT_CHARGING)
 	union power_supply_propval value = {0, };
 #endif
@@ -6410,18 +6014,11 @@ static int make_pd_list(struct sec_battery_info *battery)
 		battery->pdic_info.sink_status.power_list[1].max_voltage;
 	battery->pd_list.pd_info[0].max_current =
 		battery->pdic_info.sink_status.power_list[1].max_current;
-	if (battery->pdata->pd_comm_cap) {
-		battery->pd_list.pd_info[0].comm_capable=
-			battery->pdic_info.sink_status.power_list[1].comm_capable;
-		battery->pd_list.pd_info[0].suspend=
-			battery->pdic_info.sink_status.power_list[1].suspend;
-	}
 	battery->pd_list.pd_info[0].pdo_index = 1;
 	pd_list_index++;
 
 	base_charge_power =
-		battery->pdic_info.sink_status.power_list[1].max_voltage *
-		battery->pdic_info.sink_status.power_list[1].max_current;
+		battery->pdic_info.sink_status.power_list[1].max_voltage * battery->pdic_info.sink_status.power_list[1].max_current;
 
 	selected_pdo_voltage = SEC_INPUT_VOLTAGE_5V * 1000;
 	selected_pdo_power = 0;
@@ -6429,51 +6026,18 @@ static int make_pd_list(struct sec_battery_info *battery)
 
 	for (i = 1; i <= battery->pdic_info.sink_status.available_pdo_num; i++)
 	{
-		bool isApdo = battery->pdic_info.sink_status.power_list[i].apdo;
-		bool isAccept = battery->pdic_info.sink_status.power_list[i].accept;
-
-		temp_power = battery->pdic_info.sink_status.power_list[i].max_voltage *
-					battery->pdic_info.sink_status.power_list[i].max_current;
-
-		/* no change apdo */
-		if (!isAccept || isApdo)
+		pPower_list = &battery->pdic_info.sink_status.power_list[i];
+		if (!pPower_list->accept || pPower_list->apdo) /* skip not accept of apdo list */
 			continue;
 
-		if (temp_power >
-			(pd_charging_charge_power * 1000)) {
-			battery->pdic_info.sink_status.power_list[i].max_current =
-				(pd_charging_charge_power * 1000) /
-				battery->pdic_info.sink_status.power_list[i].max_voltage;
-			temp_power = (pd_charging_charge_power * 1000);
-			isUpdated = true;
-		}
+		temp_power = pPower_list->max_voltage * pPower_list->max_current;
 
-		if (battery->pdic_info.sink_status.power_list[i].max_current >
-			battery->pdata->max_input_current) {
-			isUpdated = true;
-			battery->pdic_info.sink_status.power_list[i].max_current =
-				battery->pdata->max_input_current;
-			temp_power = battery->pdic_info.sink_status.power_list[i].max_voltage *
-					battery->pdic_info.sink_status.power_list[i].max_current;
-		}
-
-		if (isUpdated) {
-			pr_info("%s: ->updated [%d,%s,%s], maxVol:%d, minVol:%d, maxCur:%d, power:%d\n",
-				__func__, i, isApdo ? "APDO" : "FIXED", isAccept ? "O" : "X",
-				battery->pdic_info.sink_status.power_list[i].max_voltage,
-				isApdo ? battery->pdic_info.sink_status.power_list[i].min_voltage : 0,
-				battery->pdic_info.sink_status.power_list[i].max_current,
-				temp_power);
-		}
-
-		if ((temp_power >= base_charge_power - 1000000) &&
-			(temp_power <= pd_charging_charge_power * 1000))
+		if ((temp_power >= base_charge_power - 1000000) && (temp_power <= pd_charging_charge_power * 1000))
 		{
 			if (temp_power >= selected_pdo_power &&
-				battery->pdic_info.sink_status.power_list[i].max_voltage > selected_pdo_voltage &&
-				battery->pdic_info.sink_status.power_list[i].max_voltage <= battery->pdata->max_input_voltage)
+				pPower_list->max_voltage > selected_pdo_voltage && pPower_list->max_voltage <= battery->pdata->max_input_voltage)
 			{
-				selected_pdo_voltage = battery->pdic_info.sink_status.power_list[i].max_voltage;
+				selected_pdo_voltage = pPower_list->max_voltage;
 				selected_pdo_power = temp_power;
 				selected_pdo_num = i;
 			}
@@ -6489,10 +6053,6 @@ static int make_pd_list(struct sec_battery_info *battery)
 		battery->pd_list.pd_info[pd_list_index].max_voltage = pSelected_power_list->max_voltage;
 		battery->pd_list.pd_info[pd_list_index].max_current = pSelected_power_list->max_current;
 		battery->pd_list.pd_info[pd_list_index].min_voltage = 0;
-		if (battery->pdata->pd_comm_cap) {
-			battery->pd_list.pd_info[pd_list_index].comm_capable = pSelected_power_list->comm_capable;
-			battery->pd_list.pd_info[pd_list_index].suspend = pSelected_power_list->suspend;
-		}
 		pd_list_index++;
 	}
 
@@ -6504,7 +6064,7 @@ static int make_pd_list(struct sec_battery_info *battery)
 		{
 			pPower_list = &battery->pdic_info.sink_status.power_list[i];
 
-			if (pPower_list->apdo && pd_list_index >= 0 && pd_list_index < MAX_PDO_NUM) {
+			if (pPower_list->apdo) {
 				battery->pd_list.pd_info[pd_list_index].pdo_index = i;
 				battery->pd_list.pd_info[pd_list_index].apdo = true;
 				battery->pd_list.pd_info[pd_list_index].max_voltage = pPower_list->max_voltage;
@@ -6521,38 +6081,25 @@ static int make_pd_list(struct sec_battery_info *battery)
 	}
 	num_pd_list = pd_list_index;
 
-	if (num_pd_list <= 0 || num_pd_list > MAX_PDO_NUM) {
-		pr_info("%s : PDO list is wrong: %d!!\n", __func__, num_pd_list);
+	if (num_pd_list <= 0) {
+		pr_info("%s : PDO list is empty!!\n", __func__);
 		return 0;
 	} else {
 		pr_info("%s: total num_pd_list: %d, num_fpdo: %d, num_apdo: %d\n",
 			__func__, num_pd_list, battery->pd_list.num_fpdo, battery->pd_list.num_apdo);
 	}
 
-#if defined(CONFIG_DISCRETE_CHARGER)
-	if (battery->pdata->flash_state)
-		/* select low voltage pdo */
-		pd_list_select = 0;
-	else
-#endif
-		/* select high voltage pdo */
-		pd_list_select = battery->pd_list.num_fpdo - 1;
-
-	if (pd_list_select < 0 || pd_list_select >= MAX_PDO_NUM) {
-		pr_info("%s: pd_list_select is wrong: %d\n", __func__, pd_list_select);
-		return 0;
-	}
+	/* select high voltage pdo */
+	pd_list_select = num_pd_list - battery->pd_list.num_apdo - 1;
 
 	for (i = 0; i < num_pd_list; i++) {
-		pr_info("%s: Made pd_list[%d] %s[%d,%s] maxVol:%d, minVol:%d, maxCur:%d, comm:%d, suspend:%d\n",
+		pr_info("%s: Made pd_list[%d] %s[%d,%s] maxVol:%d, minVol:%d, maxCur:%d\n",
 			__func__, i, i == pd_list_select ? "**" : " ",
 			battery->pd_list.pd_info[i].pdo_index,
 			battery->pd_list.pd_info[i].apdo ? "APDO" : "FIXED",
 			battery->pd_list.pd_info[i].max_voltage,
 			battery->pd_list.pd_info[i].min_voltage,
-			battery->pd_list.pd_info[i].max_current,
-			battery->pd_list.pd_info[i].comm_capable,
-			battery->pd_list.pd_info[i].suspend);
+			battery->pd_list.pd_info[i].max_current);
 	}
 
 	battery->pd_list.max_pd_count = num_pd_list;
@@ -6583,8 +6130,7 @@ static int make_pd_list(struct sec_battery_info *battery)
 		sec_bat_set_current_event(battery, SEC_BAT_CURRENT_EVENT_SELECT_PDO,
 			SEC_BAT_CURRENT_EVENT_SELECT_PDO);
 		sec_vote(battery->input_vote, VOTER_SELECT_PDO, true, input_current);
-		if (pd_list_select >= 0 && pd_list_select < MAX_PDO_NUM)
-			select_pdo(battery->pd_list.pd_info[pd_list_select].pdo_index);
+		select_pdo(battery->pd_list.pd_info[pd_list_select].pdo_index);
 	}
 
 	battery->pd_list.now_pd_index = sec_bat_get_pd_list_index(&battery->pdic_info.sink_status,
@@ -6592,7 +6138,7 @@ static int make_pd_list(struct sec_battery_info *battery)
 	pr_info("%s : now_pd_index : %d\n", __func__, battery->pd_list.now_pd_index);
 
 #if defined(CONFIG_DIRECT_CHARGING)
-	value.intval = battery->pd_list.pd_info[pd_list_select].pdo_index;
+	value.intval = battery->pd_list.num_apdo > 0 ? battery->pd_list.num_fpdo : 0;
 	psy_do_property(battery->pdata->charger_name, set,
 		POWER_SUPPLY_EXT_PROP_DIRECT_FIXED_PDO, value);
 #endif
@@ -6607,6 +6153,8 @@ static int usb_typec_handle_notification(struct notifier_block *nb,
 	struct sec_battery_info *battery =
 			container_of(nb, struct sec_battery_info, usb_typec_nb);
 	int cable_type = SEC_BATTERY_CABLE_NONE, i = 0, current_pdo = 0;
+	int pd_charging_charge_power = battery->current_event & SEC_BAT_CURRENT_EVENT_HV_DISABLE ?
+		battery->pdata->nv_charge_power : battery->pdata->pd_charging_charge_power;
 	PD_NOTI_ATTACH_TYPEDEF usb_typec_info = *(PD_NOTI_ATTACH_TYPEDEF *)data;
 	bool bPdIndexChanged = false;
 	bool bPrintPDlog = true;
@@ -6642,7 +6190,7 @@ static int usb_typec_handle_notification(struct notifier_block *nb,
 		case MUIC_NOTIFY_CMD_ATTACH:
 		case MUIC_NOTIFY_CMD_LOGICALLY_ATTACH:
 			/* Skip notify from MUIC if PDIC is attached already */
-			if (is_pd_wire_type(battery->wire_status) || battery->init_src_cap) {
+			if (is_pd_wire_type(battery->wire_status)) {
 				if (lpcharge) {
 					mutex_unlock(&battery->typec_notylock);
 					return 0;
@@ -6676,7 +6224,6 @@ static int usb_typec_handle_notification(struct notifier_block *nb,
 		}
 		battery->pdic_attach = false;
 		battery->pdic_ps_rdy = false;
-		battery->init_src_cap = false;
 #if defined(CONFIG_AFC_CHARGER_MODE)
 		if (battery->muic_cable_type == ATTACHED_DEV_QC_CHARGER_9V_MUIC ||
 			battery->muic_cable_type == ATTACHED_DEV_QC_CHARGER_ERR_V_MUIC)
@@ -6704,13 +6251,11 @@ static int usb_typec_handle_notification(struct notifier_block *nb,
 			dev_info(battery->dev, "%s: skip pd operation - attach(%d)\n", __func__, usb_typec_info.attach);
 			battery->pdic_attach = false;
 			battery->pdic_ps_rdy = false;
-			battery->init_src_cap = false;
 			battery->hv_pdo = false;
 			battery->pd_list.now_pd_index = 0;
 			battery->pd_list.now_isApdo = false;
 			battery->pd_list.num_apdo = 0;
 			battery->pd_list.num_fpdo = 0;
-			battery->pd_usb_attached = false;
 			mutex_unlock(&battery->typec_notylock);
 			return 0;
 		} else if ((*(struct pdic_notifier_struct *)usb_typec_info.pd).event == PDIC_NOTIFY_EVENT_PD_PRSWAP_SNKTOSRC) {
@@ -6720,17 +6265,13 @@ static int usb_typec_handle_notification(struct notifier_block *nb,
 
 			battery->pdic_attach = false;
 			battery->pdic_ps_rdy = false;
-			battery->init_src_cap = false;
 			battery->hv_pdo = false;
 			battery->pd_list.now_pd_index = 0;
 			goto skip_cable_check;
-		}
-#if defined(CONFIG_PREVENT_USB_CONN_OVERHEAT)
-		else if (!lpcharge && (battery->usb_thm_status ||
+		} else if (!lpcharge && (battery->usb_thm_status ||
 					(battery->misc_event & BATT_MISC_EVENT_TEMP_HICCUP_TYPE))) {
 			goto skip_cable_check;
 		}
-#endif
 
 		cmd = "PD_ATTACH";
 		if ((*(struct pdic_notifier_struct *)usb_typec_info.pd).event == PDIC_NOTIFY_EVENT_PDIC_ATTACH) {
@@ -6746,10 +6287,7 @@ static int usb_typec_handle_notification(struct notifier_block *nb,
 			mutex_unlock(&battery->typec_notylock);
 			return 0;
 		}
-		battery->init_src_cap = false;
-		if ((*(struct pdic_notifier_struct *)usb_typec_info.pd).event == PDIC_NOTIFY_EVENT_PD_SINK_CAP ||
-			battery->update_pd_list) {
-			pr_info("%s : update_pd_list(%d)\n", __func__, battery->update_pd_list);
+		if ((*(struct pdic_notifier_struct *)usb_typec_info.pd).event == PDIC_NOTIFY_EVENT_PD_SINK_CAP) {
 #if defined(CONFIG_DIRECT_CHARGING)
 #if defined(CONFIG_STEP_CHARGING)
 			sec_bat_reset_step_charging(battery);
@@ -6758,7 +6296,6 @@ static int usb_typec_handle_notification(struct notifier_block *nb,
 					POWER_SUPPLY_EXT_PROP_DIRECT_CLEAR_ERR, val);
 #endif
 			battery->pdic_attach = false;
-			battery->update_pd_list = false;
 #if defined(CONFIG_LSI_IFPMIC)
 			/* Refresh charger and current settings for LSI IFPMIC */
 			sec_vote_refresh(battery->chgen_vote);
@@ -6798,10 +6335,6 @@ static int usb_typec_handle_notification(struct notifier_block *nb,
 				battery->pdic_info.sink_status.current_pdo_num) {
 				sec_bat_set_current_event(battery, 0, SEC_BAT_CURRENT_EVENT_SELECT_PDO);
 				sec_vote(battery->input_vote, VOTER_SELECT_PDO, false, 0);
-#if defined(CONFIG_STEP_CHARGING) && defined(CONFIG_DIRECT_CHARGING)
-				if (is_pd_apdo_wire_type(battery->cable_type))
-					sec_bat_check_dc_step_charging(battery);
-#endif
 			}
 			dev_info(battery->dev, "%s: battery->pdic_ps_rdy(%d), hv_pdo(%d)\n",
 				__func__, battery->pdic_ps_rdy, battery->hv_pdo);
@@ -6832,18 +6365,23 @@ static int usb_typec_handle_notification(struct notifier_block *nb,
 			battery->pdic_info.sink_status.available_pdo_num, current_pdo);
 
 		for (i = 1; i <= battery->pdic_info.sink_status.available_pdo_num; i++) {
+			bool isUpdated = false;
 			bool isApdo = battery->pdic_info.sink_status.power_list[i].apdo;
-			bool isAccept = battery->pdic_info.sink_status.power_list[i].accept;
+			bool isAccpet = battery->pdic_info.sink_status.power_list[i].accept;
 
 			if (bPrintPDlog)
 				pr_info("%s:%spower_list[%d,%s,%s], maxVol:%d, minVol:%d, maxCur:%d, power:%d\n",
 					__func__, i == current_pdo ? "**" : "  ",
-					i, isApdo ? "APDO" : "FIXED", isAccept ? "O" : "X",
+					i, isApdo ? "APDO" : "FIXED", isAccpet ? "O" : "X",
 					battery->pdic_info.sink_status.power_list[i].max_voltage,
 					isApdo ? battery->pdic_info.sink_status.power_list[i].min_voltage : 0,
 					battery->pdic_info.sink_status.power_list[i].max_current,
 					battery->pdic_info.sink_status.power_list[i].max_voltage *
 					battery->pdic_info.sink_status.power_list[i].max_current);
+
+			/* no change apdo */
+			if (!isAccpet || isApdo)
+				continue;
 
 			if (!battery->pdic_attach && battery->pdic_info.sink_status.has_apdo && !isApdo &&
 				(battery->pdic_info.sink_status.power_list[i].max_voltage *
@@ -6852,10 +6390,32 @@ static int usb_typec_handle_notification(struct notifier_block *nb,
 					battery->pdic_info.sink_status.power_list[i].max_current / 1000;
 				pr_info("%s: fpdo_power = %dmW\n", __func__, fpdo_power);
 			}
+			if ((battery->pdic_info.sink_status.power_list[i].max_voltage *
+				battery->pdic_info.sink_status.power_list[i].max_current) >
+				(pd_charging_charge_power * 1000)) {
+				battery->pdic_info.sink_status.power_list[i].max_current =
+					(pd_charging_charge_power * 1000) /
+					battery->pdic_info.sink_status.power_list[i].max_voltage;
+				isUpdated = true;
+			}
 
-			/* no change apdo */
-			if (!isAccept || isApdo)
-				continue;
+			if (battery->pdic_info.sink_status.power_list[i].max_current >
+				battery->pdata->max_input_current) {
+				isUpdated = true;
+				battery->pdic_info.sink_status.power_list[i].max_current =
+					battery->pdata->max_input_current;
+			}
+
+			if (isUpdated) {
+				if (bPrintPDlog)
+					pr_info("%s: ->updated [%d,%s,%s], maxVol:%d, minVol:%d, maxCur:%d, power:%d\n",
+						__func__, i, isApdo ? "APDO" : "FIXED", isAccpet ? "O" : "X",
+						battery->pdic_info.sink_status.power_list[i].max_voltage,
+						isApdo ? battery->pdic_info.sink_status.power_list[i].min_voltage : 0,
+						battery->pdic_info.sink_status.power_list[i].max_current,
+						battery->pdic_info.sink_status.power_list[i].max_voltage *
+						battery->pdic_info.sink_status.power_list[i].max_current);
+			}
 		}
 
 		if (!battery->pdic_attach) {
@@ -7278,7 +6838,6 @@ static const struct power_supply_desc wireless_power_supply_desc = {
 	.set_property = sec_wireless_set_property,
 };
 
-#if defined(CONFIG_USE_POGO)
 static const struct power_supply_desc pogo_power_supply_desc = {
 	.name = "pogo",
 	.type = POWER_SUPPLY_TYPE_POGO,
@@ -7287,7 +6846,6 @@ static const struct power_supply_desc pogo_power_supply_desc = {
 	.get_property = sec_pogo_get_property,
 	.set_property = sec_pogo_set_property,
 };
-#endif
 
 static int sec_battery_probe(struct platform_device *pdev)
 {
@@ -7346,7 +6904,6 @@ static int sec_battery_probe(struct platform_device *pdev)
 	mutex_init(&battery->batt_handlelock);
 	mutex_init(&battery->current_eventlock);
 	mutex_init(&battery->typec_notylock);
-	mutex_init(&battery->bc12_notylock);
 	mutex_init(&battery->wclock);
 	mutex_init(&battery->voutlock);
 
@@ -7364,7 +6921,6 @@ static int sec_battery_probe(struct platform_device *pdev)
 	battery_wakeup_source_init(&pdev->dev, &battery->ext_event_ws, "sec-battery-ext_event");
 	battery_wakeup_source_init(&pdev->dev, &battery->wc_headroom_ws, "sec-battery-wc_headroom");
 	battery_wakeup_source_init(&pdev->dev, &battery->wpc_tx_ws, "sec-battery-wcp-tx");
-	battery_wakeup_source_init(&pdev->dev, &battery->hv_disable_ws, "sec-battery-hv-disable");
 #if defined(CONFIG_UPDATE_BATTERY_DATA)
 	battery_wakeup_source_init(&pdev->dev, &battery->batt_data_ws, "sec-battery-update-data");
 #endif
@@ -7436,7 +6992,6 @@ static int sec_battery_probe(struct platform_device *pdev)
 	battery->wc_status = SEC_WIRELESS_PAD_NONE;
 	battery->wc_cv_mode = false;
 	battery->wire_status = SEC_BATTERY_CABLE_NONE;
-	battery->bc12_cable = SEC_BATTERY_CABLE_NONE;
 
 	battery->wc_rx_phm_mode = false;
 	battery->wc_tx_enable = false;
@@ -7465,14 +7020,13 @@ static int sec_battery_probe(struct platform_device *pdev)
 	battery->dchg_temp = 0;
 	battery->blkt_temp = 0;
 	battery->skip_swelling = false;
+	battery->swelling_mode = false;
 	battery->bat_thm_count = 0;
 	battery->led_cover = 0;
 	battery->hiccup_status = 0;
 	battery->ext_event = BATT_EXT_EVENT_NONE;
 	battery->tx_retry_case = SEC_BAT_TX_RETRY_NONE;
 	battery->tx_misalign_cnt = 0;
-	battery->update_pd_list = false;
-	battery->pd_disable_by_afc_option = false;
 
 	sec_bat_set_current_event(battery, SEC_BAT_CURRENT_EVENT_USB_100MA, SEC_BAT_CURRENT_EVENT_USB_100MA);
 
@@ -7519,8 +7073,6 @@ static int sec_battery_probe(struct platform_device *pdev)
 	}
 	battery->batt_f_mode = f_mode_battery;
 
-	battery->pdata->flash_state = 0;
-
 	battery->usb_factory_init = false;
 #if defined(CONFIG_SEC_FACTORY)
 	battery->usb_factory_slate_mode = false;
@@ -7544,7 +7096,6 @@ static int sec_battery_probe(struct platform_device *pdev)
 		pr_info("HV wired charging mode is disabled\n");
 		sec_bat_set_current_event(battery,
 			SEC_BAT_CURRENT_EVENT_HV_DISABLE, SEC_BAT_CURRENT_EVENT_HV_DISABLE);
-		battery->pd_disable_by_afc_option = true;
 	}
 #endif
 
@@ -7552,6 +7103,17 @@ static int sec_battery_probe(struct platform_device *pdev)
 		sec_bat_set_current_event(battery, SEC_BAT_CURRENT_EVENT_FG_RESET,
 			SEC_BAT_CURRENT_EVENT_FG_RESET);
 
+	battery->pdata->store_mode_charging_max = STORE_MODE_CHARGING_MAX;
+	battery->pdata->store_mode_charging_min = STORE_MODE_CHARGING_MIN;
+#if !defined(CONFIG_SEC_FACTORY)
+#if !defined(CONFIG_ARCH_EXYNOS)
+	if (sales_code_is("VZW")) {
+		dev_err(battery->dev, "%s: Sales is VZW\n", __func__);
+		battery->pdata->store_mode_charging_max = STORE_MODE_CHARGING_MAX_VZW;
+		battery->pdata->store_mode_charging_min = STORE_MODE_CHARGING_MIN_VZW;
+	}
+#endif
+#endif
 	if (battery->pdata->charger_name == NULL)
 		battery->pdata->charger_name = "sec-charger";
 	if (battery->pdata->fuelgauge_name == NULL)
@@ -7571,7 +7133,6 @@ static int sec_battery_probe(struct platform_device *pdev)
 	INIT_DELAYED_WORK(&battery->monitor_work, sec_bat_monitor_work);
 	INIT_DELAYED_WORK(&battery->cable_work, sec_bat_cable_work);
 	INIT_DELAYED_WORK(&battery->wpc_tx_work, sec_bat_wpc_tx_work);
-	INIT_DELAYED_WORK(&battery->hv_disable_work, sec_bat_hv_disable_work);
 #if defined(CONFIG_WIRELESS_TX_MODE)
 	INIT_DELAYED_WORK(&battery->wpc_txpower_calc_work, sec_bat_txpower_calc_work);
 #endif
@@ -7612,7 +7173,6 @@ static int sec_battery_probe(struct platform_device *pdev)
 #endif
 	/* updates temperatures on boot */
 	sec_bat_get_temperature_info(battery);
-	battery->temperature = battery->raw_bat_temp;
 
 	battery_cfg.drv_data = battery;
 
@@ -7642,14 +7202,12 @@ static int sec_battery_probe(struct platform_device *pdev)
 		goto err_supply_unreg_ac;
 	}
 
-#if defined(CONFIG_USE_POGO)
 	battery->psy_pogo = power_supply_register(&pdev->dev, &pogo_power_supply_desc, &battery_cfg);
 	if (!battery->psy_pogo) {
 		dev_err(battery->dev,
 			"%s: Failed to Register psy_pogo\n", __func__);
 		goto err_supply_unreg_bat;
 	}
-#endif
 
 	battery->psy_wireless = power_supply_register(&pdev->dev, &wireless_power_supply_desc, &battery_cfg);
 	if (!battery->psy_wireless) {
@@ -7751,10 +7309,8 @@ err_req_irq:
 	power_supply_unregister(battery->psy_wireless);
 err_supply_unreg_pogo:
 	power_supply_unregister(battery->psy_pogo);
-#if defined(CONFIG_USE_POGO)
 err_supply_unreg_bat:
 	power_supply_unregister(battery->psy_bat);
-#endif
 err_supply_unreg_ac:
 	power_supply_unregister(battery->psy_ac);
 err_supply_unreg_usb:
@@ -7770,7 +7326,6 @@ err_irq:
 	wakeup_source_unregister(battery->ext_event_ws);
 	wakeup_source_unregister(battery->wc_headroom_ws);
 	wakeup_source_unregister(battery->wpc_tx_ws);
-	wakeup_source_unregister(battery->hv_disable_ws);
 #if defined(CONFIG_UPDATE_BATTERY_DATA)
 	wakeup_source_unregister(battery->batt_data_ws);
 #endif
@@ -7786,7 +7341,6 @@ err_irq:
 	mutex_destroy(&battery->batt_handlelock);
 	mutex_destroy(&battery->current_eventlock);
 	mutex_destroy(&battery->typec_notylock);
-	mutex_destroy(&battery->bc12_notylock);
 	mutex_destroy(&battery->wclock);
 	mutex_destroy(&battery->voutlock);
 	kfree(pdata);
@@ -7840,7 +7394,6 @@ static int sec_battery_remove(struct platform_device *pdev)
 	mutex_destroy(&battery->batt_handlelock);
 	mutex_destroy(&battery->current_eventlock);
 	mutex_destroy(&battery->typec_notylock);
-	mutex_destroy(&battery->bc12_notylock);
 	mutex_destroy(&battery->wclock);
 	mutex_destroy(&battery->voutlock);
 

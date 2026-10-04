@@ -34,8 +34,6 @@
 
 #define SMD_ITEM_RESULT_LENGTH 128
 
-#define STEP_MAIN_TIMEOUT 	8000
-
 enum nad_enum_step {
 	STEP_NONE = 0,
 	STEP_SMD_DDRSCANTEST_START,
@@ -43,7 +41,6 @@ enum nad_enum_step {
 	STEP_SMD_NAD_START,
 	STEP_SMD_NAD_DONE,
 	STEP_CAL1,
-	STEP_MAIN,
 	STEP_ETC,
 	//
 	STEP_STEPSCOUNT,
@@ -59,8 +56,6 @@ struct nad_env {
     unsigned int nad_acat_remaining_count;
     unsigned int nad_dramtest_remaining_count;
 	unsigned int nad_smd_result;
-	unsigned int nad_acat_result;
-	unsigned int nad_main_result;
 	unsigned int nad_dram_test_result;
 	unsigned int nad_dram_fail_data;
 	volatile unsigned long long nad_dram_fail_address;

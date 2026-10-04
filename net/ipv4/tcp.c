@@ -282,8 +282,6 @@
 #include <asm/ioctls.h>
 #include <net/busy_poll.h>
 
-#include <perf_tracker_internal.h>
-
 int sysctl_tcp_min_tso_segs __read_mostly = 2;
 
 int sysctl_tcp_autocorking __read_mostly = 1;
@@ -330,7 +328,7 @@ void tcp_enter_memory_pressure(struct sock *sk)
 {
 	unsigned long val;
 
-	if (READ_ONCE(tcp_memory_pressure))
+	if (tcp_memory_pressure)
 		return;
 	val = jiffies;
 
@@ -345,7 +343,7 @@ void tcp_leave_memory_pressure(struct sock *sk)
 {
 	unsigned long val;
 
-	if (!READ_ONCE(tcp_memory_pressure))
+	if (!tcp_memory_pressure)
 		return;
 	val = xchg(&tcp_memory_pressure, 0);
 	if (val)
@@ -576,7 +574,7 @@ unsigned int tcp_poll(struct file *file, struct socket *sock, poll_table *wait)
 	}
 	/* This barrier is coupled with smp_wmb() in tcp_reset() */
 	smp_rmb();
-	if (sk->sk_err || !skb_queue_empty_lockless(&sk->sk_error_queue))
+	if (sk->sk_err || !skb_queue_empty(&sk->sk_error_queue))
 		mask |= POLLERR;
 
 	return mask;
@@ -916,22 +914,6 @@ static int tcp_send_mss(struct sock *sk, int *size_goal, int flags)
 	return mss_now;
 }
 
-/* In some cases, both sendpage() and sendmsg() could have added
- * an skb to the write queue, but failed adding payload on it.
- * We need to remove it to consume less memory, but more
- * importantly be able to generate EPOLLOUT for Edge Trigger epoll()
- * users.
- */
-static void tcp_remove_empty_skb(struct sock *sk, struct sk_buff *skb)
-{
-	if (skb && !skb->len &&
-	    TCP_SKB_CB(skb)->end_seq == TCP_SKB_CB(skb)->seq) {
-		tcp_unlink_write_queue(skb, sk);
-		tcp_check_send_head(sk, skb);
-		sk_wmem_free_skb(sk, skb);
-	}
-}
-
 ssize_t do_tcp_sendpages(struct sock *sk, struct page *page, int offset,
 			 size_t size, int flags)
 {
@@ -1052,7 +1034,6 @@ out:
 	return copied;
 
 do_error:
-	tcp_remove_empty_skb(sk, tcp_write_queue_tail(sk));
 	if (copied)
 		goto out;
 out_err:
@@ -1431,11 +1412,17 @@ out_nopush:
 	sock_zerocopy_put(uarg);
 	return copied + copied_syn;
 
-do_error:
-	skb = tcp_write_queue_tail(sk);
 do_fault:
-	tcp_remove_empty_skb(sk, skb);
+	if (!skb->len) {
+		tcp_unlink_write_queue(skb, sk);
+		/* It is the one place in all of TCP, except connection
+		 * reset, where we can be unlinking the send_head.
+		 */
+		tcp_check_send_head(sk, skb);
+		sk_wmem_free_skb(sk, skb);
+	}
 
+do_error:
 	if (copied + copied_syn)
 		goto out;
 out_err:
@@ -1523,7 +1510,7 @@ static int tcp_peek_sndq(struct sock *sk, struct msghdr *msg, int len)
 		err = skb_copy_datagram_msg(skb, 0, msg, skb->len);
 		if (err)
 			break;
-		perf_net_pkt_trace(sk, skb, skb->len);
+
 		copied += skb->len;
 	}
 
@@ -1789,7 +1776,7 @@ int tcp_recvmsg(struct sock *sk, struct msghdr *msg, size_t len, int nonblock,
 	if (unlikely(flags & MSG_ERRQUEUE))
 		return inet_recv_error(sk, msg, len, addr_len);
 
-	if (sk_can_busy_loop(sk) && skb_queue_empty_lockless(&sk->sk_receive_queue) &&
+	if (sk_can_busy_loop(sk) && skb_queue_empty(&sk->sk_receive_queue) &&
 	    (sk->sk_state == TCP_ESTABLISHED))
 		sk_busy_loop(sk, nonblock);
 
@@ -1966,7 +1953,6 @@ int tcp_recvmsg(struct sock *sk, struct msghdr *msg, size_t len, int nonblock,
 					copied = -EFAULT;
 				break;
 			}
-			perf_net_pkt_trace(sk, skb, used);
 		}
 
 		*seq += used;
@@ -1980,15 +1966,13 @@ skip_copy:
 			tp->urg_data = 0;
 			tcp_fast_path_check(sk);
 		}
+		if (used + offset < skb->len)
+			continue;
 
 		if (TCP_SKB_CB(skb)->has_rxtstamp) {
 			tcp_update_recv_tstamps(skb, &tss);
 			has_tss = true;
 		}
-
-		if (used + offset < skb->len)
-			continue;
-
 		if (TCP_SKB_CB(skb)->tcp_flags & TCPHDR_FIN)
 			goto found_fin_ok;
 		if (!(flags & MSG_PEEK))
@@ -2368,11 +2352,9 @@ int tcp_disconnect(struct sock *sk, int flags)
 	tp->snd_ssthresh = TCP_INFINITE_SSTHRESH;
 	tp->snd_cwnd_cnt = 0;
 	tp->window_clamp = 0;
-	tp->delivered = 0;
 	tcp_set_ca_state(sk, TCP_CA_Open);
 	tp->is_sack_reneg = 0;
 	tcp_clear_retrans(tp);
-	tp->total_retrans = 0;
 	inet_csk_delack_init(sk);
 	/* Initialize rcv_mss to TCP_MIN_MSS to avoid division by 0
 	 * issue in __tcp_select_window()
@@ -2384,12 +2366,8 @@ int tcp_disconnect(struct sock *sk, int flags)
 	dst_release(sk->sk_rx_dst);
 	sk->sk_rx_dst = NULL;
 	tcp_saved_syn_free(tp);
-	tp->segs_in = 0;
-	tp->segs_out = 0;
 	tp->bytes_acked = 0;
 	tp->bytes_received = 0;
-	tp->data_segs_in = 0;
-	tp->data_segs_out = 0;
 
 	/* Clean up fastopen related fields */
 	tcp_free_fastopen_req(tp);

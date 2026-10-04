@@ -1560,9 +1560,8 @@ static void __timekeeping_inject_sleeptime(struct timekeeper *tk,
 	tk_update_sleep_time(tk, timespec64_to_ktime(*delta));
 #if IS_ENABLED(CONFIG_SEC_PM)
 	sleep_duration = *delta;
-	if (timespec64_to_ns(&sleep_duration) > 0)
-		printk_deferred("PM: Timekeeping suspended for %lld.%03lu seconds\n",
-				   (s64)sleep_duration.tv_sec, sleep_duration.tv_nsec / NSEC_PER_MSEC);
+	printk_deferred("PM: Timekeeping suspended for %lld.%03lu seconds\n",
+			   (s64)sleep_duration.tv_sec, sleep_duration.tv_nsec / NSEC_PER_MSEC);
 #else
 	tk_debug_account_sleep_time(delta);
 #endif
@@ -1679,9 +1678,11 @@ void timekeeping_resume(void)
 		nsec = mul_u64_u32_shr(cyc_delta, clock->mult, clock->shift);
 		ts_delta = ns_to_timespec64(nsec);
 		sleeptime_injected = true;
+//                pr_warn("Persistent clock CLOCK_SOURCE_SUSPEND_NONSTOP");
 	} else if (timespec64_compare(&ts_new, &timekeeping_suspend_time) > 0) {
 		ts_delta = timespec64_sub(ts_new, timekeeping_suspend_time);
 		sleeptime_injected = true;
+//                pr_warn("Persistent clock CLOCK_SOURCE_SUSPEND_NONSTOP no tick");
 	}
 
 	if (sleeptime_injected)

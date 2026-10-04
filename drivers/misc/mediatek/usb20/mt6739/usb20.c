@@ -101,8 +101,8 @@ static void dpidle_timer_wakeup_func(unsigned long data)
 {
 	struct timer_list *timer = (struct timer_list *)data;
 
-	DBG_LIMIT(1, "dpidle_timer<%pK> alive", timer);
-	DBG(2, "dpidle_timer<%pK> alive...\n", timer);
+	DBG_LIMIT(1, "dpidle_timer<%p> alive", timer);
+	DBG(2, "dpidle_timer<%p> alive...\n", timer);
 
 	if (dpidle_status == USB_DPIDLE_TIMER)
 		issue_dpidle_timer();
@@ -117,7 +117,7 @@ static void issue_dpidle_timer(void)
 	if (!timer)
 		return;
 
-	DBG(2, "add dpidle_timer<%pK>\n", timer);
+	DBG(2, "add dpidle_timer<%p>\n", timer);
 	init_timer(timer);
 	timer->function = dpidle_timer_wakeup_func;
 	timer->data = (unsigned long)timer;
@@ -472,9 +472,9 @@ void do_disconnect_check_work(struct work_struct *data)
 	DBG(1, "speed <%d>\n", musb->g.speed);
 	/* notify gadget driver, g.speed judge is very important */
 	if (!musb->is_host && musb->g.speed != USB_SPEED_UNKNOWN) {
-		DBG(0, "musb->gadget_driver:%pK\n", musb->gadget_driver);
+		DBG(0, "musb->gadget_driver:%p\n", musb->gadget_driver);
 		if (musb->gadget_driver && musb->gadget_driver->disconnect) {
-			DBG(0, "musb->gadget_driver->disconnect:%pK\n",
+			DBG(0, "musb->gadget_driver->disconnect:%p\n",
 					musb->gadget_driver->disconnect);
 			/* align musb_g_disconnect */
 			spin_unlock(&musb->lock);
@@ -539,7 +539,7 @@ bool usb_cable_connected(void)
 
 	usb_notify = get_otg_notify();
 	usb_mode = get_usb_mode(usb_notify);
-	pr_info("usb: %s: %d\n", __func__, usb_mode);
+	printk("usb: %s: %d\n", __func__, usb_mode);
 	if (usb_mode == NOTIFY_PERIPHERAL_MODE)
 		return true;
 	else
@@ -650,8 +650,9 @@ void do_connection_work(struct work_struct *data)
 		if (!mtk_musb->usb_lock.active) {
 			__pm_stay_awake(&mtk_musb->usb_lock);
 			DBG(0, "lock\n");
-		} else
+		} else {
 			DBG(0, "already lock\n");
+		}
 
 		/* note this already put SOFTCON */
 		musb_start(mtk_musb);
@@ -882,7 +883,7 @@ static irqreturn_t mt_usb_interrupt(int irq, void *dev_id)
 }
 
 /*--FOR INSTANT POWER ON USAGE --*/
-static ssize_t cmode_show(struct device *dev,
+static ssize_t mt_usb_show_cmode(struct device *dev,
 				struct device_attribute *attr, char *buf)
 {
 	if (!dev) {
@@ -892,7 +893,7 @@ static ssize_t cmode_show(struct device *dev,
 	return scnprintf(buf, PAGE_SIZE, "%d\n", cable_mode);
 }
 
-static ssize_t cmode_store(struct device *dev,
+static ssize_t mt_usb_store_cmode(struct device *dev,
 				struct device_attribute *attr,
 				const char *buf, size_t count)
 {
@@ -927,11 +928,11 @@ static ssize_t cmode_store(struct device *dev,
 	return count;
 }
 
-DEVICE_ATTR_RW(cmode);
+DEVICE_ATTR(cmode, 0664, mt_usb_show_cmode, mt_usb_store_cmode);
 
 static bool saving_mode;
 
-static ssize_t saving_show(struct device *dev,
+static ssize_t mt_usb_show_saving_mode(struct device *dev,
 				struct device_attribute *attr, char *buf)
 {
 	if (!dev) {
@@ -941,7 +942,7 @@ static ssize_t saving_show(struct device *dev,
 	return scnprintf(buf, PAGE_SIZE, "%d\n", saving_mode);
 }
 
-static ssize_t saving_store(struct device *dev,
+static ssize_t mt_usb_store_saving_mode(struct device *dev,
 					struct device_attribute *attr,
 					const char *buf, size_t count)
 {
@@ -1004,7 +1005,7 @@ void usb_dump_debug_register(void)
 	usb_enable_clock(false);
 }
 
-DEVICE_ATTR_RW(saving);
+DEVICE_ATTR(saving, 0664, mt_usb_show_saving_mode, mt_usb_store_saving_mode);
 
 #ifdef CONFIG_MTK_UART_USB_SWITCH
 static void uart_usb_switch_dump_register(void)
@@ -1024,7 +1025,7 @@ static void uart_usb_switch_dump_register(void)
 	DBG(0, "[MUSB]GPIO_SEL=%x\n", GET_GPIO_SEL_VAL(readl(ap_gpio_base)));
 }
 
-static ssize_t portmode_store(struct device *dev,
+static ssize_t mt_usb_show_portmode(struct device *dev,
 						struct device_attribute *attr,
 						char *buf)
 {
@@ -1051,7 +1052,7 @@ static ssize_t portmode_store(struct device *dev,
 	return scnprintf(buf, PAGE_SIZE, "%d\n", port_mode);
 }
 
-static ssize_t portmode_store(struct device *dev,
+static ssize_t mt_usb_store_portmode(struct device *dev,
 					struct device_attribute *attr,
 				     const char *buf, size_t count)
 {
@@ -1086,9 +1087,9 @@ static ssize_t portmode_store(struct device *dev,
 	return count;
 }
 
-DEVICE_ATTR_RW(portmode);
+DEVICE_ATTR(portmode, 0664, mt_usb_show_portmode, mt_usb_store_portmode);
 
-static ssize_t uartpath_show(struct device *dev,
+static ssize_t mt_usb_show_uart_path(struct device *dev,
 					struct device_attribute *attr,
 					char *buf)
 {
@@ -1105,7 +1106,7 @@ static ssize_t uartpath_show(struct device *dev,
 	return scnprintf(buf, PAGE_SIZE, "%x\n", var);
 }
 
-DEVICE_ATTR_RW(uartpath);
+DEVICE_ATTR(uartpath, 0444, mt_usb_show_uart_path, NULL);
 #endif
 
 #ifndef FPGA_PLATFORM
@@ -1250,7 +1251,7 @@ static int usb_i2c_probe(struct i2c_client *client,
 	/* if i2c probe before musb prob, this would cause KE */
 	/* base = (unsigned long)((unsigned long)mtk_musb->xceiv->io_priv); */
 	base = usb_phy_base;
-	DBG(0, "[MUSB]%s, start, base:%pK\n", __func__, base);
+	DBG(0, "[MUSB]%s, start, base:%p\n", __func__, base);
 
 	usb_i2c_client = client;
 
@@ -1317,8 +1318,7 @@ static int usb_i2c_probe(struct i2c_client *client,
 			, A60810_RG_SSUSB_P3_ENTRY_OFST
 			, A60810_RG_SSUSB_P3_ENTRY
 			, 0x00);
-		/*
-		 * force disable ssusb_p3_entry to
+		/* force disable ssusb_p3_entry to
 		 * work around resume from P3 bug
 		 */
 		u3_phy_write_field32(((phys_addr_t)(uintptr_t)
@@ -1344,8 +1344,7 @@ static int usb_i2c_probe(struct i2c_client *client,
 		/* fine tune SSC delta to let SSC min average ~0ppm */
 
 		/* Fine tune SYSPLL to improve phase noise */
-		/*
-		 *I2C  60    0x08[01:00]	0x03
+		/* I2C  60    0x08[01:00]	0x03
 		 * RW  RG_SSUSB_PLL_BC_U3
 		 */
 		u3_phy_write_field32(((phys_addr_t)(uintptr_t)
@@ -1353,8 +1352,7 @@ static int usb_i2c_probe(struct i2c_client *client,
 			, A60810_RG_SSUSB_PLL_BC_U3_OFST
 			, A60810_RG_SSUSB_PLL_BC_U3
 			, 0x3);
-		/*
-		 *I2C  60    0x08[12:10]	0x03
+		/* I2C  60    0x08[12:10]	0x03
 		 * RW  RG_SSUSB_PLL_DIVEN_U3
 		 */
 		u3_phy_write_field32(((phys_addr_t)(uintptr_t)
@@ -1729,6 +1727,10 @@ static int mt_usb_probe(struct platform_device *pdev)
 
 	usb_phy_base = of_iomap(np, 1);
 	pdata = devm_kzalloc(&pdev->dev, sizeof(*pdata), GFP_KERNEL);
+	if (!pdata) {
+		dev_err(&pdev->dev, "failed to allocate musb platform data\n");
+		goto err2;
+	}
 
 	config = devm_kzalloc(&pdev->dev, sizeof(*config), GFP_KERNEL);
 	if (!config) {

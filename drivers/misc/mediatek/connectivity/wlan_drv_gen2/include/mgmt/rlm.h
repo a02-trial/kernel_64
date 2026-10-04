@@ -143,7 +143,6 @@ struct NORMAL_SCAN_PARAMS {
 	UINT_8 ucSsidNum;
 	BOOLEAN fgExist;
 	BOOLEAN fgFull2Partial;
-	UINT_8 aucRandomMac[MAC_ADDR_LEN];
 };
 
 /* Beacon RM related parameters */

@@ -60,6 +60,9 @@ static int g_bLtVersion;
 #define S2MU005_CHANNEL_NUM 2
 #define S2MU005_CHANNEL_CH1 0
 #define S2MU005_CHANNEL_CH2 1
+
+#define S2MU005_TORCH_MAX_LEVEL 15
+
 /* define mutex and work queue */
 static DEFINE_MUTEX(s2mu005_mutex);
 static struct work_struct s2mu005_work_ch1;
@@ -68,6 +71,13 @@ static struct work_struct s2mu005_work_ch2;
 static int use_count;
 static int s2mu005_level_ch1 = -1;
 /* static int s2mu005_level_ch2 = -1; */
+
+extern int ss_rear_flash_set_brightness(int brightness);
+
+static int flash_current_levels[] = {25, 50, 75, 100, 125, 150, 175, 200,
+	225, 250, 275, 300, 325, 350, 375, 400,
+	450, 500, 550, 600, 650, 700, 750, 800,
+	850, 900, 950, 1000, 1050, 1100, 1150, 1200};
 
 #if 0
 static int s2mu005_is_torch_Ch1(int level)
@@ -107,11 +117,10 @@ static int s2mu005_enable_ch1(void)
 	return 1;
 #endif
 	pr_err("s2mu005_enable_ch1. %d\n", s2mu005_level_ch1);
-	if (s2mu005_level_ch1 == 1)
-		ss_rear_flash_led_flash_on();
-	else
+	if (s2mu005_level_ch1 <= S2MU005_TORCH_MAX_LEVEL)
 		ss_rear_flash_led_torch_on();
-
+	else
+		ss_rear_flash_led_flash_on();
 	return 1;
 }
 
@@ -180,9 +189,7 @@ static int s2mu005_set_level_ch1(int level)
 	pr_err("s2mu005_set_level_ch1. %d\n", level);
 	level = s2mu005_verify_level_Ch1(level);
 	s2mu005_level_ch1 = level;
-	if (level == 0)
-		ss_rear_torch_set_flashlight(1);
-
+	ss_rear_flash_set_brightness(flash_current_levels[level]);
 	return ret;
 }
 
@@ -372,10 +379,10 @@ static ssize_t s2mu005_strobe_store(struct flashlight_arg arg)
 	s2mu005_set_driver(1);
 	s2mu005_set_level(arg.ct, arg.level);
 	s2mu005_enable(arg.ct);
-	if (arg.dur > 20)
-		msleep(arg.dur);
-	else
-		usleep_range(arg.dur*1000,arg.dur*1000);
+        if (arg.dur > 20)
+	    msleep(arg.dur);
+        else
+            usleep_range(arg.dur*1000,arg.dur*1000);
 	s2mu005_disable(arg.ct);
 	s2mu005_release();
 	return 0;

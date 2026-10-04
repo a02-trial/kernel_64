@@ -26,6 +26,9 @@
 
 #define SO_IWD_MAX_MSG_SIZE	1
 
+#define TZ_CMSG_ALIGN(len)	(((len) + sizeof(uint32_t) - 1) & ~(sizeof(uint32_t) - 1))
+#define TZ_CMSG_LEN(len)	(TZ_CMSG_ALIGN(sizeof(struct tz_cmsghdr)) + (len))
+
 #define TZ_FILE_NAME_LEN	80
 
 #include "lib/circ_buf.h"

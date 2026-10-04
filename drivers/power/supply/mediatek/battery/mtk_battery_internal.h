@@ -47,7 +47,7 @@
 /* ============================================================ */
 #define BAT_VOLTAGE_LOW_BOUND 3400
 #define BAT_VOLTAGE_HIGH_BOUND 3450
-#define LOW_TMP_BAT_VOLTAGE_LOW_BOUND 3250
+#define LOW_TMP_BAT_VOLTAGE_LOW_BOUND 3350
 #define SHUTDOWN_TIME 40
 #define AVGVBAT_ARRAY_SIZE 30
 #define INIT_VOLTAGE 3450
@@ -226,9 +226,6 @@ enum Fg_kernel_cmds {
 	FG_KERNEL_CMD_BUILD_SEL_BATTEMP,
 	FG_KERNEL_CMD_UPDATE_AVG_BATTEMP,
 	FG_KERNEL_CMD_SAVE_DEBUG_PARAM,
-	FG_KERNEL_CMD_REQ_CHANGE_AGING_DATA,
-	FG_KERNEL_CMD_AG_LOG_TEST,
-	FG_KERNEL_CMD_CHG_DECIMAL_RATE,
 
 	FG_KERNEL_CMD_FROM_USER_NUMBER
 
@@ -307,9 +304,6 @@ enum daemon_cmd_int_data {
 	FG_GET_CURR_2 = 4,
 	FG_GET_REFRESH = 5,
 	FG_GET_IS_AGING_RESET = 6,
-	FG_GET_SOC_DECIMAL_RATE = 7,
-	FG_GET_DIFF_SOC_SET = 8,
-	FG_GET_IS_FORCE_FULL = 9,
 	FG_GET_MAX,
 	FG_SET_ANCHOR = 999,
 	FG_SET_SOC = FG_SET_ANCHOR + 1,
@@ -327,7 +321,6 @@ enum daemon_cmd_int_data {
 	FG_SET_OCV_Vtemp = FG_SET_ANCHOR + 13,
 	FG_SET_OCV_SOC = FG_SET_ANCHOR + 14,
 	FG_SET_CON0_SOFF_VALID = FG_SET_ANCHOR + 15,
-	FG_SET_ZCV_INTR_EN = FG_SET_ANCHOR + 16,
 	FG_SET_DATA_MAX,
 };
 
@@ -373,13 +366,6 @@ struct fuel_gauge_custom_data {
 	int aging_one_en;
 	int aging1_update_soc;
 	int aging1_load_soc;
-	int aging4_update_soc;
-	int aging4_load_soc;
-	int aging5_update_soc;
-	int aging5_load_soc;
-	int aging6_update_soc;
-	int aging6_load_soc;
-
 	int aging_temp_diff;
 	int aging_temp_low_limit;
 	int aging_temp_high_limit;
@@ -391,9 +377,6 @@ struct fuel_gauge_custom_data {
 
 	/* Aging Compensation 3*/
 	int aging_third_en;
-	int aging_4_en;
-	int aging_5_en;
-	int aging_6_en;
 
 
 	/* ui_soc */
@@ -560,7 +543,7 @@ struct FUELGAUGE_PROFILE_STRUCT {
 	unsigned short voltage;
 	unsigned short resistance; /* Ohm*/
 	unsigned short resistance2; /* Ohm*/
-	unsigned int percentage;
+	unsigned short percentage;
 };
 
 struct fuel_gauge_table {
@@ -610,7 +593,6 @@ struct battery_data {
 	/* Add for Battery Service */
 	int BAT_batt_vol;
 	int BAT_batt_temp;
-	unsigned int f_mode;
 };
 
 struct BAT_EC_Struct {
@@ -730,14 +712,9 @@ struct mtk_battery {
 
 /*battery status*/
 	int soc;
-	int precise_soc;
 	int ui_soc;
-	int precise_ui_soc;
 	int d_saved_car;
 	int tbat_precise;
-	int tbat_adc;
-	int is_fake_soc;
-	int is_full;
 
 /*battery flag*/
 	bool init_flag;
@@ -747,9 +724,6 @@ struct mtk_battery {
 	bool disable_mtkbattery;
 	bool cmd_disable_nafg;
 	bool ntc_disable_nafg;
-
-/*battery full*/
-	bool is_force_full;
 
 /*battery plug out*/
 	bool disable_plug_int;
@@ -811,7 +785,6 @@ struct mtk_battery {
 
 	bool is_reset_aging_factor;
 	int aging_factor;
-	int soc_decimal_rate;
 
 	struct timespec uisoc_oldtime;
 
@@ -898,7 +871,6 @@ extern int get_shutdown_cond_flag(void);
 /* mtk_battery.c */
 extern bool is_battery_init_done(void);
 extern int force_get_tbat(bool update);
-extern void force_get_tbat_adc(void);
 extern int bat_get_debug_level(void);
 extern bool is_kernel_power_off_charging(void);
 extern bool is_fg_disabled(void);

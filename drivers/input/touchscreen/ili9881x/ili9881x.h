@@ -107,10 +107,6 @@
 #include "sync_write.h"
 #endif
 
-#ifdef CONFIG_SAMSUNG_TUI
-#include <linux/input/stui_inf.h>
-#endif
-
 #define DRIVER_VERSION			"3.0.3.0.200610"
 
 #define TOUCH_PRINT_INFO_DWORK_TIME	30000	/* 30s */
@@ -141,7 +137,7 @@
 #define RESUME_BY_DDI			DISABLE
 #define BOOT_FW_UPDATE			ENABLE
 #define MP_INT_LEVEL			DISABLE
-#define PLL_CLK_WAKEUP_TP_RESUME	ENABLE   /* [FIX] resume-latency: enable pll wakeup on every TP resume to prevent 5-7s touch delay after screen-off */
+#define PLL_CLK_WAKEUP_TP_RESUME	DISABLE
 #define CHARGER_NOTIFIER_CALLBACK	DISABLE
 #define PROXIMITY_BY_FW			ENABLE
 #define AXIS_PACKET			ENABLE
@@ -162,17 +158,12 @@
 /* Path */
 #define CHIP_ID_9882			"9882"
 #define CHIP_ID_7806S			"7806s"
-#define CHIP_ID_9882Q			"9882q"
-#define CHIP_TYPE_9882N			0x17
-#define CHIP_TYPE_9882Q			0x1A
 #define INI_PATH_SIZE			64
 #define DEBUG_DATA_FILE_SIZE		(10*K)
 #define DEBUG_DATA_FILE_PATH		"/sdcard/ILITEK_log.csv"
 #define CSV_LCM_ON_PATH			"/sdcard/ilitek_mp_lcm_on_log"
 #define CSV_LCM_OFF_PATH		"/sdcard/ilitek_mp_lcm_off_log"
 #define INI_PATH			"/vendor/firmware/"
-
-/* 9882n & 7806S */
 #define RAWDATANOBK_LCMON_PATH		"Command_Rawdatanobk_LCMON.ini"
 #define DOZERAW_PATH			"Command_Dozeraw.ini"
 #define DAC_PATH			"Command_DAC.ini"
@@ -184,9 +175,6 @@
 #define P2P_TD_PATH			"Command_P2P_TD.ini"
 #define RAWDATATD_PATH			"Command_RawdataTD.ini"
 #define RAWDATANOBK_LCMOFF_PATH		"Command_Rawdatanobk_LCMOFF.ini"
-/* only for 9882q */
-#define RAWDATAHAVEBK_LCMON_PATH	"Command_Rawdatahavebk_LCMON.ini"
-#define RAWDATAHAVEBK_LCMOFF_PATH	"Command_Rawdatahavebk_LCMOFF.ini"
 
 #define POWER_STATUS_PATH		"/sys/class/power_supply/battery/status"
 #define DUMP_FLASH_PATH			"/sdcard/flash_dump"
@@ -424,6 +412,17 @@ enum {
 	LP_FACTORY_STATUS,
 };
 
+enum {
+	LCD_NONE = 0,
+	LCD_OFF,
+	LCD_ON
+};
+
+enum {
+	LCD_EARLY_EVENT = 0,
+	LCD_LATE_EVENT
+};
+
 enum MP_INI_PATH {
 	RAWDATANOBK_LCMON_PATH_NUM = 0,
 	DOZERAW_PATH_NUM,
@@ -436,9 +435,6 @@ enum MP_INI_PATH {
 	P2P_TD_PATH_NUM,
 	RAWDATATD_PATH_NUM,
 	RAWDATANOBK_LCMOFF_PATH_NUM,
-	/* only for 9882q */
-	RAWDATAHAVEBK_LCMON_PATH_NUM,
-	RAWDATAHAVEBK_LCMOFF_PATH_NUM,
 	MP_INI_PATH_MAX
 };
 
@@ -463,7 +459,7 @@ struct gesture_symbol {
 	u8 alphabet_F                 :1;
 	u8 alphabet_AT                :1;
 	u8 reserve0                   :5;
-}__packed;
+} __packed;
 
 struct report_info_block {
 	u8 nReportByPixel	:1;
@@ -475,7 +471,7 @@ struct report_info_block {
 	u8 nReserved01		:8;
 	u8 nReserved02		:8;
 	u8 nReserved03		:8;
-}__packed;
+} __packed;
 
 #define TDDI_I2C_ADDR				0x41
 #define TDDI_DEV_ID				"ilit_ts"
@@ -1027,7 +1023,6 @@ struct ilitek_ts_data {
 	bool ddi_rest_done;
 	bool resume_by_ddi;
 	bool tp_suspend;
-	bool tp_shutdown;
 	bool info_from_hex;
 	bool prox_near;
 	bool gesture_load_code;
@@ -1084,8 +1079,6 @@ struct ilitek_ts_data {
 	bool dead_zone_enabled;
 	bool sip_mode_enabled;
 	bool game_mode_enabled;
-	int clear_cover_mode_enabled;
-	int clear_cover_type;
 	bool prox_lp_scan_mode_enabled;
 
 	/*sec function*/
@@ -1117,6 +1110,7 @@ struct ilitek_ts_data {
 	u32 area_edge;
 
 	bool enable_settings_aot;
+	bool enable_sysinput_enabled;
 	bool support_ear_detect;
 	bool support_spay_gesture_mode;
 
@@ -1212,10 +1206,8 @@ struct ilitek_hwif_info {
 
 #if defined(CONFIG_EXYNOS_DPU30)
 int get_lcd_info(char *arg);
-#elif defined(CONFIG_SMCDSD_PANEL)
-extern unsigned int lcdtype;
 #else
-static unsigned int lcdtype;
+extern unsigned int lcdtype;
 #endif
 
 /* Prototypes for tddi firmware/flash functions */
@@ -1348,7 +1340,6 @@ extern void ili_demo_debug_info_mode(u8 *buf, size_t rlen);
 extern void ili_demo_debug_info_id0(u8 *buf, size_t len);
 extern int ili_tp_data_mode_ctrl(u8 *cmd);
 extern void set_current_ic_mode(int mode);
-
 extern long spu_firmware_signature_verify(const char *fw_name, const u8 *fw_data, const long fw_size);
 
 static inline void ipio_kfree(void **mem)

@@ -39,9 +39,6 @@ enum IMGSENSOR_MODE {
 	IMGSENSOR_MODE_SLIM_VIDEO,
 	IMGSENSOR_MODE_CUSTOM1,
 	IMGSENSOR_MODE_CUSTOM2,
-	IMGSENSOR_MODE_CUSTOM3,
-	IMGSENSOR_MODE_CUSTOM4,
-	IMGSENSOR_MODE_CUSTOM5,
 };
 
 struct imgsensor_mode_struct {
@@ -129,9 +126,6 @@ struct imgsensor_info_struct {
      /* custom1 for stereo relative information */
 	struct imgsensor_mode_struct custom1;
 	struct imgsensor_mode_struct custom2;
-	struct imgsensor_mode_struct custom3;
-	struct imgsensor_mode_struct custom4;
-	struct imgsensor_mode_struct custom5;
 	kal_uint8 ae_shut_delay_frame;	/* shutter delay frame for AE cycle */
 
 	/* sensor gain delay frame for AE cycle */
@@ -158,20 +152,11 @@ struct imgsensor_info_struct {
 
 	kal_uint8 custom1_delay_frame; /* enter custom1 delay frame num */
 	kal_uint8 custom2_delay_frame;
-	kal_uint8 custom3_delay_frame;
-	kal_uint8 custom4_delay_frame;
-	kal_uint8 custom5_delay_frame;
 	kal_uint8 margin;	/* sensor framelength & shutter margin */
 	kal_uint32 min_shutter;	/* min shutter */
 
 	/* max framelength by sensor register's limitation */
 	kal_uint32 max_frame_length;
-	kal_uint32 min_gain;
-	kal_uint32 max_gain;
-	kal_uint32 min_gain_iso;
-	kal_uint32 gain_step;
-	kal_uint32 exp_step;
-	kal_uint32 gain_type;
 
 	kal_uint8 isp_driving_current;	/* mclk driving current */
 	kal_uint8 sensor_interface_type;	/* sensor_interface_type */

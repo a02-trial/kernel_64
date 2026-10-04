@@ -1,13 +1,12 @@
-// SPDX-License-Identifier: GPL-2.0
 /*
  *  drivers/usb/notify/usb_notify_sysfs.c
  *
- * Copyright (C) 2015-2020 Samsung, Inc.
+ * Copyright (C) 2015-2017 Samsung, Inc.
  * Author: Dongrak Shin <dongrak.shin@samsung.com>
  *
  */
 
- /* usb notify layer v3.5 */
+ /* usb notify layer v3.3 */
 
 #define pr_fmt(fmt) "usb_notify: " fmt
 
@@ -81,7 +80,7 @@ usb_hw_param_print[USB_CCIC_HW_PARAM_MAX][MAX_HWPARAM_STRING] = {
 	{"C_ARP"},
 	{"CC_VER"},
 };
-#endif /* CONFIG_USB_HW_PARAM */
+#endif
 
 struct notify_data {
 	struct class *usb_notify_class;
@@ -375,7 +374,7 @@ static ssize_t usb_hw_param_show(struct device *dev,
 	}
 	p_param = get_hw_param(n, USB_CCIC_VERSION);
 	if (p_param)
-		*p_param = show_ccic_version();
+		*p_param = show_pdic_version();
 	for (index = 0; index < USB_CCIC_HW_PARAM_MAX - 1; index++) {
 		p_param = get_hw_param(n, index);
 		if (p_param)
@@ -497,7 +496,7 @@ static ssize_t hw_param_show(struct device *dev,
 	if (!is_skip_list(n, USB_CCIC_VERSION)) {
 		p_param = get_hw_param(n, USB_CCIC_VERSION);
 		if (p_param)
-			*p_param = show_ccic_version();
+			*p_param = show_pdic_version();
 	}
 	for (index = 0; index < USB_CCIC_HW_PARAM_MAX - 1; index++) {
 		if (!is_skip_list(n, index)) {
@@ -511,26 +510,26 @@ static ssize_t hw_param_show(struct device *dev,
 		}
 	}
 	if (!is_skip_list(n, USB_CCIC_VERSION)) {
-		/* CCIC FW version */
-		ret += sprintf(buf + ret, "\"%s\":\"",
-			usb_hw_param_print[USB_CCIC_VERSION]);
-		p_param = get_hw_param(n, USB_CCIC_VERSION);
-		if (p_param) {
-			/* HW Version */
-			ret += sprintf(buf + ret, "%02X%02X%02X%02X",
-				*((unsigned char *)p_param + 3),
-				*((unsigned char *)p_param + 2),
-				*((unsigned char *)p_param + 1),
-				*((unsigned char *)p_param));
-			/* SW Main Version */
-			ret += sprintf(buf + ret, "%02X%02X%02X",
-				*((unsigned char *)p_param + 6),
-				*((unsigned char *)p_param + 5),
-				*((unsigned char *)p_param + 4));
-			/* SW Boot Version */
-			ret += sprintf(buf + ret, "%02X",
-				*((unsigned char *)p_param + 7));
-			ret += sprintf(buf + ret, "\"\n");
+	/* PDIC FW version */
+	ret += sprintf(buf + ret, "\"%s\":\"",
+		usb_hw_param_print[USB_CCIC_VERSION]);
+	p_param = get_hw_param(n, USB_CCIC_VERSION);
+	if (p_param) {
+		/* HW Version */
+		ret += sprintf(buf + ret, "%02X%02X%02X%02X",
+			*((unsigned char *)p_param + 3),
+			*((unsigned char *)p_param + 2),
+			*((unsigned char *)p_param + 1),
+			*((unsigned char *)p_param));
+		/* SW Main Version */
+		ret += sprintf(buf + ret, "%02X%02X%02X",
+			*((unsigned char *)p_param + 6),
+			*((unsigned char *)p_param + 5),
+			*((unsigned char *)p_param + 4));
+		/* SW Boot Version */
+		ret += sprintf(buf + ret, "%02X",
+			*((unsigned char *)p_param + 7));
+		ret += sprintf(buf + ret, "\"\n");
 		} else {
 			ret += sprintf(buf + ret, "0000000000000000\"\n");
 		}
@@ -705,39 +704,6 @@ error:
 	return ret;
 }
 
-static ssize_t cards_show(
-	struct device *dev, struct device_attribute *attr,
-		char *buf)
-{
-	struct usb_notify_dev *udev = (struct usb_notify_dev *)
-		dev_get_drvdata(dev);
-	char card_strings[MAX_CARD_STR_LEN] = {0,};
-	char buf_card[15] = {0,};
-	int i;
-	int cnt = 0;
-
-	for (i = 0; i < MAX_USB_AUDIO_CARDS; i++) {
-		if (udev->usb_audio_cards[i].cards) {
-			cnt += snprintf(buf_card, sizeof(buf_card),
-				"<%scard%d>",
-				udev->usb_audio_cards[i].bundle ? "*" : "", i);
-			if (cnt < 0) {
-				pr_err("%s snprintf return %d\n",
-						__func__, cnt);
-				continue;
-			}
-			if (cnt >= MAX_CARD_STR_LEN) {
-				pr_err("%s overflow\n", __func__);
-				goto err;
-			}
-			strlcat(card_strings, buf_card, sizeof(card_strings));
-		}
-	}
-err:
-	pr_info("card_strings %s\n", card_strings);
-	return sprintf(buf, "%s\n", card_strings);
-}
-
 int usb_notify_dev_uevent(struct usb_notify_dev *udev, char *envp_ext[])
 {
 	int ret = 0;
@@ -770,15 +736,15 @@ err:
 }
 EXPORT_SYMBOL_GPL(usb_notify_dev_uevent);
 
-static DEVICE_ATTR_RW(disable);
-static DEVICE_ATTR_RO(support);
-static DEVICE_ATTR_RO(otg_speed);
-static DEVICE_ATTR_RO(gadget_speed);
-static DEVICE_ATTR_RW(whitelist_for_mdm);
-static DEVICE_ATTR_RO(cards);
+static DEVICE_ATTR(disable, 0664, disable_show, disable_store);
+static DEVICE_ATTR(support, 0444, support_show, NULL);
+static DEVICE_ATTR(otg_speed, 0444, otg_speed_show, NULL);
+static DEVICE_ATTR(gadget_speed, 0444, gadget_speed_show, NULL);
+static DEVICE_ATTR(whitelist_for_mdm, 0664,
+	whitelist_for_mdm_show, whitelist_for_mdm_store);
 #if defined(CONFIG_USB_HW_PARAM)
-static DEVICE_ATTR_RW(usb_hw_param);
-static DEVICE_ATTR_RW(hw_param);
+static DEVICE_ATTR(usb_hw_param, 0664, usb_hw_param_show, usb_hw_param_store);
+static DEVICE_ATTR(hw_param, 0664, hw_param_show, hw_param_store);
 #endif
 
 static struct attribute *usb_notify_attrs[] = {
@@ -787,7 +753,6 @@ static struct attribute *usb_notify_attrs[] = {
 	&dev_attr_otg_speed.attr,
 	&dev_attr_gadget_speed.attr,
 	&dev_attr_whitelist_for_mdm.attr,
-	&dev_attr_cards.attr,
 #if defined(CONFIG_USB_HW_PARAM)
 	&dev_attr_usb_hw_param.attr,
 	&dev_attr_hw_param.attr,

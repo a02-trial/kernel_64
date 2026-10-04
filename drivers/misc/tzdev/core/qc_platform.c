@@ -41,9 +41,9 @@
 #include "core/platform.h"
 #include "core/qc_clocks.h"
 
-#define SECUREOS_SMC_SUCCESS		0
-#define SECUREOS_SMC_INTERRUPTED	1
-#define SECUREOS_SMC_KERNEL_PANIC	2
+#define BF_SMC_SUCCESS		0
+#define BF_SMC_INTERRUPTED	1
+#define BF_SMC_KERNEL_PANIC	2
 
 /* svc_id and cmd_id to call QSEE 3-rd party smc handler */
 #define TZ_SVC_EXECUTIVE_EXT		250
@@ -124,7 +124,7 @@ static int tzdev_run_platform_init_sequence(void)
 		return -ENOMEM;
 	}
 
-	attrs = sysdep_alloc_workqueue_attrs();
+	attrs = alloc_workqueue_attrs(GFP_KERNEL);
 	if (!attrs) {
 		log_error(tzdev_platform, "failed to allocate work queue attrs\n");
 		ret = -ENOMEM;
@@ -263,7 +263,7 @@ static int tzdev_scm_call(struct tzdev_smc_data *data)
 	do {
 		ret = scm_call2(SCM_TZM_FNID(TZ_SVC_EXECUTIVE_EXT,
 				TZ_CMD_ID_EXEC_SMC_EXT), &desc);
-	} while (!ret && desc.ret[0] == SECUREOS_SMC_INTERRUPTED);
+	} while (!ret && desc.ret[0] == BF_SMC_INTERRUPTED);
 
 #if !defined(CONFIG_TZDEV_QC_CRYPTO_CLOCKS_USR_MNG)
 	tzdev_qc_clock_disable();
@@ -276,7 +276,7 @@ static int tzdev_scm_call(struct tzdev_smc_data *data)
 		goto out;
 	}
 
-	if (desc.ret[0] == SECUREOS_SMC_KERNEL_PANIC) {
+	if (desc.ret[0] == BF_SMC_KERNEL_PANIC) {
 		static unsigned int panic_printed;
 
 		if (!panic_printed) {

@@ -30,7 +30,7 @@ struct connect_api_info {
 	int pid;
 	int tgid;
 	unsigned long long buffer_id;
-	unsigned long long buffer_key;
+	int buffer_key;
 	int api;
 };
 

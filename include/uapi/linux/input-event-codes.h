@@ -365,8 +365,6 @@
 #define BTN_BACK		0x116
 #define BTN_TASK		0x117
 
-#define BTN_PALM		0x118	/* palm flag */
-
 #define BTN_JOYSTICK		0x120
 #define BTN_TRIGGER		0x120
 #define BTN_THUMB		0x121
@@ -529,7 +527,6 @@
 
 #define KEY_SIDE_GESTURE_RIGHT	0x1ca
 #define KEY_SIDE_GESTURE_LEFT	0x1cb
-#define KEY_BLACK_UI_GESTURE	0x1c7
 
 #define KEY_RESET		0x1cd
 
@@ -658,12 +655,7 @@
  * e.g. teletext or data broadcast application (MHEG, MHP, HbbTV, etc.)
  */
 #define KEY_DATA			0x277
-
-#define KEY_DEX_ON			0x2bd
 #define KEY_WINK			0x2bf	/* Intelligence Key */
-
-#define KEY_INT_CANCEL		0x2be	/* for touch event skip */
-
 #define KEY_ONSCREEN_KEYBOARD		0x278
 
 #define BTN_TRIGGER_HAPPY		0x2c0
@@ -707,10 +699,6 @@
 #define BTN_TRIGGER_HAPPY38		0x2e5
 #define BTN_TRIGGER_HAPPY39		0x2e6
 #define BTN_TRIGGER_HAPPY40		0x2e7
-
-#define BTN_HOTKEY_APP1 		0x2f5
-#define BTN_HOTKEY_APP2 		0x2f6
-#define BTN_HOTKEY_APP3 		0x2f7
 
 /* We avoid low common keys in module aliases so they don't get huge. */
 #define KEY_MIN_INTERESTING	KEY_MUTE
@@ -823,7 +811,7 @@
 #define SW_MUTE_DEVICE		0x0e  /* set = device disabled */
 #define SW_PEN_INSERTED		0x0f  /* set = pen inserted */
 #define SW_GLOVE		0x0f	/* set = glove mode */
-#define SW_MAX			0x3f
+#define SW_MAX			0x0f
 #define SW_CNT			(SW_MAX+1)
 
 /*

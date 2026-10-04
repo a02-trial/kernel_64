@@ -1025,7 +1025,11 @@ static int vhost_net_release(struct inode *inode, struct file *f)
 
 static struct socket *get_raw_socket(int fd)
 {
-	int r;
+	struct {
+		struct sockaddr_ll sa;
+		char  buf[MAX_ADDR_LEN];
+	} uaddr;
+	int uaddr_len = sizeof uaddr, r;
 	struct socket *sock = sockfd_lookup(fd, &r);
 
 	if (!sock)
@@ -1037,7 +1041,12 @@ static struct socket *get_raw_socket(int fd)
 		goto err;
 	}
 
-	if (sock->sk->sk_family != AF_PACKET) {
+	r = sock->ops->getname(sock, (struct sockaddr *)&uaddr.sa,
+			       &uaddr_len, 0);
+	if (r)
+		goto err;
+
+	if (uaddr.sa.sll_family != AF_PACKET) {
 		r = -EPFNOSUPPORT;
 		goto err;
 	}

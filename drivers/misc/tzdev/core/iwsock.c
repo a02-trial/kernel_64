@@ -13,7 +13,6 @@
 
 #include <linux/crypto.h>
 #include <linux/errno.h>
-#include <linux/idr.h>
 #include <linux/kthread.h>
 #include <linux/mutex.h>
 #include <linux/socket.h>
@@ -67,10 +66,10 @@
 #define GET_SOCKET_SEND_BUF(iwd_buf)						\
 	(struct circ_buf *)((char *)iwd_buf + sizeof(struct iwd_sock_buf_head))
 
-#define GET_SOCKET_RECEIVE_BUF(iwd_buf, snd_buf_size)				\
+#define GET_SOCKET_RECEIVE_BUF(iwd_buf, rcv_buf_size)				\
 	(struct circ_buf *)((char *)iwd_buf + 					\
 		sizeof(struct iwd_sock_buf_head) + 				\
-		circ_buf_total_size(snd_buf_size))
+		circ_buf_total_size(rcv_buf_size))
 
 #define GET_SOCKET_OOB_BUF(iwd_buf, rcv_buf_size, snd_buf_size)			\
 	(struct circ_buf *)((char *)iwd_buf + 					\
@@ -173,7 +172,7 @@ static int tz_iwsock_publish_sd(struct sock_desc *sd)
 
 	mutex_lock(&tzdev_sock_map_lock);
 
-	sid = idr_alloc(&tzdev_sock_map, sd, 0, MAX_NUM_SOCKETS, GFP_KERNEL);
+	sid = sysdep_idr_alloc_in_range(&tzdev_sock_map, sd, 0, MAX_NUM_SOCKETS);
 	if (sid >= 0) {
 		sd->id = sid;
 		tz_iwsock_get_sd(sd);
@@ -941,7 +940,6 @@ static int __tz_iwsock_read(struct sock_desc *sd, struct circ_buf_desc *read_buf
 	int swd_state;
 	long ret;
 	size_t nbytes;
-	int try_count = 0;
 
 	if (unlikely(tz_iwsock_state != READY)) {
 		log_error(tzdev_iwsock, "Failed to read socket, subsystem is not ready\n");
@@ -965,19 +963,18 @@ static int __tz_iwsock_read(struct sock_desc *sd, struct circ_buf_desc *read_buf
 
 	swd_state = sd->iwd_buf->swd_state;
 
-retry:
 	smp_rmb();
 
 	if (msg->msg_control) {
 		ret = circ_buf_read_packet_local(read_buf,
 				(char *)msg->msg_control,
-				sizeof(struct tz_cmsghdr_cred),
+				sizeof(struct tz_cmsghdr_swd_cred),
 				mode);
 		if (IS_ERR_VALUE(ret)) {
 			if (ret != -EAGAIN)
 				log_error(tzdev_iwsock, "Failed to read socket, error=%ld\n", ret);
 			goto recheck;
-		} else if (ret != sizeof(struct tz_cmsghdr_cred)) {
+		} else if (ret != sizeof(struct tz_cmsghdr_swd_cred)) {
 			ret = -EINVAL;
 			log_error(tzdev_iwsock, "Failed to read socket, invalid packet size, error=%ld\n", ret);
 			goto unlock;
@@ -1003,12 +1000,8 @@ retry:
 	}
 
 recheck:
-	if (ret == -EAGAIN && swd_state == BUF_SK_CLOSED) {
-		if (try_count++ == 0)
-			goto retry;
-
+	if (ret == -EAGAIN && swd_state == BUF_SK_CLOSED)
 		ret = 0;
-	}
 
 unlock:
 	mutex_unlock(&sd->lock);
@@ -1057,7 +1050,7 @@ static int tz_iwsock_format_cred_scm(struct sock_desc *sd)
 	if (sd->mm == current->mm)
 		return 0;
 
-	ret = tz_format_cred(&sd->cred.cred, sd->is_kern);
+	ret = tz_format_cred(&sd->cred.cred);
 	if (ret) {
 		log_error(tzdev_uiwsock, "Failed to format socket credentials %d\n", ret);
 		return ret;

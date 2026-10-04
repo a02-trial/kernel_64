@@ -355,7 +355,7 @@ wlanAdapterStart(IN P_ADAPTER_T prAdapter,
 		}
 
 		/* init wake lock before interrupt enable and tx thread */
-		KAL_WAKE_LOCK_INIT(prAdapter, prAdapter->rTxThreadWakeLock, "WLAN TX THREAD");
+		KAL_WAKE_LOCK_INIT(prAdapter, &prAdapter->rTxThreadWakeLock, "WLAN TX THREAD");
 
 		/* 4 <2> Initialize System Service (MGMT Memory pool and STA_REC) */
 		nicInitSystemService(prAdapter);
@@ -793,7 +793,7 @@ wlanAdapterStart(IN P_ADAPTER_T prAdapter,
 			DBGLOG(INIT, ERROR, "Wait firmware ready fail, FailReason: %d\n",
 					eFailReason);
 			kalSendAeeWarning("[Wait firmware ready fail!]", __func__);
-			KAL_WAKE_LOCK_DESTROY(prAdapter, prAdapter->rTxThreadWakeLock);
+			KAL_WAKE_LOCK_DESTROY(prAdapter, &prAdapter->rTxThreadWakeLock);
 			nicRxUninitialize(prAdapter);
 			nicTxRelease(prAdapter);
 			/* System Service Uninitialization */
@@ -804,7 +804,7 @@ wlanAdapterStart(IN P_ADAPTER_T prAdapter,
 			DBGLOG(INIT, ERROR, "Ram code download fail, FailReason: %d\n",
 					eFailReason);
 			kalSendAeeWarning("[Ram code download fail!]", __func__);
-			KAL_WAKE_LOCK_DESTROY(prAdapter, prAdapter->rTxThreadWakeLock);
+			KAL_WAKE_LOCK_DESTROY(prAdapter, &prAdapter->rTxThreadWakeLock);
 			nicRxUninitialize(prAdapter);
 			nicTxRelease(prAdapter);
 			/* System Service Uninitialization */
@@ -3840,9 +3840,6 @@ WLAN_STATUS wlanLoadManufactureData(IN P_ADAPTER_T prAdapter, IN P_REG_INFO_T pr
 #endif
 
 	/* 3. Check if needs to support 5GHz */
-#if (CFG_FORCE_DISABLE_5G == 1)
-    prAdapter->fgEnable5GBand = FALSE;
-#else
 	/* if(prRegInfo->ucEnable5GBand) { // Frank workaround */
 	if (1) {
 		/* check if it is disabled by hardware */
@@ -3850,8 +3847,9 @@ WLAN_STATUS wlanLoadManufactureData(IN P_ADAPTER_T prAdapter, IN P_REG_INFO_T pr
 			prAdapter->fgEnable5GBand = FALSE;
 		else
 			prAdapter->fgEnable5GBand = TRUE;
-	}
-#endif
+	} else
+		prAdapter->fgEnable5GBand = FALSE;
+
 	/*
 	 * DBGLOG(INIT, INFO, "NVRAM 5G Enable(%d) SW_En(%d) HW_Dis(%d)\n",
 	 *     prRegInfo->ucEnable5GBand, prRegInfo->ucSupport5GBand, prAdapter->fgIsHw5GBandDisabled);
@@ -4388,13 +4386,8 @@ wlanSetPreferBandByNetwork(IN P_ADAPTER_T prAdapter, IN ENUM_BAND_T eBand, IN EN
 {
 	ASSERT(prAdapter);
 	ASSERT(eBand <= BAND_NUM);
+	ASSERT(eNetTypeIndex <= NETWORK_TYPE_INDEX_NUM);
 
-	if (eNetTypeIndex >= NETWORK_TYPE_INDEX_NUM ||
-		eNetTypeIndex < NETWORK_TYPE_AIS_INDEX) {
-		DBGLOG(SCN, WARN, "wlanSetPreferBandByNetwork, Idx=%d\n",
-			eNetTypeIndex);
-		return;
-	}
 	/* 1. set prefer band according to network type */
 	prAdapter->aePreferBand[eNetTypeIndex] = eBand;
 
@@ -5733,14 +5726,12 @@ VOID wlanCfgApply(IN P_ADAPTER_T prAdapter)
 		(UINT_16) wlanCfgGetUint32(prAdapter, "ViTxOp", 94);
 	prWifiVar->au2TxOp[WMM_AC_VO_INDEX] =
 		(UINT_16) wlanCfgGetUint32(prAdapter, "VoTxOp", 47);
-		
+
 	prWifiVar->fgReuseRSNIE = (BOOLEAN) wlanCfgGetUint32(prAdapter,
 		"ReuseRSNIE", 1);
 
 	prAdapter->prGlueInfo->i4Priority = wlanCfgGetInt32(prAdapter, "RTPri", 0);
 	/* TODO: Apply other Config */
-	prWifiVar->fgSapCheckPmkidInDriver =
-		(UINT_32) wlanCfgGetUint32(prAdapter, "SapCheckPmkidInDriver", 1);
 }
 #endif /* CFG_SUPPORT_CFG_FILE */
 
@@ -5810,7 +5801,6 @@ UINT_32 wlanDecimalStr2Hexadecimals(PUINT_8 pucDecimalStr, PUINT_16 pu2Out)
 	while (*pucDecimalStr == '0')
 		pucDecimalStr++;
 	kalStrnCpy(aucDecimalStr, pucDecimalStr, sizeof(aucDecimalStr) - 1);
-	aucDecimalStr[31] = 0;
 	pucDecimalPart = strchr(aucDecimalStr, '.');
 	if (!pucDecimalPart) {
 		DBGLOG(INIT, INFO, "No decimal part, ori str %s\n", pucDecimalStr);

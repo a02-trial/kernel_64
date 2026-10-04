@@ -74,8 +74,7 @@ const char *prof_pwr_seq_item[MCDI_PROF_BK_NUM] = {
 
 void mcdi_prof_set_idle_state(int cpu, int state)
 {
-	if ((cpu >= 0) && (cpu < NF_CPU))
-		mcdi_usage.dev[cpu].actual_state = state;
+	mcdi_usage.dev[cpu].actual_state = state;
 }
 
 static void set_mcdi_profile_sampling(int en)
@@ -177,8 +176,7 @@ static void mcdi_usage_save(struct mcdi_prof_dev *dev, int entered_state,
 		spin_unlock_irqrestore(&mcdi_prof_spin_lock, flags);
 
 	} else {
-		if ((entered_state >= 0) && (entered_state < NF_MCDI_STATE))
-			dev->state[entered_state].dur += dev->last_residency;
+		dev->state[entered_state].dur += dev->last_residency;
 	}
 }
 
@@ -236,10 +234,9 @@ static inline bool mcdi_usage_may_never_wakeup(int cpu)
 static unsigned long long mcdi_usage_get_time(int cpu, int state_idx)
 {
 	struct mcdi_prof_dev *dev = &mcdi_usage.dev[cpu];
-	unsigned long long dur = 0;
+	unsigned long long dur;
 
-	if ((state_idx >= 0) && (state_idx < NF_MCDI_STATE))
-		dur = dev->state[state_idx].dur;
+	dur = dev->state[state_idx].dur;
 
 	if (state_idx == MCDI_STATE_CPU_OFF && dur == 0) {
 		if (mcdi_usage_may_never_wakeup(cpu))
@@ -262,8 +259,7 @@ void mcdi_usage_time_start(int cpu)
 	if (!mcdi_usage.enable)
 		return;
 
-	if ((cpu >= 0) && (cpu < NF_CPU))
-		mcdi_usage.dev[cpu].enter = sched_clock();
+	mcdi_usage.dev[cpu].enter = sched_clock();
 }
 
 void mcdi_usage_time_stop(int cpu)
@@ -271,8 +267,7 @@ void mcdi_usage_time_stop(int cpu)
 	if (!mcdi_usage.enable)
 		return;
 
-	if ((cpu >= 0) && (cpu < NF_CPU))
-		mcdi_usage.dev[cpu].leave = sched_clock();
+	mcdi_usage.dev[cpu].leave = sched_clock();
 }
 
 void mcdi_usage_calc(int cpu)
@@ -282,9 +277,6 @@ void mcdi_usage_calc(int cpu)
 	unsigned long long leave_ts, enter_ts;
 
 	entered_state = dev->actual_state;
-
-	if (!((entered_state >= 0) && (entered_state < NF_MCDI_STATE)))
-		return;
 
 	dev->state[entered_state].cnt++;
 	dev->last_state_idx = entered_state;
@@ -310,10 +302,7 @@ static bool mcdi_profile_matched_state(int cpu)
 		return true;
 
 	/* Idle state was saved to last_state_idx in mcdi_usage_calc() */
-	if ((cpu >= 0) && (cpu < NF_CPU))
-		return profile_state == mcdi_usage.dev[cpu].last_state_idx;
-	else
-		return false;
+	return profile_state == mcdi_usage.dev[cpu].last_state_idx;
 }
 
 void mcdi_profile_ts(int cpu_idx, unsigned int prof_idx)

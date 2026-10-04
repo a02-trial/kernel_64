@@ -99,7 +99,6 @@ struct ccb_ctrl_info {
 
 extern unsigned int ccb_configs_len;
 extern struct ccci_ccb_config ccb_configs[];
-extern void mtk_ccci_ccb_info_peek(void);
 
 
 /* ======================================================================= */
@@ -272,6 +271,8 @@ extern void mtk_ccci_ccb_info_peek(void);
 	_IOWR(CCCI_IOC_MAGIC, 64, struct ccci_ccb_config)
 #define CCCI_IOC_CCB_CTRL_OFFSET		\
 	_IOR(CCCI_IOC_MAGIC, 65, unsigned int)
+#define CCCI_IOC_GET_CCB_DEBUG_VAL		\
+	_IOWR(CCCI_IOC_MAGIC, 67, struct ccci_ccb_debug)
 
 #define CCCI_IOC_CCB_CTRL_INFO			\
 	_IOWR(CCCI_IOC_MAGIC, 71, struct ccb_ctrl_info)
@@ -509,32 +510,14 @@ enum CCCI_CH {
 	CCCI_DISP_RX			= 183,
 	CCCI_DISP_TX			= 184,
 
-	CCCI_CIQ_RX			= 185,
-	CCCI_CIQ_TX			= 186,
-
-	CCCI_WIFI_RX			= 187,
-	CCCI_WIFI_TX			= 188,
-	CCCI_VTS_RX			= 189,
-	CCCI_VTS_TX			= 190,
-
-	CCCI_IKERAW_RX			= 191,
-	CCCI_IKERAW_TX			= 192,
-
 	CCCI_RIL_IPC0_RX		= 193,
 	CCCI_RIL_IPC0_TX		= 194,
 	CCCI_RIL_IPC1_RX		= 195,
 	CCCI_RIL_IPC1_TX		= 196,
-	CCCI_VT_CTL_RX		= 197,
+
+	CCCI_VT_CTL_RX			= 197,
 	CCCI_VT_CTL_TX			= 198,
 
-	CCCI_MD_DIRC_RX			= 200,
-	CCCI_MD_DIRC_TX			= 201,
-	CCCI_TIME_RX			= 202,
-	CCCI_TIME_TX			= 203,
-	CCCI_GARB_RX			= 204,
-	CCCI_GARB_TX			= 205,
-	CCCI_AT_RX				= 258,
-	CCCI_AT_TX				= 259,
 	CCCI_C2K_PPP_DATA, /* data ch for c2k */
 
 	CCCI_C2K_AT,	/*rild AT ch for c2k*/
@@ -631,8 +614,6 @@ int ccci_register_dev_node(const char *name, int major_id, int minor);
 int ccci_get_adc_num(void);
 int ccci_get_adc_val(void);
 #endif
-
-int hif_empty_query(int qno);
 
 #ifdef FEATURE_SCP_CCCI_SUPPORT
 extern void fsm_scp_init0(void);

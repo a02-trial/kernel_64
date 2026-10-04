@@ -22,12 +22,9 @@
 
 #ifdef CONFIG_MTK_DRAMC
 #include <mtk_dramc.h>
-#endif /* CONFIG_MTK_DRAMC */
-
-#ifdef CONFIG_MEDIATEK_DRAMC
-#include <dramc.h>
-#endif /* CONFIG_MEDIATEK_DRAMC */
-
+#else
+__weak int dram_steps_freq(unsigned int step) { return 0; }
+#endif
 
 static int qos_bound_enabled;
 static int qos_bound_stress_enabled;
@@ -51,7 +48,6 @@ void qos_bound_enable(int enable)
 	qos_ipi_d.u.qos_bound_enable.enable = enable;
 	bound = (struct qos_bound *)
 		sspm_sbuf_get(qos_ipi_to_sspm_command(&qos_ipi_d, 2));
-	smp_mb(); /* init bound before flag enabled */
 #endif
 	qos_bound_enabled = enable;
 }
@@ -108,14 +104,7 @@ EXPORT_SYMBOL(get_qos_bound);
 
 int get_qos_bound_bw_threshold(int state)
 {
-	int val = 0;
-
-#ifdef CONFIG_MEDIATEK_DRAMC
-	val = mtk_dramc_get_steps_freq(0) * QOS_BOUND_EMI_CH * 2;
-#endif
-#ifdef CONFIG_MTK_DRAMC
-	val = dram_steps_freq(0) * QOS_BOUND_EMI_CH * 2;
-#endif
+	int val = dram_steps_freq(0) * 4;
 
 	if (state == QOS_BOUND_BW_FULL)
 		return val * QOS_BOUND_BW_FULL_PCT / 100;

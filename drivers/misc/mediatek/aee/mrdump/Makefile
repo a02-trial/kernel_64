@@ -12,7 +12,6 @@
 #
 
 subdir-ccflags-y += -Idrivers/misc/mediatek/mtprof/
-subdir-ccflags-y += -Idrivers/misc/mediatek/dbgtop/
 
 ccflags-$(CONFIG_MTK_AEE_IPANIC) += -DTEXT_OFFSET=$(TEXT_OFFSET)
 obj-$(CONFIG_MTK_AEE_IPANIC)	+= mrdump.o
@@ -26,7 +25,11 @@ mrdump-objs-y := \
 	mrdump_panic.o
 
 mrdump-objs-$(CONFIG_ARM) += mrdump_arm.o
-mrdump-objs-$(CONFIG_ARM64) += mrdump_arm64.o
+mrdump-objs-y += mrdump_panic_wdt.o
+
+mrdump-objs-$(CONFIG_ARM64) += \
+	mrdump_arm64.o \
+	mrdump_panic_wdt.o
 
 mrdump-objs := $(mrdump-objs-y)
 

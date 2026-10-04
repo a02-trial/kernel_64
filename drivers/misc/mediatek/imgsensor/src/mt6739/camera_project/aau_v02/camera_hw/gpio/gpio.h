@@ -20,7 +20,6 @@
 #include <linux/platform_device.h>
 #include <linux/pinctrl/pinctrl.h>
 #include "imgsensor_hw.h"
-#include "imgsensor_platform.h"
 
 extern struct mutex pinctrl_mutex;
 

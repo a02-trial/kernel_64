@@ -12,6 +12,11 @@ config IMGSENSOR_MAIN
 	help
 	  Specify main sensor.
 
+config CAMERA_AAU_V02
+	bool CAMERA_AAU_V02
+	help
+	  For AAU V02 camera set
+
 config IMGSENSOR_MAIN2
 	string "Custom main2 image sensor"
 	depends on SPECIFY_IMGSENSOR
@@ -36,53 +41,24 @@ config IMGSENSOR_MAIN3
 	help
 	  Specify main3 sensor.
 
-config IMGSENSOR_CUSTOM_CAMERA 
+config IMGSENSOR_CUSTOM_CAMERA
 	bool "Use custom camera set"
 	help
-	  Use custom camera set
+	  Specify custom camera set
+	  This config is mainly mapping to userspace.
+	  Consider the numbers of sensors and usage on the phone.
+	  Compare the custom usage defined in user-custom folder.
 
 if IMGSENSOR_CUSTOM_CAMERA
 choice IMGSENSOR_CAMERA_SET_CHOICE
 	prompt "Choose the proper camera set"
+	help
+	  Select custom camera set
+	  This config is mainly mapping to userspace.
+	  Consider the numbers of sensors and usage on the phone.
+	  Compare the custom usage defined in user-custom folder.
 
-config CAMERA_AAT_V31
-	bool CAMERA_AAT_V31
-	help
-	  For AAT V31 camera set
-config CAMERA_AAT_V32X
-	bool CAMERA_AAT_V32X
-	help
-	  For AAT V32X camera set
-config CAMERA_AAU_V32
-	bool CAMERA_AAU_V32
-	help
-	  For AAU V32 camera set
-config CAMERA_AAT_V41
-	bool CAMERA_AAT_V41
-	help
-	  For AAT V41 camera set
-config CAMERA_AAU_V02
-	bool CAMERA_AAU_V02
-	help
-	  For AAU V02 camera set
-config CAMERA_AAU_V22
-	bool CAMERA_AAU_V22
-	help
-	  For AAU V22 camera set
-config CAMERA_MMU_V32
-	bool CAMERA_MMU_V32
-	help
-	  For MMU V32 camera set
-config CAMERA_MMU_V22
-	bool CAMERA_MMU_V22
-	help
-	  For MMU V22 camera set
 endchoice
-config CAMERA_SAMSUNG_MODEL_NAME
-	string CAMERA_SAMSUNG_MODEL_NAME
-	help
-	  Current model name. Set string by IMGSENSOR_CAMERA_SET_CHOICE.
-	  For example, A32-5G's CAMERA_SAMSUNG_MODEL_NAME is aat_v32x.
 config CAMERA_SENSOR0
 	string "Camera Sensor 0"
 	help
@@ -132,11 +108,3 @@ config CAMERA_SENSOR5_2
 	help
 	  Camera image sensor 5_2
 endif
-config CAMERA_ADAPTIVE_MIPI
-	bool CAMERA_ADAPTIVE_MIPI
-	depends on MTK_IMGSENSOR
-	help
-	  for using Adaptive MIPI.
-	  use CONFIG_CAMERA_ADAPTIVE_MIPI
-
-source "drivers/misc/mediatek/imgsensor/src/common/sysfs/Kconfig"

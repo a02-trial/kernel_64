@@ -1,0 +1,54 @@
+name: Build Kernel for Samsung Galaxy A02
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to build from'
+        required: true
+        default: 'ori'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v3
+      with:
+        ref: ${{ github.event.inputs.branch }}
+
+    - name: Set up Build Environment
+      run: |
+        sudo apt update && sudo apt install -y build-essential bc bison flex libssl-dev libncurses5-dev libelf-dev
+
+    - name: Apply Changes to a02_defconfig
+      run: |
+        sed -i '/CONFIG_SAMSUNG_PRODUCT_SHIP/d' arch/arm/configs/a02_defconfig
+        echo "# CONFIG_SAMSUNG_PRODUCT_SHIP is not set" >> arch/arm/configs/a02_defconfig
+        echo "CONFIG_BROKEN_ON_SAMSUNG=y" >> arch/arm/configs/a02_defconfig
+        sed -i '/CONFIG_LOCALVERSION_AUTO/d' arch/arm/configs/a02_defconfig
+        echo "# CONFIG_LOCALVERSION_AUTO is not set" >> arch/arm/configs/a02_defconfig
+        sed -i 's/CONFIG_CMDLINE=.*/CONFIG_CMDLINE="console=tty0 console=ttyMT3,921600n1 root=\/dev\/ram vmalloc=496M slub_max_order=0 slub_debug=O androidboot.os_patch_level=2026-05-01"/' arch/arm/configs/a02_defconfig
+        echo "CONFIG_MEMCG_FORCE_USE_VM_SWAPPINESS=y" >> arch/arm/configs/a02_defconfig
+        echo "CONFIG_NAMESPACES=y" >> arch/arm/configs/a02_defconfig
+        echo "CONFIG_PID_NS=y" >> arch/arm/configs/a02_defconfig
+        echo "CONFIG_NET_NS=y" >> arch/arm/configs/a02_defconfig
+
+    - name: Build Kernel
+      run: |
+        chmod +x z
+        ./z
+
+    - name: Archive Kernel
+      run: |
+        mkdir -p output
+        cp arch/arm/boot/zImage output/
+        cp arch/arm/boot/dts/*.dtb output/
+        zip -r kernel_build_output.zip output
+
+    - name: Upload Kernel Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: kernel-build
+        path: kernel_build_output.zip

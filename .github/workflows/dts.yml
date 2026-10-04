@@ -1,0 +1,60 @@
+name: DTS Cherry-Pick Operator
+
+on:
+  workflow_dispatch:
+
+jobs:
+  transplant:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Kasih ijin nulis ke repo
+    steps:
+      - name: Checkout Repo A10
+        uses: actions/checkout@v4
+        with:
+          ref: coba_build
+          fetch-depth: 0
+
+      - name: Setup Git Identity
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Maling DTSI dari Repo A11
+        run: |
+          git clone --depth 1 -b 186 https://github.com/rdbckp/a022f_kernel A11_SOURCE
+          
+          FILES=(
+            "mt6357.dtsi"
+            "mt6357-regulator.dtsi"
+            "rt9458.dtsi"
+            "rt9466.dtsi"
+            "mtk_battery_prop.dtsi"
+            "modem-MT6739ap-pdata.dtsi"
+            "mtk_modem_v1_6739.dtsi"
+            "cust_mt6739_msdc.dtsi"
+            "mtk_usb.dtsi"
+            "trusty.dtsi"
+            "mt6739.dtsi"
+            "mtk_pinctrl.dtsi"
+            "mt6739-a022f.dts"
+          )
+
+          DTS_PATH="arch/arm/boot/dts"
+          for file in "${FILES[@]}"; do
+            if [ -f "A11_SOURCE/$DTS_PATH/$file" ]; then
+              cp -f "A11_SOURCE/$DTS_PATH/$file" "$DTS_PATH/"
+              echo "✅ $file diculik!"
+            fi
+          done
+          rm -rf A11_SOURCE
+
+      - name: Commit dan Push
+        run: |
+          git add arch/arm/boot/dts/
+          if git diff --quiet HEAD --; then
+            echo "Gak ada perubahan."
+          else
+            git commit -m "DTS: Sync jeroan dari Android 11 Binary 3"
+            git push origin coba_build
+          fi

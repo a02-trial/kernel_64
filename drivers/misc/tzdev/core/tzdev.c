@@ -15,7 +15,6 @@
 #include <linux/buffer_head.h>
 #include <linux/completion.h>
 #include <linux/cpu.h>
-#include <linux/export.h>
 #include <linux/file.h>
 #include <linux/fs.h>
 #include <linux/interrupt.h>
@@ -40,6 +39,9 @@
 #include <linux/uaccess.h>
 #include <linux/workqueue.h>
 
+#include <asm/segment.h>
+#include <asm/uaccess.h>
+
 #include "tzdev_internal.h"
 #include "core/cdev.h"
 #include "core/deploy_tzar.h"
@@ -52,13 +54,10 @@
 #include "core/mem.h"
 #include "core/notifier.h"
 #include "core/platform.h"
-#include "core/subsystem.h"
 #include "core/sysdep.h"
 #include "debug/iw_boot_log.h"
 #include "debug/panic_dump.h"
 #include "debug/pmf.h"
-#include "debug/profiler.h"
-#include "debug/trace.h"
 #include "extensions/boost.h"
 
 MODULE_AUTHOR("Jaemin Ryu <jm77.ryu@samsung.com>");
@@ -78,9 +77,18 @@ enum tzdev_iwi_id {
 	TZDEV_IWI_PANIC
 };
 
+struct tzdev_shmem {
+	struct list_head link;
+	unsigned int id;
+};
+
 struct tzdev_fd_data {
+	struct list_head shmem_list;
+	spinlock_t shmem_list_lock;
+
 	unsigned int boost_state;
 	struct mutex mutex;
+
 	void *platform_data;
 };
 
@@ -146,37 +154,97 @@ static int tzdev_check_version(void)
 	return ret;
 }
 
-static int tzdev_boost_on(struct file *filp)
+static int tzdev_register_shared_memory(struct file *filp, unsigned long arg)
 {
-	int ret = 0;
+	int ret;
+	struct tzdev_shmem *shmem;
 	struct tzdev_fd_data *data = filp->private_data;
+	struct tzio_mem_register __user *argp = (struct tzio_mem_register __user *)arg;
+	struct tzio_mem_register s;
 
-	mutex_lock(&data->mutex);
+	if (copy_from_user(&s, argp, sizeof(struct tzio_mem_register)))
+		return -EFAULT;
 
-	if (!data->boost_state) {
-		tz_boost_enable();
-		data->boost_state = 1;
-	} else {
-		ret = -EBUSY;
+	shmem = kzalloc(sizeof(struct tzdev_shmem), GFP_KERNEL);
+	if (!shmem) {
+		log_error(tzdev, "Failed to allocate shmem structure\n");
+		return -ENOMEM;
 	}
-	mutex_unlock(&data->mutex);
 
-	return ret;
+	tzdev_pmf_stamp(PMF_TZDEV_MEM_REGISTER);
+	ret = tzdev_mem_register_user(UINT_PTR(s.ptr), s.size, s.write);
+	tzdev_pmf_stamp(PMF_TZDEV_MEM_REGISTER_STOP);
+	if (ret < 0) {
+		kfree(shmem);
+		return ret;
+	}
+
+	INIT_LIST_HEAD(&shmem->link);
+	shmem->id = ret;
+
+	spin_lock(&data->shmem_list_lock);
+	list_add(&shmem->link, &data->shmem_list);
+	spin_unlock(&data->shmem_list_lock);
+
+	return shmem->id;
 }
 
-static int tzdev_boost_off(struct file *filp)
+static int tzdev_release_shared_memory(struct file *filp, unsigned int id)
+{
+	struct tzdev_shmem *shmem;
+	struct tzdev_fd_data *data = filp->private_data;
+	unsigned int found = 0;
+
+	spin_lock(&data->shmem_list_lock);
+	list_for_each_entry(shmem, &data->shmem_list, link) {
+		if (shmem->id == id) {
+			list_del(&shmem->link);
+			found = 1;
+			break;
+		}
+	}
+	spin_unlock(&data->shmem_list_lock);
+
+	if (!found)
+		return -EINVAL;
+
+	kfree(shmem);
+
+	return tzdev_mem_release_user(id);
+}
+
+static long tzdev_boost_control(struct file *filp, unsigned int state)
 {
 	int ret = 0;
 	struct tzdev_fd_data *data = filp->private_data;
 
 	mutex_lock(&data->mutex);
 
-	if (data->boost_state) {
-		tz_boost_disable();
-		data->boost_state = 0;
-	} else {
-		ret = -EBUSY;
+	switch (state) {
+	case TZIO_BOOST_ON:
+		if (!data->boost_state) {
+			tz_boost_enable();
+			data->boost_state = 1;
+		} else {
+			log_error(tzdev, "Trying to enable boost twice, filp=%pK\n", filp);
+			ret = -EBUSY;
+		}
+		break;
+	case TZIO_BOOST_OFF:
+		if (data->boost_state) {
+			tz_boost_disable();
+			data->boost_state = 0;
+		} else {
+			log_error(tzdev, "Trying to disable boost twice, filp=%pK\n", filp);
+			ret = -EBUSY;
+		}
+		break;
+	default:
+		log_error(tzdev, "Unknown boost request, cmd=%u filp=%pK\n", state, filp);
+		ret = -EINVAL;
+		break;
 	}
+
 	mutex_unlock(&data->mutex);
 
 	return ret;
@@ -193,6 +261,8 @@ static int tzdev_open(struct inode *inode, struct file *filp)
 		return -ENOMEM;
 	}
 
+	INIT_LIST_HEAD(&data->shmem_list);
+	spin_lock_init(&data->shmem_list_lock);
 	mutex_init(&data->mutex);
 
 	data->platform_data = tzdev_platform_open();
@@ -213,11 +283,18 @@ release:
 
 static int tzdev_release(struct inode *inode, struct file *filp)
 {
+	struct tzdev_shmem *shmem, *tmp;
 	struct tzdev_fd_data *data = filp->private_data;
 
 	tzdev_platform_release(data->platform_data);
 
-	tzdev_boost_off(filp);
+	list_for_each_entry_safe(shmem, tmp, &data->shmem_list, link) {
+		list_del(&shmem->link);
+		tzdev_mem_release_user(shmem->id);
+		kfree(shmem);
+	}
+
+	tzdev_boost_control(filp, TZIO_BOOST_OFF);
 
 	mutex_destroy(&data->mutex);
 
@@ -230,15 +307,15 @@ static long tzdev_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	struct tzdev_fd_data *data = filp->private_data;
 
-	trace_tzdev_ioctl(cmd);
-
 	switch (cmd) {
 	case TZIO_GET_SYSCONF:
 		return tzdev_get_sysconf(filp, arg);
-	case TZIO_BOOST_ON:
-		return tzdev_boost_on(filp);
-	case TZIO_BOOST_OFF:
-		return tzdev_boost_off(filp);
+	case TZIO_MEM_REGISTER:
+		return tzdev_register_shared_memory(filp, arg);
+	case TZIO_MEM_RELEASE:
+		return tzdev_release_shared_memory(filp, arg);
+	case TZIO_BOOST_CONTROL:
+		return tzdev_boost_control(filp, arg);
 	}
 
 	return tzdev_platform_ioctl(data->platform_data, cmd, arg);
@@ -356,7 +433,6 @@ static void dump_kernel_panic_bh(struct work_struct *work)
 {
 	tz_iw_boot_log_read();
 #if defined(CONFIG_TZDEV_SWD_PANIC_IS_CRITICAL)
-	tz_iwlog_fini();
 	panic("tzdev: IWI_PANIC raised\n");
 #else
 	tzdev_run_fini_sequence();
@@ -377,17 +453,10 @@ static int __init tzdev_init(void)
 {
 	int rc;
 
-	rc = tzdev_call_init_array();
-	if (rc) {
-		log_error(tzdev, "tzdev_platform_init() failed to init submodules error=%d\n", rc);
-		goto err;
-	}
-
 	rc = tzdev_platform_register();
 	if (rc)
 		log_error(tzdev, "tzdev_platform_init() failed with error=%d\n", rc);
 
-err:
 	return rc;
 }
 
@@ -402,16 +471,12 @@ unsigned int tzdev_is_up(void)
 {
 	return atomic_read(&tzdev_swd_state) == TZDEV_SWD_UP;
 }
-EXPORT_SYMBOL(tzdev_is_up);
 
 int tzdev_smc(struct tzdev_smc_data *data)
 {
 	int ret;
 
-	trace_tzdev_pre_smc(data);
-
 	tzdev_atomic_notifier_run(TZDEV_PRE_SMC_NOTIFIER);
-	tzprofiler_pre_smc_call_direct();
 
 	log_debug(tzdev, "enter: args={0x%x 0x%x 0x%x 0x%x 0x%x 0x%x 0x%x}\n",
 			data->args[0], data->args[1], data->args[2], data->args[3],
@@ -423,9 +488,6 @@ int tzdev_smc(struct tzdev_smc_data *data)
 			data->args[0], data->args[1], data->args[2], data->args[3], ret);
 
 	tzdev_atomic_notifier_run(TZDEV_POST_SMC_NOTIFIER);
-	tzprofiler_post_smc_call_direct();
-
-	trace_tzdev_post_smc(data);
 
 	return ret;
 }

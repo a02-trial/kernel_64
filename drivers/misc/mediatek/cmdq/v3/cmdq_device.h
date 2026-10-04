@@ -1,6 +1,14 @@
-/* SPDX-License-Identifier: GPL-2.0 */
 /*
- * Copyright (c) 2015 MediaTek Inc.
+ * Copyright (C) 2015 MediaTek Inc.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
  */
 
 #ifndef __CMDQ_DEVICE_H__
@@ -27,15 +35,10 @@ u32 cmdq_dev_enable_device_clock(bool enable, struct clk *clk_module,
 	const char *clkName);
 bool cmdq_dev_device_clock_is_enable(struct clk *clk_module);
 /* For test case used */
-#if !IS_ENABLED(CONFIG_KASAN)
 void testcase_clkmgr_impl(enum CMDQ_ENG_ENUM engine,
 	char *name, const unsigned long testWriteReg,
 	const u32 testWriteValue,
 	const unsigned long testReadReg, const bool verifyWriteResult);
-#else
-#define testcase_clkmgr_impl(engine, name, \
-	testWriteReg, testWriteValue, testReadReg, verifyWriteResult) ((void)0)
-#endif
 
 struct device *cmdq_dev_get(void);
 /* interrupt index */

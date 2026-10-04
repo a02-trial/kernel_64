@@ -1779,8 +1779,7 @@ err_hwaddr_unsync:
 		bond_hw_addr_flush(bond_dev, slave_dev);
 
 err_close:
-	if (!netif_is_bond_master(slave_dev))
-		slave_dev->priv_flags &= ~IFF_BONDING;
+	slave_dev->priv_flags &= ~IFF_BONDING;
 	dev_close(slave_dev);
 
 err_restore_mac:
@@ -1986,8 +1985,7 @@ static int __bond_release_one(struct net_device *bond_dev,
 	else
 		dev_set_mtu(slave_dev, slave->original_mtu);
 
-	if (!netif_is_bond_master(slave_dev))
-		slave_dev->priv_flags &= ~IFF_BONDING;
+	slave_dev->priv_flags &= ~IFF_BONDING;
 
 	bond_free_slave(slave);
 
@@ -2057,7 +2055,8 @@ static int bond_miimon_inspect(struct bonding *bond)
 	ignore_updelay = !rcu_dereference(bond->curr_active_slave);
 
 	bond_for_each_slave_rcu(bond, slave, iter) {
-		bond_propose_link_state(slave, BOND_LINK_NOCHANGE);
+		slave->new_link = BOND_LINK_NOCHANGE;
+		slave->link_new_state = slave->link;
 
 		link_state = bond_check_dev_link(bond, slave->dev, 0);
 
@@ -2093,7 +2092,7 @@ static int bond_miimon_inspect(struct bonding *bond)
 			}
 
 			if (slave->delay <= 0) {
-				bond_propose_link_state(slave, BOND_LINK_DOWN);
+				slave->new_link = BOND_LINK_DOWN;
 				commit++;
 				continue;
 			}
@@ -2132,7 +2131,7 @@ static int bond_miimon_inspect(struct bonding *bond)
 				slave->delay = 0;
 
 			if (slave->delay <= 0) {
-				bond_propose_link_state(slave, BOND_LINK_UP);
+				slave->new_link = BOND_LINK_UP;
 				commit++;
 				ignore_updelay = false;
 				continue;
@@ -2152,7 +2151,7 @@ static void bond_miimon_commit(struct bonding *bond)
 	struct slave *slave, *primary;
 
 	bond_for_each_slave(bond, slave, iter) {
-		switch (slave->link_new_state) {
+		switch (slave->new_link) {
 		case BOND_LINK_NOCHANGE:
 			/* For 802.3ad mode, check current slave speed and
 			 * duplex again in case its port was disabled after
@@ -2186,6 +2185,9 @@ static void bond_miimon_commit(struct bonding *bond)
 			} else if (BOND_MODE(bond) != BOND_MODE_ACTIVEBACKUP) {
 				/* make it immediately active */
 				bond_set_active_slave(slave);
+			} else if (slave != primary) {
+				/* prevent it from being the active one */
+				bond_set_backup_slave(slave);
 			}
 
 			netdev_info(bond->dev, "link status definitely up for interface %s, %u Mbps %s duplex\n",
@@ -2242,8 +2244,8 @@ static void bond_miimon_commit(struct bonding *bond)
 
 		default:
 			netdev_err(bond->dev, "invalid new link %d on slave %s\n",
-				   slave->link_new_state, slave->dev->name);
-			bond_propose_link_state(slave, BOND_LINK_NOCHANGE);
+				   slave->new_link, slave->dev->name);
+			slave->new_link = BOND_LINK_NOCHANGE;
 
 			continue;
 		}
@@ -2642,13 +2644,13 @@ static void bond_loadbalance_arp_mon(struct bonding *bond)
 	bond_for_each_slave_rcu(bond, slave, iter) {
 		unsigned long trans_start = dev_trans_start(slave->dev);
 
-		bond_propose_link_state(slave, BOND_LINK_NOCHANGE);
+		slave->new_link = BOND_LINK_NOCHANGE;
 
 		if (slave->link != BOND_LINK_UP) {
 			if (bond_time_in_interval(bond, trans_start, 1) &&
 			    bond_time_in_interval(bond, slave->last_rx, 1)) {
 
-				bond_propose_link_state(slave, BOND_LINK_UP);
+				slave->new_link = BOND_LINK_UP;
 				slave_state_changed = 1;
 
 				/* primary_slave has no meaning in round-robin
@@ -2675,7 +2677,7 @@ static void bond_loadbalance_arp_mon(struct bonding *bond)
 			if (!bond_time_in_interval(bond, trans_start, 2) ||
 			    !bond_time_in_interval(bond, slave->last_rx, 2)) {
 
-				bond_propose_link_state(slave, BOND_LINK_DOWN);
+				slave->new_link = BOND_LINK_DOWN;
 				slave_state_changed = 1;
 
 				if (slave->link_failure_count < UINT_MAX)
@@ -2707,8 +2709,8 @@ static void bond_loadbalance_arp_mon(struct bonding *bond)
 			goto re_arm;
 
 		bond_for_each_slave(bond, slave, iter) {
-			if (slave->link_new_state != BOND_LINK_NOCHANGE)
-				slave->link = slave->link_new_state;
+			if (slave->new_link != BOND_LINK_NOCHANGE)
+				slave->link = slave->new_link;
 		}
 
 		if (slave_state_changed) {
@@ -2731,9 +2733,9 @@ re_arm:
 }
 
 /* Called to inspect slaves for active-backup mode ARP monitor link state
- * changes.  Sets proposed link state in slaves to specify what action
- * should take place for the slave.  Returns 0 if no changes are found, >0
- * if changes to link states must be committed.
+ * changes.  Sets new_link in slaves to specify what action should take
+ * place for the slave.  Returns 0 if no changes are found, >0 if changes
+ * to link states must be committed.
  *
  * Called with rcu_read_lock held.
  */
@@ -2745,12 +2747,12 @@ static int bond_ab_arp_inspect(struct bonding *bond)
 	int commit = 0;
 
 	bond_for_each_slave_rcu(bond, slave, iter) {
-		bond_propose_link_state(slave, BOND_LINK_NOCHANGE);
+		slave->new_link = BOND_LINK_NOCHANGE;
 		last_rx = slave_last_rx(bond, slave);
 
 		if (slave->link != BOND_LINK_UP) {
 			if (bond_time_in_interval(bond, last_rx, 1)) {
-				bond_propose_link_state(slave, BOND_LINK_UP);
+				slave->new_link = BOND_LINK_UP;
 				commit++;
 			}
 			continue;
@@ -2778,7 +2780,7 @@ static int bond_ab_arp_inspect(struct bonding *bond)
 		if (!bond_is_active_slave(slave) &&
 		    !rcu_access_pointer(bond->current_arp_slave) &&
 		    !bond_time_in_interval(bond, last_rx, 3)) {
-			bond_propose_link_state(slave, BOND_LINK_DOWN);
+			slave->new_link = BOND_LINK_DOWN;
 			commit++;
 		}
 
@@ -2791,7 +2793,7 @@ static int bond_ab_arp_inspect(struct bonding *bond)
 		if (bond_is_active_slave(slave) &&
 		    (!bond_time_in_interval(bond, trans_start, 2) ||
 		     !bond_time_in_interval(bond, last_rx, 2))) {
-			bond_propose_link_state(slave, BOND_LINK_DOWN);
+			slave->new_link = BOND_LINK_DOWN;
 			commit++;
 		}
 	}
@@ -2811,7 +2813,7 @@ static void bond_ab_arp_commit(struct bonding *bond)
 	struct slave *slave;
 
 	bond_for_each_slave(bond, slave, iter) {
-		switch (slave->link_new_state) {
+		switch (slave->new_link) {
 		case BOND_LINK_NOCHANGE:
 			continue;
 
@@ -2864,7 +2866,7 @@ static void bond_ab_arp_commit(struct bonding *bond)
 
 		default:
 			netdev_err(bond->dev, "impossible: new_link %d on slave %s\n",
-				   slave->link_new_state, slave->dev->name);
+				   slave->new_link, slave->dev->name);
 			continue;
 		}
 
@@ -3990,7 +3992,7 @@ out:
 		 * this to-be-skipped slave to send a packet out.
 		 */
 		old_arr = rtnl_dereference(bond->slave_arr);
-		for (idx = 0; old_arr != NULL && idx < old_arr->count; idx++) {
+		for (idx = 0; idx < old_arr->count; idx++) {
 			if (skipslave == old_arr->arr[idx]) {
 				old_arr->arr[idx] =
 				    old_arr->arr[old_arr->count-1];

@@ -1257,8 +1257,7 @@ P_BSS_DESC_T scanAddToBssDesc(IN P_ADAPTER_T prAdapter, IN P_SW_RFB_T prSwRfb)
 		DBGLOG(SCN, EVENT, "%s %pM channel %d\n", rSsid.aucSsid, prWlanBeaconFrame->aucBSSID,
 				HIF_RX_HDR_GET_CHNL_NUM(prSwRfb->prHifRxHdr));
 	else
-		DBGLOG(SCN, EVENT, "hidden ssid, %pM channel %d\n",
-				HIDE(prWlanBeaconFrame->aucBSSID),
+		DBGLOG(SCN, EVENT, "hidden ssid, %pM channel %d\n", prWlanBeaconFrame->aucBSSID,
 				HIF_RX_HDR_GET_CHNL_NUM(prSwRfb->prHifRxHdr));
 	/* 4 <1.2> Replace existing BSS_DESC_T or allocate a new one */
 	prBssDesc = scanSearchExistingBssDescWithSsid(prAdapter,
@@ -2043,14 +2042,12 @@ VOID scanReportBss2Cfg80211(IN P_ADAPTER_T prAdapter, IN ENUM_BSS_TYPE_T eBSSTyp
 		/* Check BSSID is legal channel */
 		if (!scanCheckBssIsLegal(prAdapter, prSpecificBssDesc)) {
 			DBGLOG(SCN, TRACE, "Remove specific SSID[%s] on channel %d\n",
-			       HIDE(prSpecificBssDesc->aucSSID),
-			       prSpecificBssDesc->ucChannelNum);
+			       prSpecificBssDesc->aucSSID, prSpecificBssDesc->ucChannelNum);
 			return;
 		}
 
 		DBGLOG(SCN, TRACE, "Report specific SSID[%s] ValidSSID[%d]\n",
-			HIDE(prSpecificBssDesc->aucSSID),
-			prSpecificBssDesc->fgIsValidSSID);
+			prSpecificBssDesc->aucSSID, prSpecificBssDesc->fgIsValidSSID);
 
 		if (eBSSType == BSS_TYPE_INFRASTRUCTURE) {
 			if (prSpecificBssDesc->fgIsValidSSID)
@@ -2101,7 +2098,7 @@ VOID scanReportBss2Cfg80211(IN P_ADAPTER_T prAdapter, IN ENUM_BSS_TYPE_T eBSSTyp
 		"ValidSSID[%u] u2RawLength[%d] fgIsP2PReport[%d]\n"
 				DBGLOG(SCN, TRACE, TEMP_LOG_TEMPLATE,
 						MAC2STR(prBssDesc->aucBSSID),
-						HIDE(prBssDesc->aucSSID),
+						prBssDesc->aucSSID,
 						prBssDesc->ucChannelNum,
 						prBssDesc->eBSSType,
 						prBssDesc->fgIsValidSSID,
@@ -2353,8 +2350,7 @@ VOID scanCollectBeaconReport(IN P_ADAPTER_T prAdapter, PUINT_8 pucIEBuf,
 				kalMemCopy(aucBcnSsid, &pucIE[2], ucBcnSsidLen);
 				DBGLOG(SCN, TRACE,
 					"SSID mismatch, req(len %u, %s), bcn(id %u, len %u, %s)\n",
-					ucReqSsidLen, HIDE(aucReqSsid),
-					pucIE[0], ucBcnSsidLen, HIDE(aucBcnSsid));
+					ucReqSsidLen, aucReqSsid, pucIE[0], ucBcnSsidLen, aucBcnSsid);
 			}
 			return; /* don't match SSID, don't report it */
 		case 1: /* Beacon Reporting Information */
@@ -2802,7 +2798,7 @@ P_BSS_DESC_T scanSearchBssDescByPolicy(IN P_ADAPTER_T prAdapter, IN ENUM_NETWORK
 #endif
 
 	DBGLOG(SCN, INFO, "SEARCH: Bss Num: %d, Look for SSID: %s, %pM Band=%d, channel=%d\n",
-			   (UINT_32) prBSSDescList->u4NumElem, HIDE(prConnSettings->aucSSID),
+			   (UINT_32) prBSSDescList->u4NumElem, prConnSettings->aucSSID,
 			   (prConnSettings->aucBSSID), eBand, ucChannel);
 
 	/* 4 <1> The outer loop to search for a candidate. */
@@ -2811,7 +2807,7 @@ P_BSS_DESC_T scanSearchBssDescByPolicy(IN P_ADAPTER_T prAdapter, IN ENUM_NETWORK
 		/* TODO(Kevin): Update Minimum Channel Load Information here */
 
 		DBGLOG(SCN, TRACE, "SEARCH: [ %pM ], SSID:%s\n",
-				   prBssDesc->aucBSSID, HIDE(prBssDesc->aucSSID));
+				   prBssDesc->aucBSSID, prBssDesc->aucSSID);
 
 		/* 4 <2> Check PHY Type and attributes */
 		/* 4 <2.1> Check Unsupported BSS PHY Type */

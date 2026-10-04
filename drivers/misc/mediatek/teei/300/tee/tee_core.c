@@ -28,7 +28,6 @@
 #include <imsg_log.h>
 #include "tee_private.h"
 #include "capi_proxy.h"
-#include "teei_id.h"
 
 #define TEE_NUM_DEVICES	32
 
@@ -57,7 +56,7 @@ static struct tee_context *teedev_open(struct tee_device *teedev)
 	int rc;
 	struct tee_context *ctx;
 
-	if (!isee_device_get(teedev))
+	if (!tee_device_get(teedev))
 		return ERR_PTR(-EINVAL);
 
 	ctx = kzalloc(sizeof(*ctx), GFP_KERNEL);
@@ -75,7 +74,7 @@ static struct tee_context *teedev_open(struct tee_device *teedev)
 	return ctx;
 err:
 	kfree(ctx);
-	isee_device_put(teedev);
+	tee_device_put(teedev);
 	return ERR_PTR(rc);
 
 }
@@ -89,7 +88,7 @@ static void teedev_close_context(struct tee_context *ctx)
 	list_for_each_entry(shm, &ctx->list_shm, link)
 		shm->ctx = NULL;
 	mutex_unlock(&ctx->teedev->mutex);
-	isee_device_put(ctx->teedev);
+	tee_device_put(ctx->teedev);
 	kfree(ctx);
 }
 
@@ -143,7 +142,7 @@ static int tee_ioctl_shm_alloc(struct tee_context *ctx,
 
 	data.id = -1;
 
-	shm = isee_shm_alloc(ctx, data.size, TEE_SHM_MAPPED | TEE_SHM_DMA_BUF);
+	shm = tee_shm_alloc(ctx, data.size, TEE_SHM_MAPPED | TEE_SHM_DMA_BUF);
 	if (IS_ERR(shm))
 		return PTR_ERR(shm);
 
@@ -154,14 +153,14 @@ static int tee_ioctl_shm_alloc(struct tee_context *ctx,
 	if (copy_to_user(udata, &data, sizeof(data)))
 		ret = -EFAULT;
 	else
-		ret = isee_shm_get_fd(shm);
+		ret = tee_shm_get_fd(shm);
 
 	/*
 	 * When user space closes the file descriptor the shared memory
-	 * should be freed or if isee_shm_get_fd() failed then it will
+	 * should be freed or if tee_shm_get_fd() failed then it will
 	 * be freed immediately.
 	 */
-	isee_shm_put(shm);
+	tee_shm_put(shm);
 	return ret;
 }
 
@@ -176,12 +175,6 @@ static inline void flush_shm_dcache(void *start, size_t len)
 #endif
 }
 
-static inline void invalid_shm_dcache(void *start, size_t len)
-{
-	__Invalidate_Dcache_By_Area((unsigned long)start,
-					(unsigned long)(start + len));
-}
-
 static int tee_ioctl_shm_kern_op(struct tee_context *ctx,
 			       struct tee_ioctl_shm_kern_op_arg __user *udata)
 {
@@ -194,7 +187,7 @@ static int tee_ioctl_shm_kern_op(struct tee_context *ctx,
 		return -EFAULT;
 
 
-	shm = isee_shm_get_from_id(ctx, data.id);
+	shm = tee_shm_get_from_id(ctx, data.id);
 	if (IS_ERR(shm))
 		return PTR_ERR(shm);
 
@@ -204,9 +197,6 @@ static int tee_ioctl_shm_kern_op(struct tee_context *ctx,
 		break;
 	case TEE_IOCTL_SHM_KERN_OP_FLUSH_CACHE:
 		flush_shm_dcache(shm->kaddr, shm->size);
-		break;
-	case TEE_IOCTL_SHM_KERN_OP_INVALID_CACHE:
-		invalid_shm_dcache(shm->kaddr, shm->size);
 		break;
 	default:
 		ret = -EINVAL;
@@ -218,11 +208,11 @@ static int tee_ioctl_shm_kern_op(struct tee_context *ctx,
 
 	/*
 	 * When user space closes the file descriptor the shared memory
-	 * should be freed or if isee_shm_get_fd() failed then it will
+	 * should be freed or if tee_shm_get_fd() failed then it will
 	 * be freed immediately.
 	 */
 out:
-	isee_shm_put(shm);
+	tee_shm_put(shm);
 
 	return ret;
 }
@@ -266,9 +256,9 @@ static int params_from_user(struct tee_context *ctx, struct tee_param *params,
 			 * identifier we return an error. All pointers that
 			 * has been added in params have an increased ref
 			 * count. It's the callers responibility to do
-			 * isee_shm_put() on all resolved pointers.
+			 * tee_shm_put() on all resolved pointers.
 			 */
-			shm = isee_shm_get_from_id(ctx, ip.c);
+			shm = tee_shm_get_from_id(ctx, ip.c);
 			if (IS_ERR(shm))
 				return PTR_ERR(shm);
 
@@ -377,7 +367,7 @@ out:
 		for (n = 0; n < arg.num_params; n++)
 			if (tee_param_is_memref(params + n) &&
 			    params[n].u.memref.shm)
-				isee_shm_put(params[n].u.memref.shm);
+				tee_shm_put(params[n].u.memref.shm);
 		kfree(params);
 	}
 
@@ -439,7 +429,7 @@ out:
 		for (n = 0; n < arg.num_params; n++)
 			if (tee_param_is_memref(params + n) &&
 			    params[n].u.memref.shm)
-				isee_shm_put(params[n].u.memref.shm);
+				tee_shm_put(params[n].u.memref.shm);
 		kfree(params);
 	}
 	return rc;
@@ -730,18 +720,18 @@ static void tee_release_device(struct device *dev)
 }
 
 /**
- * isee_device_alloc() - Allocate a new struct tee_device instance
+ * tee_device_alloc() - Allocate a new struct tee_device instance
  * @teedesc:	Descriptor for this driver
  * @dev:	Parent device for this device
  * @pool:	Shared memory pool, NULL if not used
  * @driver_data: Private driver data for this device
  *
  * Allocates a new struct tee_device instance. The device is
- * removed by isee_device_unregister().
+ * removed by tee_device_unregister().
  *
  * @returns a pointer to a 'struct tee_device' or an ERR_PTR on failure
  */
-struct tee_device *isee_device_alloc(const struct tee_desc *teedesc,
+struct tee_device *tee_device_alloc(const struct tee_desc *teedesc,
 				    struct device *dev,
 				    struct tee_shm_pool *pool,
 				    void *driver_data)
@@ -776,7 +766,7 @@ struct tee_device *isee_device_alloc(const struct tee_desc *teedesc,
 		goto err;
 	}
 
-	snprintf(teedev->name, sizeof(teedev->name), "isee_tee%s%d",
+	snprintf(teedev->name, sizeof(teedev->name), "tee%s%d",
 		 teedesc->flags & TEE_DESC_PRIVILEGED ? "priv" : "",
 		 teedev->id - offs);
 
@@ -799,7 +789,7 @@ struct tee_device *isee_device_alloc(const struct tee_desc *teedesc,
 	dev_set_drvdata(&teedev->dev, driver_data);
 	device_initialize(&teedev->dev);
 
-	/* 1 as isee_device_unregister() does one final isee_device_put() */
+	/* 1 as tee_device_unregister() does one final tee_device_put() */
 	teedev->num_users = 1;
 	init_completion(&teedev->c_no_users);
 	mutex_init(&teedev->mutex);
@@ -822,7 +812,7 @@ err:
 	kfree(teedev);
 	return ret;
 }
-EXPORT_SYMBOL_GPL(isee_device_alloc);
+EXPORT_SYMBOL_GPL(tee_device_alloc);
 
 static ssize_t implementation_id_show(struct device *dev,
 				      struct device_attribute *attr, char *buf)
@@ -845,15 +835,15 @@ static const struct attribute_group tee_dev_group = {
 };
 
 /**
- * isee_device_register() - Registers a TEE device
+ * tee_device_register() - Registers a TEE device
  * @teedev:	Device to register
  *
- * isee_device_unregister() need to be called to remove the @teedev if
+ * tee_device_unregister() need to be called to remove the @teedev if
  * this function fails.
  *
  * @returns < 0 on failure
  */
-int isee_device_register(struct tee_device *teedev)
+int tee_device_register(struct tee_device *teedev)
 {
 	int rc;
 
@@ -896,9 +886,9 @@ err_device_add:
 	cdev_del(&teedev->cdev);
 	return rc;
 }
-EXPORT_SYMBOL_GPL(isee_device_register);
+EXPORT_SYMBOL_GPL(tee_device_register);
 
-void isee_device_put(struct tee_device *teedev)
+void tee_device_put(struct tee_device *teedev)
 {
 	mutex_lock(&teedev->mutex);
 	/* Shouldn't put in this state */
@@ -912,7 +902,7 @@ void isee_device_put(struct tee_device *teedev)
 	mutex_unlock(&teedev->mutex);
 }
 
-bool isee_device_get(struct tee_device *teedev)
+bool tee_device_get(struct tee_device *teedev)
 {
 	mutex_lock(&teedev->mutex);
 	if (!teedev->desc) {
@@ -925,14 +915,14 @@ bool isee_device_get(struct tee_device *teedev)
 }
 
 /**
- * isee_device_unregister() - Removes a TEE device
+ * tee_device_unregister() - Removes a TEE device
  * @teedev:	Device to unregister
  *
  * This function should be called to remove the @teedev even if
- * isee_device_register() hasn't been called yet. Does nothing if
+ * tee_device_register() hasn't been called yet. Does nothing if
  * @teedev is NULL.
  */
-void isee_device_unregister(struct tee_device *teedev)
+void tee_device_unregister(struct tee_device *teedev)
 {
 	if (!teedev)
 		return;
@@ -943,7 +933,7 @@ void isee_device_unregister(struct tee_device *teedev)
 		device_del(&teedev->dev);
 	}
 
-	isee_device_put(teedev);
+	tee_device_put(teedev);
 	wait_for_completion(&teedev->c_no_users);
 
 	/*
@@ -955,18 +945,18 @@ void isee_device_unregister(struct tee_device *teedev)
 
 	put_device(&teedev->dev);
 }
-EXPORT_SYMBOL_GPL(isee_device_unregister);
+EXPORT_SYMBOL_GPL(tee_device_unregister);
 
 /**
- * isee_get_drvdata() - Return driver_data pointer
+ * tee_get_drvdata() - Return driver_data pointer
  * @teedev:	Device containing the driver_data pointer
  * @returns the driver_data pointer supplied to tee_register().
  */
-void *isee_get_drvdata(struct tee_device *teedev)
+void *tee_get_drvdata(struct tee_device *teedev)
 {
 	return dev_get_drvdata(&teedev->dev);
 }
-EXPORT_SYMBOL_GPL(isee_get_drvdata);
+EXPORT_SYMBOL_GPL(tee_get_drvdata);
 
 struct match_dev_data {
 	struct tee_ioctl_version_data *vers;
@@ -1061,13 +1051,13 @@ static int __init tee_init(void)
 {
 	int rc;
 
-	tee_class = class_create(THIS_MODULE, "isee_tee");
+	tee_class = class_create(THIS_MODULE, "tee");
 	if (IS_ERR(tee_class)) {
 		IMSG_ERROR("couldn't create class\n");
 		return PTR_ERR(tee_class);
 	}
 
-	rc = alloc_chrdev_region(&tee_devt, 0, TEE_NUM_DEVICES, "isee_tee");
+	rc = alloc_chrdev_region(&tee_devt, 0, TEE_NUM_DEVICES, "tee");
 	if (rc) {
 		IMSG_ERROR("failed to allocate char dev region\n");
 		class_destroy(tee_class);

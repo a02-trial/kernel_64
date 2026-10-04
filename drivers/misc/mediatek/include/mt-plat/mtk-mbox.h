@@ -19,60 +19,18 @@
 #include <linux/spinlock.h>
 
 /*
- * mbox slot size definition
+ * mbox slot size defination
  * 1 slot for 4 bytes
+ *
  */
 #define MBOX_SLOT_SIZE 4
-
-struct mtk_mbox_pin_send;
-struct mtk_mbox_pin_recv;
 
 typedef int (*mbox_rx_cb_t)(void *);
 typedef int (*mbox_pin_cb_t)(unsigned int ipi_id, void *prdata, void *data,
 	unsigned int len);
-typedef void (*mbox_ipi_cb_t)(struct mtk_mbox_pin_recv *, void *);
 
 /*
- * mbox receive information
- *
- * poll_count  :mbox polling success count
- * recv_irq_count :mbox receive irq count
- * notify_count   :mbox irq notify count
- * cb_count :mbox execute callback function count
- * pre_timestamp  :time stamp before callback function
- * post_timestamp :time stamp after callback function
- */
-struct mtk_mbox_recv_record {
-	uint32_t poll_count;
-	uint32_t recv_irq_count;
-	uint32_t notify_count;
-	uint32_t cb_count;
-	uint64_t pre_timestamp;
-	uint64_t post_timestamp;
-};
-
-/*
- * mbox send information
- *
- */
-struct mtk_mbox_send_record {
-};
-
-/*
- * mbox record information
- *
- * write_count    :mbox write success count
- * busy_count     :mbox read success count
- * trig_irq_count :mbox trigger irq success count
- */
-struct mtk_mbox_record {
-	uint32_t write_count;
-	uint32_t busy_count;
-	uint32_t trig_irq_count;
-};
-
-/*
- * mbox pin structure, this is for send definition,
+ * mbox pin structure, this is for send defination,
  * ipi=endpoint=pin
  * mbox     : (mbox number)mbox number of the pin, up to 16(plt)
  * offset   : (slot)msg offset in share memory, up to 1024*4 KB(plt)
@@ -84,7 +42,6 @@ struct mtk_mbox_record {
  * mutex      : (mutex)mutex for remote response
  * completion : (completion)completion for remote response
  * pin_lock   : (spinlock_t)lock of the pin
- * send_record: send pin record information
  */
 struct mtk_mbox_pin_send {
 	unsigned int mbox     : 4,
@@ -97,11 +54,10 @@ struct mtk_mbox_pin_send {
 	struct mutex mutex_send;
 	struct completion comp_ack;  // to remove
 	spinlock_t pin_lock;
-	struct mtk_mbox_send_record send_record;
 };
 
 /*
- * mbox pin structure, this is for receive definition,
+ * mbox pin structure, this is for receive defination,
  * ipi=endpoint=pin
  * mbox     : (mbox number)mbox number of the pin, up to 16(plt)
  * offset   : (slot)msg offset in share memory, up to 1024*4 KB(plt)
@@ -117,7 +73,6 @@ struct mtk_mbox_pin_send {
  * pin_buf : (void*)buffer point
  * prdata  : (void*)private data
  * pin_lock: (spinlock_t)lock of the pin
- * recv_record: receive pin record information
  */
 struct mtk_mbox_pin_recv {
 	unsigned int mbox     : 4,
@@ -134,7 +89,6 @@ struct mtk_mbox_pin_recv {
 	void *pin_buf;
 	void *prdata;
 	spinlock_t pin_lock;
-	struct mtk_mbox_recv_record recv_record;
 };
 
 
@@ -143,8 +97,6 @@ struct mtk_mbox_pin_recv {
  * 1) a share memory tightly coupled to the tinysys
  * 2) several IRQs
  *
- * @ipi_cb: the callback handler for synchronization layer
- * @ipi_priv: private data for synchronization layer
  * @pre_cb: the callback handler in the begin of mbox receiving ipi
  * @post_cb: the callback handler in the end of mbox receiving ipi
  * @prdata: private data for the callback use
@@ -160,18 +112,16 @@ struct mtk_mbox_device {
 	unsigned int count;
 	unsigned int recv_count;
 	unsigned int send_count;
-	void (*memcpy_to_tiny)(void __iomem *dest, const void *src, int size);
-	void (*memcpy_from_tiny)(void *dest, const void __iomem *src, int size);
-	mbox_ipi_cb_t ipi_cb;
-	void *ipi_priv;
+	void (*ipi_cb)(struct mtk_mbox_pin_recv *pin_recv);
 	mbox_rx_cb_t pre_cb;
 	mbox_rx_cb_t post_cb;
+	void (*memcpy_to_tiny)(void __iomem *dest, const void *src, int size);
+	void (*memcpy_from_tiny)(void *dest, const void __iomem *src, int size);
 	void *prdata;
-	bool log_enable;
 };
 
 /*
- * mbox callback function context definition
+ * mbox callback function context defination
  * 0: isr context, 1:process context
  */
 enum MBOX_PIN_CTX {
@@ -180,7 +130,7 @@ enum MBOX_PIN_CTX {
 };
 
 /*
- * mbox buffer full action definition
+ * mbox buffer full action defination
  * 0:drop, 1:assert, 2:overwrite
  */
 enum MBOX_BUF_OPT {
@@ -192,12 +142,12 @@ enum MBOX_BUF_OPT {
 };
 
 /*
- * mbox recv action definition
- * 0:receive message, 1:receive ack
+ * mbox recv action defination
+ * 0:for recv, 1:for response
  */
 enum MBOX_RECV_OPT {
-	MBOX_RECV_MESSAGE  = 0,
-	MBOX_RECV_ACK      = 1,
+	MBOX_RECV         = 0,
+	MBOX_RESPONSE     = 1,
 };
 
 /*
@@ -211,11 +161,10 @@ enum MBOX_RECV_OPT {
  * enable :mbox status, 0:disable, 1: enable
  * is64d  :mbox is64d status, 0:32d, 1: 64d
  * base   :mbox base address
- * set_irq_reg  :mbox set irq register
- * clr_irq_reg  :mbox clear irq register
- * init_base_reg:mbox initialize register
- * mbox lock    :lock of mbox
- * record       :mbox record information
+ * set_irq_reg  : mbox set irq register
+ * clr_irq_reg  : mbox clear irq register
+ * init_base_reg: mbox initialize register
+ * mbox lock    : lock of mbox
  */
 struct mtk_mbox_info {
 	struct mtk_mbox_device *mbdev;
@@ -232,19 +181,15 @@ struct mtk_mbox_info {
 	void __iomem *send_status_reg;
 	void __iomem *recv_status_reg;
 	spinlock_t mbox_lock;
-	struct mtk_mbox_record record;
 };
 
 /*
- * mbox return value definition
+ * mbox return value defination
  */
 enum MBOX_RETURN {
-	MBOX_READ_SZ_ERR  = -6,
-	MBOX_WRITE_SZ_ERR = -5,
-	MBOX_PARA_ERR     = -4,
-	MBOX_CONFIG_ERR   = -3,
-	MBOX_IRQ_ERR      = -2,
-	MBOX_PLT_ERR      = -1,
+	MBOX_CONFIG_ERROR = -3,
+	MBOX_IRQ_ERROR    = -2,
+	MBOX_PARA_ERROR   = -1,
 	MBOX_DONE         = 0,
 	MBOX_PIN_BUSY     = 1,
 };
@@ -295,15 +240,13 @@ int mtk_mbox_clr_irq(struct mtk_mbox_device *mbdev, unsigned int mbox,
 		unsigned int irq);
 int mtk_mbox_trigger_irq(struct mtk_mbox_device *mbdev, unsigned int mbox,
 		unsigned int irq);
-unsigned int mtk_mbox_read_recv_irq(struct mtk_mbox_device *mbdev,
+unsigned int mtk_mbox_read_irq_status(struct mtk_mbox_device *mbdev,
 		unsigned int mbox);
 int mtk_mbox_set_base_addr(struct mtk_mbox_device *mbdev, unsigned int mbox,
 		unsigned int addr);
 unsigned int mtk_mbox_check_send_irq(struct mtk_mbox_device *mbdev,
 		unsigned int mbox, unsigned int pin_index);
 int mtk_mbox_probe(struct platform_device *pdev, struct mtk_mbox_device *mbdev,
-		unsigned int mbox);
-int mtk_mbox_scp_probe(struct platform_device *pdev, struct mtk_mbox_device *mbdev,
 		unsigned int mbox);
 int mtk_mbox_cb_register(struct mtk_mbox_device *mbdev, unsigned int pin_offset,
 		mbox_pin_cb_t mbox_pin_cb, void *prdata);
@@ -313,13 +256,7 @@ int mtk_smem_init(struct platform_device *pdev, struct mtk_mbox_device *mbdev,
 		unsigned int mbox, void __iomem *base,
 		void __iomem *set_irq_reg, void __iomem *clr_irq_reg,
 		void __iomem *send_status_reg, void __iomem *recv_status_reg);
-void mtk_mbox_dump_all(struct mtk_mbox_device *mbdev);
-void mtk_mbox_dump_recv(struct mtk_mbox_device *mbdev, unsigned int pin);
-void mtk_mbox_dump_recv_pin(struct mtk_mbox_device *mbdev,
-	struct mtk_mbox_pin_recv *pin_recv);
-void mtk_mbox_dump_send(struct mtk_mbox_device *mbdev, unsigned int pin);
-void mtk_mbox_dump(struct mtk_mbox_device *mbdev, unsigned int mbox);
-int mtk_mbox_log_enable(struct mtk_mbox_device *mbdev, bool enable);
-void mtk_mbox_reset_record(struct mtk_mbox_device *mbdev);
+void mtk_mbox_info_dump(struct mtk_mbox_device *mbdev);
+
 #endif
 

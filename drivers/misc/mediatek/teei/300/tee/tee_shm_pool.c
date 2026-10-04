@@ -90,7 +90,7 @@ static int pool_res_mem_mgr_init(struct tee_shm_pool_mgr *mgr,
 }
 
 /**
- * isee_shm_pool_alloc_res_mem() - Create a shared memory pool from reserved
+ * tee_shm_pool_alloc_res_mem() - Create a shared memory pool from reserved
  * memory range
  * @priv_info:	Information for driver private shared memory pool
  * @dmabuf_info: Information for dma-buf shared memory pool
@@ -103,7 +103,7 @@ static int pool_res_mem_mgr_init(struct tee_shm_pool_mgr *mgr,
  * @returns pointer to a 'struct tee_shm_pool' or an ERR_PTR on failure.
  */
 struct tee_shm_pool *
-isee_shm_pool_alloc_res_mem(struct tee_shm_pool_mem_info *priv_info,
+tee_shm_pool_alloc_res_mem(struct tee_shm_pool_mem_info *priv_info,
 			   struct tee_shm_pool_mem_info *dmabuf_info)
 {
 	struct tee_shm_pool *pool = NULL;
@@ -144,18 +144,18 @@ err:
 	kfree(pool);
 	return ERR_PTR(ret);
 }
-EXPORT_SYMBOL_GPL(isee_shm_pool_alloc_res_mem);
+EXPORT_SYMBOL_GPL(tee_shm_pool_alloc_res_mem);
 
 /**
- * isee_shm_pool_free() - Free a shared memory pool
+ * tee_shm_pool_free() - Free a shared memory pool
  * @pool:	The shared memory pool to free
  *
  * There must be no remaining shared memory allocated from this pool when
  * this function is called.
  */
-void isee_shm_pool_free(struct tee_shm_pool *pool)
+void tee_shm_pool_free(struct tee_shm_pool *pool)
 {
 	pool->destroy(pool);
 	kfree(pool);
 }
-EXPORT_SYMBOL_GPL(isee_shm_pool_free);
+EXPORT_SYMBOL_GPL(tee_shm_pool_free);

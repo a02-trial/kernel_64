@@ -11,7 +11,6 @@
  * GNU General Public License for more details.
  */
 
-
 /** Commands for TA memory **/
 
 #ifndef __TRUSTZONE_TA_MEM__

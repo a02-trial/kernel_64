@@ -15,7 +15,6 @@
 #define _TZIRS_H_
 
 #include <linux/ioctl.h>
-#include <linux/kconfig.h>
 
 #define IOC_MAGIC 'h'
 #define IOCTL_IRS_CMD _IOWR(IOC_MAGIC, 1, struct irs_ctx)
@@ -48,11 +47,6 @@ typedef enum {
 	IRS_DENY_DELETE_FROM_SMC,
 	IRS_SUCCESS			= 0		/*Success result*/
 } TZ_IRS_ERR;
-
-#if IS_MODULE(CONFIG_TZDEV)
-int tzirs_init(void);
-void tzirs_exit(void);
-#endif
 
 long tzirs_smc(unsigned long *p1, unsigned long *p2, unsigned long *p3);
 

@@ -82,50 +82,6 @@ config SND_SOC_MT6785_MT6359
 	  Select Y if you have such device.
 	  If unsure select "N".
 
-config SND_SOC_MT6853
-	tristate "ASoC support for Mediatek MT6853 chip"
-	select REGMAP_MMIO
-	select SND_SOC_MEDIATEK
-	select SND_SOC_MTK_SRAM
-	select SND_SOC_MTK_SMART_PHONE
-	help
-	  This adds ASoC driver for Mediatek MT6853 boards
-	  that can be used with other codecs.
-	  Select Y if you have such device.
-	  If unsure select "N".
-
-config SND_SOC_MT6853_MT6359
-	tristate "ASoc Audio driver for MT6853 with MT6359 codec"
-	select SND_SOC_MT6853
-	select SND_SOC_MT6359
-	help
-	  This adds ASoC driver for Mediatek MT6853 boards
-	  with the MT6359 codecs.
-	  Select Y if you have such device.
-	  If unsure select "N".
-
-config SND_SOC_MT6873
-	tristate "ASoC support for Mediatek MT6873 chip"
-	select REGMAP_MMIO
-	select SND_SOC_MEDIATEK
-	select SND_SOC_MTK_SRAM
-	select SND_SOC_MTK_SMART_PHONE
-	help
-	  This adds ASoC driver for Mediatek MT6873 boards
-	  that can be used with other codecs.
-	  Select Y if you have such device.
-	  If unsure select "N".
-
-config SND_SOC_MT6873_MT6359
-	tristate "ASoc Audio driver for MT6873 with MT6359 codec"
-	select SND_SOC_MT6873
-	select SND_SOC_MT6359
-	help
-	  This adds ASoC driver for Mediatek MT6873 boards
-	  with the MT6359 codecs.
-	  Select Y if you have such device.
-	  If unsure select "N".
-
 config SND_SOC_MT6885
 	tristate "ASoC support for Mediatek MT6885 chip"
 	select REGMAP_MMIO
@@ -148,25 +104,6 @@ config SND_SOC_MT6885_MT6359
 	  Select Y if you have such device.
 	  If unsure select "N".
 
-config SND_SOC_MT6893
-	tristate "ASoC support for Mediatek MT6893 chip"
-	select SND_SOC_MT6885
-	help
-	  This adds ASoC driver for Mediatek MT6893 boards
-	  that can be used with other codecs.
-	  Select Y if you have such device.
-	  If unsure select "N".
-
-config SND_SOC_MT6893_MT6359
-	tristate "ASoc Audio driver for MT6893 with MT6359 codec"
-	select SND_SOC_MT6893
-	select SND_SOC_MT6359
-	help
-	  This adds ASoC driver for Mediatek MT6885 boards
-	  with the MT6359 codecs.
-	  Select Y if you have such device.
-	  If unsure select "N".
-
 config SND_SOC_MT8168
 	tristate "ASoC support for Mediatek MT8168 chip"
 	depends on ARCH_MEDIATEK
@@ -177,15 +114,6 @@ config SND_SOC_MT8168
 	  Select Y if you have such device.
 	  Ex: MT8168
 
-config SND_SOC_MT8168_EVB
-	tristate "ASoC Audio driver for MT8168 EVB Board"
-	depends on SND_SOC_MT8168
-	help
-	  This adds support for ASoC machine driver for Mediatek MT8168.
-	  Select Y if you have such device.
-	  If unsure select "N".
-	  Ex: MT8168
-
 config SND_SOC_MT8168_FPGA
 	tristate "ASoC Audio driver for MT8168 Early Porting"
 	depends on SND_SOC_MT8168
@@ -193,17 +121,6 @@ config SND_SOC_MT8168_FPGA
 	  This adds ASoC driver for Mediatek MT8168 FPGA boards
 	  Select Y if you have such device.
 	  If unsure select "N".
-	  Ex: MT8168
-
-config SND_SOC_MT8168_P1
-	tristate "ASoC Audio driver for MT8168 P1 Board"
-	depends on SND_SOC_MT8168
-	help
-	  This adds support for ASoC machine driver for Mediatek MT8168
-	  that used MT6357 codec.
-	  Select Y if you have such device.
-	  If unsure select "N".
-	  Ex: MT8168
 
 config SND_SOC_MT8173
 	tristate "ASoC support for Mediatek MT8173 chip"
@@ -319,6 +236,15 @@ config MTK_SND_SOC_NEW_ARCH
 	  If new chip after mt6757, we will enable this config.
 	  Audio driver refactor to common folder and platform folder.
 
+config MTK_AUDIO_TUNNELING_SUPPORT
+	bool "Audio playback through dsp"
+	select SND_SOC_COMPRESS
+	help
+	  Only enable this when we have DSP.
+	  This makes audio output pass bitstream without any post processing.
+	  The decoding process is done in DSP.
+	  Select Y to enable MTK_AUDIO_TUNNELING_SUPPORT for DSP playback.
+
 config MTK_VOW_BARGE_IN_SUPPORT
 	bool "Support VOW barge-in"
 	help
@@ -330,9 +256,7 @@ config MTK_VOW_BARGE_IN_SUPPORT
 
 config SND_SOC_MTK_AUDIO_DSP
 	bool "ASoC support for Mediatek audiodsp chip"
-	depends on MTK_AUDIODSP_SUPPORT
 	default n
-	select SND_SOC_COMPRESS
 	help
 	  This adds dsp driver for Mediatek boards
 	  that can be used with other platforms

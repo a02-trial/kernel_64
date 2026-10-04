@@ -22,7 +22,7 @@
 #include <linux/mfd/samsung/s2mu005-private.h>
 #include <linux/leds-s2mu005.h>
 #include <linux/platform_device.h>
-#include <../../../../battery/common/sec_battery.h>
+#include <../drivers/battery/common/sec_battery.h>
 
 #define FLED_PINCTRL_STATE_DEFAULT "fled_default"
 #define FLED_PINCTRL_STATE_SLEEP "fled_sleep"
@@ -39,8 +39,6 @@ struct s2mu005_led_data * g_led_datas[S2MU005_LED_MAX];
 int ta_attached = 0;
 int sdp_attached = 0;
 extern int factory_mode;
-
-static bool fd_use;
 
 static u8 leds_cur_max[] = {
 	S2MU005_FLASH_OUT_I_1200MA,
@@ -553,12 +551,13 @@ int ss_rear_flash_led_torch_on()
 
 int ss_rear_flash_led_turn_off()
 {
-	struct i2c_client * client;
-	client = g_led_datas[S2MU005_FLASH_LED]->i2c;
-	assistive_light = false;
-
-	return s2mu005_update_reg(client,CH_FLASH_TORCH_EN,S2MU005_FLASH_TORCH_OFF,S2MU005_CH1_FLASH_TORCH_OFF_MASK);
-
+	if (assistive_light == false) {
+	     struct i2c_client * client;
+	     client = g_led_datas[S2MU005_FLASH_LED]->i2c;
+		 
+	     return s2mu005_update_reg(client,CH_FLASH_TORCH_EN,S2MU005_FLASH_TORCH_OFF,S2MU005_CH1_FLASH_TORCH_OFF_MASK);
+	}
+	return 0;	
 }EXPORT_SYMBOL_GPL(ss_rear_flash_led_turn_off);
 
 int ss_rear_torch_set_flashlight(bool isFlashlight)
@@ -580,6 +579,25 @@ int ss_rear_torch_set_flashlight(bool isFlashlight)
 	}
 	return 0;
 }EXPORT_SYMBOL_GPL(ss_rear_torch_set_flashlight);
+
+int ss_rear_flash_set_brightness(int brightness)
+{
+	struct s2mu005_led_data *led_data = g_led_datas[S2MU005_FLASH_LED];
+
+	pr_info("%s Input Current=%d\n", __func__, brightness);
+	int level = S2MU005_FLASH_BRIGHTNESS(brightness);
+	/* flash brightness set */
+	s2mu005_update_reg(led_data->i2c, S2MU005_REG_FLED_CH1_CTRL0,
+		level, S2MU005_FLASH_IOUT_MASK);
+
+	/* torch brightness set */
+	if (brightness <= 400) {
+		level = S2MU005_TORCH_BRIGHTNESS(brightness);
+		s2mu005_update_reg(led_data->i2c, S2MU005_REG_FLED_CH1_CTRL1,
+		level, S2MU005_TORCH_IOUT_MASK);
+	}
+	return 0;
+} EXPORT_SYMBOL_GPL(ss_rear_flash_set_brightness);
 
 #ifdef S2MU005_FLED_DEBUG
 int s2mu005_led_dump_reg(void)
@@ -767,23 +785,23 @@ static ssize_t rear_flash_store(struct device *dev,
 			break;
 		/* 5-level brightness for torch */
 		case 1001:
-			brightness = S2MU005_TORCH_OUT_I_25MA;
-			assistive_light = true;
-			break;
-		case 1002:
 			brightness = S2MU005_TORCH_OUT_I_50MA;
 			assistive_light = true;
 			break;
-		case 1004:
+		case 1002:
 			brightness = S2MU005_TORCH_OUT_I_75MA;
 			assistive_light = true;
 			break;
+		case 1004:
+			brightness = S2MU005_TORCH_OUT_I_125MA;
+			assistive_light = true;
+			break;
 		case 1006:
-			brightness = S2MU005_TORCH_OUT_I_100MA;
+			brightness = S2MU005_TORCH_OUT_I_175MA;
 			assistive_light = true;
 			break;
 		case 1009:
-			brightness = S2MU005_TORCH_OUT_I_125MA;
+			brightness = S2MU005_TORCH_OUT_I_225MA;
 			assistive_light = true;
 			break;
 		default:
@@ -938,12 +956,6 @@ int create_flash_sysfs(void)
 	
 	return 0;
 }
-
-bool s2mu005_is_fd_in_use() {
-	return fd_use;
-
-}
-EXPORT_SYMBOL(s2mu005_is_fd_in_use);
 
 static int s2mu005_led_probe(struct platform_device *pdev)
 {

@@ -32,6 +32,10 @@
 #include <mt-plat/upmu_common.h>
 #include <mt-plat/mtk_auxadc_intf.h>
 
+#ifdef CONFIG_MTK_PMIC_WRAP_HAL
+#include <mach/mtk_pmic_wrap.h>
+#endif
+
 #ifndef CONFIG_MTK_GAUGE_VERSION
 #define CONFIG_MTK_GAUGE_VERSION 0
 #endif
@@ -122,7 +126,6 @@ static void wk_auxadc_dbg_dump(void)
 {
 	unsigned char reg_log[861] = "", reg_str[21] = "";
 	unsigned short i, j;
-	unsigned int len = 0;
 	static unsigned char dbg_stamp;
 	static struct pmic_adc_dbg_st pmic_adc_dbg[4];
 
@@ -152,9 +155,9 @@ static void wk_auxadc_dbg_dump(void)
 					reg_log);
 				strncpy(reg_log, "", 860);
 			}
-			len += snprintf(reg_str, 20, "Reg[0x%x]=0x%x, ",
-					adc_dbg_addr[j],
-					pmic_adc_dbg[dbg_stamp].reg[j]);
+			snprintf(reg_str, 20, "Reg[0x%x]=0x%x, ",
+				adc_dbg_addr[j],
+				pmic_adc_dbg[dbg_stamp].reg[j]);
 			strncat(reg_log, reg_str, 860);
 		}
 		pr_notice("%d %s\n\n",
@@ -271,6 +274,9 @@ void wake_up_mdrt_thread(void)
 /* dump MDRT related register */
 static void mdrt_reg_dump(void)
 {
+#ifdef CONFIG_MTK_PMIC_WRAP_HAL
+	pwrap_dump_all_register();
+#endif
 	pr_notice("AUXADC_ADC15 = 0x%x\n",
 		upmu_get_reg_value(MT6359_AUXADC_ADC15));
 	pr_notice("AUXADC_ADC16 = 0x%x\n",
@@ -398,6 +404,9 @@ static int mdrt_kthread(void *x)
 
 		set_current_state(TASK_INTERRUPTIBLE);
 		schedule();
+		/* Fix Cove.Scan, should not happened */
+		if (polling_cnt >= 0x1000)
+			break;
 	}
 	return 0;
 }
@@ -553,7 +562,7 @@ out:
 int pmic_auxadc_chip_init(struct device *dev)
 {
 	int ret = 0;
-	struct iio_channel *chan_vbif = NULL;
+	struct iio_channel *chan_vbif;
 
 	HKLOG("%s\n", __func__);
 	pmic_auxadc_dev = dev;

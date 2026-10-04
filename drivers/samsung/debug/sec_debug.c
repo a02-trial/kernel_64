@@ -32,34 +32,19 @@
 #include <linux/sched/mm.h>
 #include <linux/sched/debug.h>
 #include <linux/nmi.h>
-#include <linux/sec_hard_reset_hook.h>
-
-/* get time function to log */
-#ifndef arch_irq_stat_cpu
-#define arch_irq_stat_cpu(cpu) 0
-#endif
-#ifndef arch_irq_stat
-#define arch_irq_stat() 0
-#endif
 
 static u32 __initdata sec_extra_info_base = SEC_EXTRA_INFO_BASE;
 static u32 __initdata sec_extra_info_size = SZ_64K;
 
 DEFINE_PER_CPU(unsigned char, coreregs_stored);
-#ifdef CONFIG_MACH_MT6739
 DEFINE_PER_CPU(struct pt_regs, sec_debug_core_reg);
 DEFINE_PER_CPU(sec_debug_mmu_reg_t, sec_debug_mmu_reg);
-#else
-DEFINE_PER_CPU(struct pt_regs, sec_aarch64_core_reg);
-DEFINE_PER_CPU(sec_debug_mmu_reg_t, sec_aarch64_mmu_reg);
-#endif
 
 union sec_debug_level_t sec_debug_level = { .en.kernel_fault = 1, };
 module_param_named(enable, sec_debug_level.en.kernel_fault, ushort, 0644);
 module_param_named(enable_user, sec_debug_level.en.user_fault, ushort, 0644);
 module_param_named(level, sec_debug_level.uint_val, uint, 0644);
 
-#ifdef CONFIG_MACH_MT6739
 void sec_debug_save_core_reg(void *v_regs)
 {
 	struct pt_regs *regs = (struct pt_regs *)v_regs;
@@ -81,14 +66,70 @@ void sec_debug_save_core_reg(void *v_regs)
 			"str r9, [r0,#36]\n\t"		/* R9 */
 			"str r10, [r0,#40]\n\t"		/* R10 */
 			"str r11, [r0,#44]\n\t"		/* R11 */
-			"str r12, [r0,#48]\n\t"		/* R12 ip*/
-			"str r13, [r0,#52]\n\t"		/* R13 sp */
-			"str r14, [r0,#56]\n\t"		/* R14 lr */
+			"str r12, [r0,#48]\n\t"		/* R12 */
+			/* SVC */
+			"str r13, [r0,#52]\n\t"		/* R13_SVC */
+			"str r14, [r0,#56]\n\t"		/* R14_SVC */
+			"mrs r1, spsr\n\t"		/* SPSR_SVC */
+			"str r1, [r0,#60]\n\t"
 			/* PC and CPSR */
 			"sub r1, r15, #0x4\n\t"		/* PC */
-			"str r1, [r0,#60]\n\t"
+			"str r1, [r0,#64]\n\t"
 			"mrs r1, cpsr\n\t"		/* CPSR */
-			"str r1, [r0,#64]\n\t" :		/* output */
+			"str r1, [r0,#68]\n\t"
+			/* SYS/USR */
+			"mrs r1, cpsr\n\t"		/* switch to SYS mode */
+			"and r1, r1, #0xFFFFFFE0\n\t"
+			"orr r1, r1, #0x1f\n\t"
+			"msr cpsr,r1\n\t"
+			"str r13, [r0,#72]\n\t"		/* R13_USR */
+			"str r14, [r0,#76]\n\t"		/* R14_USR */
+			/* FIQ */
+			"mrs r1, cpsr\n\t"		/* switch to FIQ mode */
+			"and r1,r1,#0xFFFFFFE0\n\t"
+			"orr r1,r1,#0x11\n\t"
+			"msr cpsr,r1\n\t"
+			"str r8, [r0,#80]\n\t"		/* R8_FIQ */
+			"str r9, [r0,#84]\n\t"		/* R9_FIQ */
+			"str r10, [r0,#88]\n\t"		/* R10_FIQ */
+			"str r11, [r0,#92]\n\t"		/* R11_FIQ */
+			"str r12, [r0,#96]\n\t"		/* R12_FIQ */
+			"str r13, [r0,#100]\n\t"	/* R13_FIQ */
+			"str r14, [r0,#104]\n\t"	/* R14_FIQ */
+			"mrs r1, spsr\n\t"		/* SPSR_FIQ */
+			"str r1, [r0,#108]\n\t"
+			/* IRQ */
+			"mrs r1, cpsr\n\t"		/* switch to IRQ mode */
+			"and r1, r1, #0xFFFFFFE0\n\t"
+			"orr r1, r1, #0x12\n\t"
+			"msr cpsr,r1\n\t"
+			"str r13, [r0,#112]\n\t"	/* R13_IRQ */
+			"str r14, [r0,#116]\n\t"	/* R14_IRQ */
+			"mrs r1, spsr\n\t"		/* SPSR_IRQ */
+			"str r1, [r0,#120]\n\t"
+			/* ABT */
+			"mrs r1, cpsr\n\t"		/* switch to Abort mode */
+			"and r1, r1, #0xFFFFFFE0\n\t"
+			"orr r1, r1, #0x17\n\t"
+			"msr cpsr,r1\n\t"
+			"str r13, [r0,#136]\n\t"	/* R13_ABT */
+			"str r14, [r0,#140]\n\t"	/* R14_ABT */
+			"mrs r1, spsr\n\t"		/* SPSR_ABT */
+			"str r1, [r0,#144]\n\t"
+			/* UND */
+			"mrs r1, cpsr\n\t"		/* switch to undef mode */
+			"and r1, r1, #0xFFFFFFE0\n\t"
+			"orr r1, r1, #0x1B\n\t"
+			"msr cpsr,r1\n\t"
+			"str r13, [r0,#148]\n\t"	/* R13_UND */
+			"str r14, [r0,#152]\n\t"	/* R14_UND */
+			"mrs r1, spsr\n\t"		/* SPSR_UND */
+			"str r1, [r0,#156]\n\t"
+			/* restore to SVC mode */
+			"mrs r1, cpsr\n\t"		/* switch to SVC mode */
+			"and r1, r1, #0xFFFFFFE0\n\t"
+			"orr r1, r1, #0x13\n\t"
+			"msr cpsr,r1\n\t" :		/* output */
 			: "r"(core_reg)			/* input */
 			: "%r0", "%r1"			/* clobbered registers */
 		);
@@ -139,96 +180,17 @@ void sec_debug_save_mmu_reg(sec_debug_mmu_reg_t *mmu_reg)
 		: "%r1", "memory"			/* clobbered register */
 	);
 }
-#else
-void sec_debug_save_core_reg(void *v_regs)
-{
-	struct pt_regs *regs = (struct pt_regs *)v_regs;
-	struct pt_regs *core_reg =
-			&per_cpu(sec_aarch64_core_reg, smp_processor_id());
 
-	if (!regs) {
-		asm volatile (
-			"stp x0, x1, [%0, #8 * 0]\n\t"
-			"stp x2, x3, [%0, #8 * 2]\n\t"
-			"stp x4, x5, [%0, #8 * 4]\n\t"
-			"stp x6, x7, [%0, #8 * 6]\n\t"
-			"stp x8, x9, [%0, #8 * 8]\n\t"
-			"stp x10, x11, [%0, #8 * 10]\n\t"
-			"stp x12, x13, [%0, #8 * 12]\n\t"
-			"stp x14, x15, [%0, #8 * 14]\n\t"
-			"stp x16, x17, [%0, #8 * 16]\n\t"
-			"stp x18, x19, [%0, #8 * 18]\n\t"
-			"stp x20, x21, [%0, #8 * 20]\n\t"
-			"stp x22, x23, [%0, #8 * 22]\n\t"
-			"stp x24, x25, [%0, #8 * 24]\n\t"
-			"stp x26, x27, [%0, #8 * 26]\n\t"
-			"stp x28, x29, [%0, #8 * 28]\n\t"
-			"stp x5, x6, [sp,#-32]!\n\t"
-			"str x7, [sp,#16]\n\t"
-			"mov x5, sp\n\t"
-			"stp x30, x5, [%0, #8 * 30]\n\t"
-			"adr x6, 1f\n\t"
-			"mrs x7, spsr_el1\n\t"
-			"stp x6, x7, [%0, #8 * 32]\n\t"
-			"ldr x7, [sp,#16]\n\t"
-			"ldp x5, x6, [sp],#32\n\t"
-		"1:"
-			:
-			: "r" (&core_reg->regs[0])
-			: "memory"
-		);
-	} else {
-		memcpy(core_reg, regs, sizeof(struct pt_regs));
-	}
-
-	return;
-}
-
-void sec_debug_save_mmu_reg(sec_debug_mmu_reg_t *mmu_reg)
-{
-	asm("mrs x1, SCTLR_EL1\n\t"		/* SCTLR_EL1 */
-	    "str x1, [%0]\n\t"
-	    "mrs x1, TTBR0_EL1\n\t"		/* TTBR0_EL1 */
-	    "str x1, [%0,#8]\n\t"
-	    "mrs x1, TTBR1_EL1\n\t"		/* TTBR1_EL1 */
-	    "str x1, [%0,#16]\n\t"
-	    "mrs x1, TCR_EL1\n\t"		/* TCR_EL1 */
-	    "str x1, [%0,#24]\n\t"
-	    "mrs x1, ESR_EL1\n\t"		/* ESR_EL1 */
-	    "str x1, [%0,#32]\n\t"
-	    "mrs x1, FAR_EL1\n\t"		/* FAR_EL1 */
-	    "str x1, [%0,#40]\n\t"
-	    /* Don't populate AFSR0_EL1 and AFSR1_EL1 */
-	    "mrs x1, CONTEXTIDR_EL1\n\t"	/* CONTEXTIDR_EL1 */
-	    "str x1, [%0,#48]\n\t"
-	    "mrs x1, TPIDR_EL0\n\t"		/* TPIDR_EL0 */
-	    "str x1, [%0,#56]\n\t"
-	    "mrs x1, TPIDRRO_EL0\n\t"		/* TPIDRRO_EL0 */
-	    "str x1, [%0,#64]\n\t"
-	    "mrs x1, TPIDR_EL1\n\t"		/* TPIDR_EL1 */
-	    "str x1, [%0,#72]\n\t"
-	    "mrs x1, MAIR_EL1\n\t"		/* MAIR_EL1 */
-	    "str x1, [%0,#80]\n\t" :		/* output */
-	    : "r"(mmu_reg)			/* input */
-	    : "%x1", "memory"			/* clobbered register */
-	);
-}
-#endif
 
 void sec_debug_init_mmu(void *unused)
 {
-#ifdef CONFIG_MACH_MT6739
 	sec_debug_save_mmu_reg(&per_cpu(sec_debug_mmu_reg, raw_smp_processor_id()));
-#else
-	sec_debug_save_mmu_reg(&per_cpu(sec_aarch64_mmu_reg, raw_smp_processor_id()));
-#endif
 }
 
 int sec_save_context(int cpu, void *v_regs)
 {
 	unsigned long flags;
 	struct pt_regs *regs = (struct pt_regs *)v_regs;
-	//struct pt_regs tmp;
 
 	if (cpu == _THIS_CPU) {
 		if (__this_cpu_read(coreregs_stored)) {
@@ -245,27 +207,12 @@ int sec_save_context(int cpu, void *v_regs)
 	local_irq_save(flags);
 	sec_debug_save_core_reg(regs);
 
-#ifdef CONFIG_MACH_MT6739
 	if (cpu == _THIS_CPU) {
 		sec_debug_save_mmu_reg(&per_cpu(sec_debug_mmu_reg, smp_processor_id()));
-	} else {
-		sec_debug_save_mmu_reg(&per_cpu(sec_debug_mmu_reg, cpu));
-	}
-#else
-	if (cpu == _THIS_CPU) {
-		sec_debug_save_mmu_reg(&per_cpu(sec_aarch64_mmu_reg, smp_processor_id()));
-	} else {
-		sec_debug_save_mmu_reg(&per_cpu(sec_aarch64_mmu_reg, cpu));
-	}
-#endif
-	//crash_setup_regs(&tmp, regs);
-	//crash_save_vmcoreinfo();
-	if (cpu == _THIS_CPU) {
-		//crash_save_cpu(&tmp, smp_processor_id());
 		__this_cpu_inc(coreregs_stored);
 		pr_emerg("context saved(CPU:%d)\n", smp_processor_id());
 	} else {
-		//crash_save_cpu(&tmp, cpu);
+		sec_debug_save_mmu_reg(&per_cpu(sec_debug_mmu_reg, cpu));
 		++per_cpu(coreregs_stored, cpu);
 		pr_emerg("context saved(CPU:%d)\n", cpu);
 	}
@@ -337,11 +284,25 @@ static int __init sec_debug_user_fault_init(void)
 }
 device_initcall(sec_debug_user_fault_init);
 
+#if defined(CONFIG_TOUCHSCREEN_DUMP_MODE)
+struct tsp_dump_callbacks dump_callbacks;
+static inline void tsp_dump(void)
+{
+	pr_err("[TSP] dump_tsp_log : %d\n", __LINE__);
+	if (dump_callbacks.inform_dump)
+		dump_callbacks.inform_dump();
+}
+#endif
+
 void sec_debug_check_crash_key(unsigned int code, int value)
 {
 	static bool volup_p;
 	static bool voldown_p;
 	static int loopcount;
+#if defined(CONFIG_TOUCHSCREEN_DUMP_MODE)
+	static int tsp_dump_count;
+#endif
+
 	if (!SEC_DEBUG_LEVEL(kernel))
 		return;
 
@@ -367,9 +328,29 @@ void sec_debug_check_crash_key(unsigned int code, int value)
 			}
 		}
 
+#if defined(CONFIG_TOUCHSCREEN_DUMP_MODE)
+		/* dump TSP rawdata
+		 *	Hold volume up key first
+		 *	and then press home key twice
+		 *	and volume down key should not be pressed
+		 */
+		if (volup_p && !voldown_p) {
+			if (code == KEY_HOMEPAGE) {
+				pr_info("%s: count to dump tsp rawdata : %d\n",
+					 __func__, ++tsp_dump_count);
+				if (tsp_dump_count == 2) {
+					tsp_dump();
+					tsp_dump_count = 0;
+				}
+			}
+		}
+#endif
 	} else {
 		if (code == KEY_VOLUMEUP) {
 			volup_p = false;
+#if defined(CONFIG_TOUCHSCREEN_DUMP_MODE)
+			tsp_dump_count = 0;
+#endif
 		}
 		if (code == KEY_VOLUMEDOWN) {
 			loopcount = 0;
@@ -398,8 +379,6 @@ void sec_upload_cause(void *buf)
 
 	if (!strncmp(buf, "User Fault", 10))
 		LAST_RR_SET(upload_reason, UPLOAD_CAUSE_USER_FAULT);
-	else if (is_hard_reset_occurred())
-		LAST_RR_SET(upload_reason, UPLOAD_CAUSE_FORCED_UPLOAD);		
 	else if (!strncmp(buf, "Crash Key", 9))
 		LAST_RR_SET(upload_reason, UPLOAD_CAUSE_FORCED_UPLOAD);
 	else if (!strncmp(buf, "User Crash Key", 14))
@@ -414,25 +393,30 @@ void sec_upload_cause(void *buf)
 	LAST_RR_MEMCPY(panic_str, buf, PANIC_STRBUF_LEN);		
 }
 
-#ifndef CONFIG_MACH_MT6739
 static void sec_dump_one_task_info(struct task_struct *tsk, bool is_main)
 {
-	char state_array[] = {'R', 'S', 'D', 'T', 't', 'X', 'Z', 'P', 'x', 'K', 'W', 'I', 'N'};
+	char state_array[] = {'R', 'S', 'D', 'T', 't', 'Z', 'X', 'x', 'K', 'W'};
 	unsigned char idx = 0;
-	unsigned long state;
+	unsigned long state = (tsk->state & TASK_REPORT) | tsk->exit_state;
 	unsigned long wchan;
 	unsigned long pc = 0;
 	char symname[KSYM_NAME_LEN];
+	int permitted;
+	struct mm_struct *mm;
 
-	if ((tsk == NULL) || !try_get_task_stack(tsk))
-		return;
-	state = tsk->state | tsk->exit_state;
-
-	pc = KSTK_EIP(tsk);
+	permitted = ptrace_may_access(tsk, PTRACE_MODE_READ_FSCREDS | PTRACE_MODE_NOAUDIT);
+	mm = get_task_mm(tsk);
+	if (mm) {
+		if (permitted)
+			pc = KSTK_EIP(tsk);
+	}
 
 	wchan = get_wchan(tsk);
 	if (lookup_symbol_name(wchan, symname) < 0) {
-		snprintf(symname, KSYM_NAME_LEN, "%lu", wchan);
+		if (!ptrace_may_access(tsk, PTRACE_MODE_READ_FSCREDS))
+			snprintf(symname, KSYM_NAME_LEN,  "_____");
+		else
+			snprintf(symname, KSYM_NAME_LEN, "%lu", wchan);
 	}
 
 	while (state) {
@@ -448,17 +432,10 @@ static void sec_dump_one_task_info(struct task_struct *tsk, bool is_main)
 			task_cpu(tsk), wchan, pc, (unsigned long)tsk,
 			is_main ? '*' : ' ', tsk->comm, symname);
 
-	if (tsk->state == TASK_RUNNING ||
-	    tsk->state == TASK_WAKING ||
-	    task_contributes_to_load(tsk)) {
-			print_worker_info(KERN_INFO, tsk);
-
-			if (tsk->on_cpu && tsk->on_rq &&
-		    	tsk->cpu != smp_processor_id())
-				return;
-
-			show_stack(tsk, NULL);
-			pr_info("\n");
+	if (tsk->state == TASK_RUNNING  ||  task_contributes_to_load(tsk)) {
+		print_worker_info(KERN_INFO, tsk);
+		show_stack(tsk, NULL);
+		pr_info("\n");
 	}
 }
 
@@ -469,7 +446,7 @@ static inline struct task_struct *get_next_thread(struct task_struct *tsk)
 				thread_group);
 }
 
-static void sec_dump_task_info(void)
+void sec_dump_task_info(void)
 {
 	struct task_struct *frst_tsk;
 	struct task_struct *curr_tsk;
@@ -507,46 +484,6 @@ static void sec_dump_task_info(void)
 	}
 	pr_info(" ----------------------------------------------------------------------------------------------------------------------------\n");
 }
-
-static void sec_dump_irq_info(void)
-{
-	int i, j;
-	unsigned long long sum = 0;
-
-	for_each_possible_cpu(i) {
-		sum += kstat_cpu_irqs_sum(i);
-		sum += arch_irq_stat_cpu(i);
-	}
-	sum += arch_irq_stat();
-
-	pr_info("\n");
-	pr_info("<irq info>");
-	pr_info("------------------------------------------------------------------\n");
-	pr_info("sum irq : %llu", sum);
-	pr_info("------------------------------------------------------------------\n");
-
-	for_each_irq_nr(j) {
-		unsigned int irq_stat = kstat_irqs(j);
-
-		if (irq_stat) {
-			struct irq_desc *desc = irq_to_desc(j);
-			const char *name;
-
-			name = desc->action ? (desc->action->name ? desc->action->name : "???") : "???";
-			pr_info("irq-%-4d(hwirq-%-4d) : %8u %s\n",
-				j, (int)desc->irq_data.hwirq, irq_stat, name);
-		}
-	}
-
-	pr_info("------------------------------------------------------------------\n");
-}
-
-void sec_debug_dump_info(void)
-{
-	sec_dump_task_info();
-	sec_dump_irq_info();
-}
-#endif
 
 static int sec_debug_check_magic(struct sec_debug_shared_info *sdi)
 {
@@ -622,11 +559,11 @@ static int __init sec_debug_init(void)
 	smp_call_function(sec_debug_init_mmu, NULL, 1);
 	sec_debug_init_mmu(NULL);
 
-	if (SEC_DEBUG_LEVEL(kernel)) {
-		LAST_RR_SET(mcupm_skip, UPLOAD_MAGIC_UPLOAD);
-		//sec_free_dbg_mem(LK_RSV_ADDR, LK_RSV_SIZE);
+#if 0
+	if (SEC_DEBUG_LEVEL(kernel) == 0) {
+		sec_free_dbg_mem(LK_RSV_ADDR, LK_RSV_SIZE);
 	}
-
+#endif
 	return 0;
 }
 postcore_initcall(sec_debug_init);

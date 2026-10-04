@@ -34,7 +34,6 @@ extern unsigned int tzdev_mem_verbosity;
 extern unsigned int tzdev_profiler_verbosity;
 extern unsigned int tzdev_nwfs_verbosity;
 extern unsigned int tzdev_pmf_verbosity;
-extern unsigned int tzdev_cpufreq_verbosity;
 
 enum {
 	TZDEV_LOG_LEVEL_ERROR,

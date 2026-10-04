@@ -1,6 +1,5 @@
-/* SPDX-License-Identifier: GPL-2.0 */
 /*
- * Copyright (C) 2016-2020 Samsung Electronics Co. Ltd.
+ * Copyright (C) 2016-2017 Samsung Electronics Co. Ltd.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -8,134 +7,15 @@
  * (at your option) any later version.
  */
 
-  /* usb notify layer v3.5 */
+  /* usb notify layer v3.3 */
 
 #ifndef __LINUX_USBLOG_PROC_NOTIFY_H__
 #define __LINUX_USBLOG_PROC_NOTIFY_H__
 
-#define NOTIFY_FOREACH_STATE(S)		\
-	S(NOTIFY_UNDEFINED_STATE),			\
-	S(NOTIFY_INVALID_STATE),			\
-	S(NOTIFY_TOGGLING),			\
-	S(NOTIFY_SRC_UNATTACHED),			\
-	S(NOTIFY_SRC_ATTACH_WAIT),			\
-	S(NOTIFY_SRC_ATTACHED),			\
-	S(NOTIFY_SRC_STARTUP),				\
-	S(NOTIFY_SRC_SEND_CAPABILITIES),		\
-	S(NOTIFY_SRC_SEND_CAPABILITIES_TIMEOUT),	\
-	S(NOTIFY_SRC_NEGOTIATE_CAPABILITIES),		\
-	S(NOTIFY_SRC_TRANSITION_SUPPLY),		\
-	S(NOTIFY_SRC_READY),				\
-	S(NOTIFY_SRC_WAIT_NEW_CAPABILITIES),		\
-						\
-	S(NOTIFY_SNK_UNATTACHED),			\
-	S(NOTIFY_SNK_ATTACH_WAIT),			\
-	S(NOTIFY_SNK_DEBOUNCED),			\
-	S(NOTIFY_SNK_ATTACHED),			\
-	S(NOTIFY_SNK_STARTUP),				\
-	S(NOTIFY_SNK_DISCOVERY),			\
-	S(NOTIFY_SNK_DISCOVERY_DEBOUNCE),		\
-	S(NOTIFY_SNK_DISCOVERY_DEBOUNCE_DONE),		\
-	S(NOTIFY_SNK_WAIT_CAPABILITIES),		\
-	S(NOTIFY_SNK_NEGOTIATE_CAPABILITIES),		\
-	S(NOTIFY_SNK_NEGOTIATE_PPS_CAPABILITIES),	\
-	S(NOTIFY_SNK_TRANSITION_SINK),			\
-	S(NOTIFY_SNK_TRANSITION_SINK_VBUS),		\
-	S(NOTIFY_SNK_READY),				\
-						\
-	S(NOTIFY_ACC_UNATTACHED),			\
-	S(NOTIFY_DEBUG_ACC_ATTACHED),			\
-	S(NOTIFY_AUDIO_ACC_ATTACHED),			\
-	S(NOTIFY_AUDIO_ACC_DEBOUNCE),			\
-						\
-	S(NOTIFY_HARD_RESET_SEND),			\
-	S(NOTIFY_HARD_RESET_START),			\
-	S(NOTIFY_SRC_HARD_RESET_VBUS_OFF),		\
-	S(NOTIFY_SRC_HARD_RESET_VBUS_ON),		\
-	S(NOTIFY_SNK_HARD_RESET_SINK_OFF),		\
-	S(NOTIFY_SNK_HARD_RESET_WAIT_VBUS),		\
-	S(NOTIFY_SNK_HARD_RESET_SINK_ON),		\
-						\
-	S(NOTIFY_SOFT_RESET),				\
-	S(NOTIFY_SOFT_RESET_SEND),			\
-						\
-	S(NOTIFY_DR_SWAP_ACCEPT),			\
-	S(NOTIFY_DR_SWAP_SEND),			\
-	S(NOTIFY_DR_SWAP_SEND_TIMEOUT),		\
-	S(NOTIFY_DR_SWAP_CANCEL),			\
-	S(NOTIFY_DR_SWAP_CHANGE_DR),			\
-						\
-	S(NOTIFY_PR_SWAP_ACCEPT),			\
-	S(NOTIFY_PR_SWAP_SEND),			\
-	S(NOTIFY_PR_SWAP_SEND_TIMEOUT),		\
-	S(NOTIFY_PR_SWAP_CANCEL),			\
-	S(NOTIFY_PR_SWAP_START),			\
-	S(NOTIFY_PR_SWAP_SRC_SNK_TRANSITION_OFF),	\
-	S(NOTIFY_PR_SWAP_SRC_SNK_SOURCE_OFF),		\
-	S(NOTIFY_PR_SWAP_SRC_SNK_SOURCE_OFF_CC_DEBOUNCED), \
-	S(NOTIFY_PR_SWAP_SRC_SNK_SINK_ON),		\
-	S(NOTIFY_PR_SWAP_SNK_SRC_SINK_OFF),		\
-	S(NOTIFY_PR_SWAP_SNK_SRC_SOURCE_ON),		\
-	S(NOTIFY_PR_SWAP_SNK_SRC_SOURCE_ON_VBUS_RAMPED_UP),    \
-						\
-	S(NOTIFY_VCONN_SWAP_ACCEPT),			\
-	S(NOTIFY_VCONN_SWAP_SEND),			\
-	S(NOTIFY_VCONN_SWAP_SEND_TIMEOUT),		\
-	S(NOTIFY_VCONN_SWAP_CANCEL),			\
-	S(NOTIFY_VCONN_SWAP_START),			\
-	S(NOTIFY_VCONN_SWAP_WAIT_FOR_VCONN),		\
-	S(NOTIFY_VCONN_SWAP_TURN_ON_VCONN),		\
-	S(NOTIFY_VCONN_SWAP_TURN_OFF_VCONN),		\
-						\
-	S(NOTIFY_SNK_TRY),				\
-	S(NOTIFY_SNK_TRY_WAIT),			\
-	S(NOTIFY_SNK_TRY_WAIT_DEBOUNCE),               \
-	S(NOTIFY_SNK_TRY_WAIT_DEBOUNCE_CHECK_VBUS),    \
-	S(NOTIFY_SRC_TRYWAIT),				\
-	S(NOTIFY_SRC_TRYWAIT_DEBOUNCE),		\
-	S(NOTIFY_SRC_TRYWAIT_UNATTACHED),		\
-						\
-	S(NOTIFY_SRC_TRY),				\
-	S(NOTIFY_SRC_TRY_WAIT),                        \
-	S(NOTIFY_SRC_TRY_DEBOUNCE),			\
-	S(NOTIFY_SNK_TRYWAIT),				\
-	S(NOTIFY_SNK_TRYWAIT_DEBOUNCE),		\
-	S(NOTIFY_SNK_TRYWAIT_VBUS),			\
-	S(NOTIFY_BIST_RX),				\
-						\
-	S(NOTIFY_GET_STATUS_SEND),			\
-	S(NOTIFY_GET_STATUS_SEND_TIMEOUT),		\
-	S(NOTIFY_GET_PPS_STATUS_SEND),			\
-	S(NOTIFY_GET_PPS_STATUS_SEND_TIMEOUT),		\
-						\
-	S(NOTIFY_ERROR_RECOVERY),			\
-	S(NOTIFY_PORT_RESET),				\
-	S(NOTIFY_PORT_RESET_WAIT_OFF),		\
-						\
-	S(NOTIFY_SNK_TRY_WAIT_PE),			\
-	S(NOTIFY_SRC_TRY_WAIT_PE),		\
-	S(NOTIFY_DEBUG_ACC_SNK_ATTACHED),			\
-	S(NOTIFY_CUSTOM_SRC_ATTACHED),		\
-	S(NOTIFY_NORP_SRC_ATTACHED),			\
-	S(NOTIFY_ROLE_SWAP),		\
-	S(NOTIFY_WATER_PROTECTION_WAIT),			\
-	S(NOTIFY_WATER_PROTECTION),				\
-	S(NOTIFY_UNATTACH_WAIT_PE)
-
-
-#define NOTIFY_GENERATE_ENUM(e)	e
-#define NOTIFY_GENERATE_STRING(s)	#s
-
-enum usblog_tcpm_state {
-	NOTIFY_FOREACH_STATE(NOTIFY_GENERATE_ENUM)
-};
-
 enum usblog_type {
 	NOTIFY_FUNCSTATE,
-	NOTIFY_TCPMSTATE,
-	NOTIFY_CCSTATE,
 	NOTIFY_ALTERNATEMODE,
-	NOTIFY_CCIC_EVENT,
+	NOTIFY_PDIC_EVENT,
 	NOTIFY_MANAGER,
 	NOTIFY_USBMODE,
 	NOTIFY_USBMODE_EXTRA,
@@ -144,8 +24,6 @@ enum usblog_type {
 	NOTIFY_PORT_CONNECT,
 	NOTIFY_PORT_DISCONNECT,
 	NOTIFY_PORT_CLASS,
-	NOTIFY_PCM_PLAYBACK,
-	NOTIFY_PCM_CAPTURE,
 	NOTIFY_EXTRA,
 };
 
@@ -174,13 +52,6 @@ enum usblog_state {
 	NOTIFY_VBUS_DIS_FAIL,
 	NOTIFY_HIGH,
 	NOTIFY_SUPER,
-	NOTIFY_GET_DES,
-	NOTIFY_SET_CON,
-	NOTIFY_CONNDONE_SSP,
-	NOTIFY_CONNDONE_SS,
-	NOTIFY_CONNDONE_HS,
-	NOTIFY_CONNDONE_FS,
-	NOTIFY_CONNDONE_LS,
 };
 
 enum usblog_status {
@@ -191,16 +62,15 @@ enum usblog_status {
 };
 
 /*
- *	You should refer "linux/usb/typec/common/pdic_notifier.h"
- *	ccic_device, ccic_id may be different at each branch
- */
-enum ccic_device {
+	You should refer "linux/pdic/pdic_notifier.h"
+	pdic_device, pdic_id may be different at each branch
+*/
+enum pdic_device {
 	NOTIFY_DEV_INITIAL = 0,
 	NOTIFY_DEV_USB,
 	NOTIFY_DEV_BATTERY,
 	NOTIFY_DEV_PDIC,
 	NOTIFY_DEV_MUIC,
-	NOTIFY_DEV_CCIC,
 	NOTIFY_DEV_MANAGER,
 	NOTIFY_DEV_DP,
 	NOTIFY_DEV_USB_DP,
@@ -208,7 +78,7 @@ enum ccic_device {
 	NOTIFY_DEV_SECOND_MUIC,
 };
 
-enum ccic_id {
+enum pdic_id {
 	NOTIFY_ID_INITIAL = 0,
 	NOTIFY_ID_ATTACH,
 	NOTIFY_ID_RID,
@@ -228,15 +98,10 @@ enum ccic_id {
 	NOTIFY_ID_WATER_CABLE,
 };
 
-enum ccic_rid {
+enum pdic_rid {
 	NOTIFY_RID_UNDEFINED = 0,
-#if defined(CONFIG_USB_CCIC_NOTIFIER_USING_QC)
-	NOTIFY_RID_GND,
-	NOTIFY_RID_056K,
-#else
 	NOTIFY_RID_000K,
 	NOTIFY_RID_001K,
-#endif
 	NOTIFY_RID_255K,
 	NOTIFY_RID_301K,
 	NOTIFY_RID_523K,
@@ -244,17 +109,17 @@ enum ccic_rid {
 	NOTIFY_RID_OPEN,
 };
 
-enum ccic_con {
+enum pdic_con {
 	NOTIFY_CON_DETACH = 0,
 	NOTIFY_CON_ATTACH,
 };
 
-enum ccic_rprd {
+enum pdic_rprd {
 	NOTIFY_RD = 0,
 	NOTIFY_RP,
 };
 
-enum ccic_rpstatus {
+enum pdic_rpstatus {
 	NOTIFY_RP_NONE = 0,
 	NOTIFY_RP_56K,	/* 80uA */
 	NOTIFY_RP_22K,		/* 180uA */
@@ -262,13 +127,13 @@ enum ccic_rpstatus {
 	NOTIFY_RP_ABNORMAL,
 };
 
-enum ccic_hpd {
+enum pdic_hpd {
 	NOTIFY_HPD_LOW = 0,
 	NOTIFY_HPD_HIGH,
 	NOTIFY_HPD_IRQ,
 };
 
-enum ccic_pin_assignment {
+enum pdic_pin_assignment {
 	NOTIFY_DP_PIN_UNKNOWN = 0,
 	NOTIFY_DP_PIN_A,
 	NOTIFY_DP_PIN_B,
@@ -278,25 +143,11 @@ enum ccic_pin_assignment {
 	NOTIFY_DP_PIN_F,
 };
 
-enum ccic_pin_status {
+enum pdic_pin_status {
 	NOTIFY_PIN_NOTERMINATION = 0,
 	NOTIFY_PIN_CC1_ACTIVE,
 	NOTIFY_PIN_CC2_ACTIVE,
 	NOTIFY_PIN_AUDIO_ACCESSORY,
-};
-
-enum ccic_voltage_status {
-	NOTIFY_CC_VOLT_OPEN = 0,
-	NOTIFY_CC_VOLT_RA,
-	NOTIFY_CC_VOLT_RD,
-
-	NOTIFY_CC_VOLT_SNK_DFT,
-	NOTIFY_CC_VOLT_SNK_1_5,
-	NOTIFY_CC_VOLT_SNK_3_0,
-
-	NOTIFY_CC_DRP_TOGGLING,
-
-	NOTIFY_CC_UNDEFINED,
 };
 
 enum extra {
@@ -312,11 +163,6 @@ enum extra {
 	NOTIFY_EXTRA_CCOPEN_REQ_SET,
 	NOTIFY_EXTRA_CCOPEN_REQ_CLEAR,
 	NOTIFY_EXTRA_USB_ANALOGAUDIO,
-	NOTIFY_EXTRA_USBHOST_OVERCURRENT,
-	NOTIFY_EXTRA_ROOTHUB_SUSPEND_FAIL,
-	NOTIFY_EXTRA_PORT_SUSPEND_FAIL,
-	NOTIFY_EXTRA_PORT_SUSPEND_WAKEUP_FAIL,
-	NOTIFY_EXTRA_PORT_SUSPEND_LTM_FAIL,
 };
 
 #define ALTERNATE_MODE_NOT_READY	(1 << 0)
@@ -327,20 +173,21 @@ enum extra {
 
 #ifdef CONFIG_USB_NOTIFY_PROC_LOG
 extern void store_usblog_notify(int type, void *param1, void *param2);
-extern void store_ccic_version(unsigned char *hw, unsigned char *sw_main,
+extern void store_pdic_version(unsigned char *hw, unsigned char *sw_main,
 			unsigned char *sw_boot);
-extern unsigned long long show_ccic_version(void);
-extern void store_ccic_bin_version(const unsigned char *sw_main,
+extern void store_pdic_bin_version(const unsigned char *sw_main,
 					const unsigned char *sw_boot);
+extern unsigned long long show_pdic_version(void);
 extern int register_usblog_proc(void);
 extern void unregister_usblog_proc(void);
 #else
 static inline void store_usblog_notify(int type, void *param1, void *param2) {}
-static inline void store_ccic_version(unsigned char *hw, unsigned char *sw_main,
+static inline void store_pdic_version(unsigned char *hw, unsigned char *sw_main,
 			unsigned char *sw_boot) {}
-static inline unsigned long long show_ccic_version(void) {return 0; }
-static inline void store_ccic_bin_version(const unsigned char *sw_main,
+static inline void store_pdic_bin_version(const unsigned char *sw_main,
 			const unsigned char *sw_boot) {}
+static inline unsigned long long show_pdic_version(void)
+			{return 0; }
 static inline int register_usblog_proc(void)
 			{return 0; }
 static inline void unregister_usblog_proc(void) {}

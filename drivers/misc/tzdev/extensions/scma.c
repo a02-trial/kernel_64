@@ -36,7 +36,6 @@
 #include "core/iwio.h"
 #include "core/log.h"
 #include "core/notifier.h"
-#include "core/subsystem.h"
 
 #define SCMA_MAX_ALIGN_ORDER	31
 #define SCMA_SWD_PAGE_SHIFT	12
@@ -64,7 +63,7 @@ struct platform_device scma_device = {
 static dma_addr_t scma_res_mem_base;
 static unsigned int scma_res_mem_size;
 
-int tzdev_scma_init(struct reserved_mem *rmem)
+int __init tzdev_scma_init(struct reserved_mem *rmem)
 {
 	scma_res_mem_base = rmem->base;
 	scma_res_mem_size = rmem->size;
@@ -219,7 +218,7 @@ static struct notifier_block tz_scma_init_notifier = {
 	.notifier_call = tz_scma_init_call,
 };
 
-int tz_scma_init(void)
+static int __init tz_scma_init(void)
 {
 	int rc;
 
@@ -234,4 +233,4 @@ int tz_scma_init(void)
 	return rc;
 }
 
-tzdev_early_initcall(tz_scma_init);
+early_initcall(tz_scma_init);

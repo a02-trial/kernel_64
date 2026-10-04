@@ -1,0 +1,105 @@
+name: Build RooXie Kernel (Pure GCC AOSP)
+
+on:
+  workflow_dispatch:
+    inputs:
+      DEVICE_NAME:
+        description: 'Nama HP (Contoh: SM-A022F)'
+        required: true
+        default: 'SM-A022F'
+
+jobs:
+  building-kernel:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Build Environment
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential bc libssl-dev libfl-dev curl git wget zip ccache libarchive-tools
+          
+      - name: Download Toolchain (AOSP GCC 4.9)
+        run: |
+          mkdir -p toolchain
+          cd toolchain
+          # GCC 4.9 dari LineageOS (Paling stabil buat ARM32/64)
+          git clone --depth 1 https://github.com/lineageos/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9.git gcc-arm
+          git clone --depth 1 https://github.com/lineageos/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git gcc-aarch64
+          cd ..
+
+      - name: Start Building Kernel
+        run: |
+          # Setup Path GCC
+          GCC64_PATH="${{ github.workspace }}/toolchain/gcc-aarch64/bin"
+          GCC32_PATH="${{ github.workspace }}/toolchain/gcc-arm/bin"
+          export PATH="$GCC64_PATH:$GCC32_PATH:$PATH"
+          
+          export KBUILD_BUILD_USER="${{ github.actor }}"
+          export KBUILD_BUILD_HOST="${{ github.event.inputs.DEVICE_NAME }}"
+          
+          # PAKE PURE GCC (No Clang, No Error -mapcs)
+          # Kita pake arm-linux-androideabi- buat CROSS_COMPILE
+          export OPTS="ARCH=arm \
+                       O=out \
+                       CROSS_COMPILE=arm-linux-androideabi- \
+                       CROSS_COMPILE_ARM32=arm-linux-androideabi-"
+
+          # 1. Config
+          make $OPTS a02_defconfig
+          
+          # 2. Build (Tanpa Clang biar gak rewel)
+          make -j$(nproc --all) $OPTS zImage-dtb 2>&1 | tee build.log
+
+      - name: Set Properties
+        id: props
+        run: echo "date=$(TZ=Asia/Jakarta date +%Y%m%d-%I%M%p)" >> $GITHUB_OUTPUT
+
+      - name: Make Artifact & Verify Size
+        run: |
+          mkdir -p ${{ github.workspace }}/final_output
+          
+          # Gunakan -L (Follow Symlink) biar file padet
+          if [ -f "out/arch/arm/boot/zImage-dtb" ]; then
+            cp -L out/arch/arm/boot/zImage-dtb ${{ github.workspace }}/final_output/zImage-dtb
+            
+            SIZE=$(stat -c%s "${{ github.workspace }}/final_output/zImage-dtb")
+            echo "✅ zImage-dtb READY! Size: $SIZE bytes"
+            if [ "$SIZE" -lt 5000000 ]; then
+               echo "❌ Error: File masih zonk (terlalu kecil)!"
+               exit 1
+            fi
+          else
+            echo "❌ ERROR: zImage-dtb GAK KELUAR! Cek build.log"
+            exit 1
+          fi
+
+      - name: Final Packing (Zip)
+        run: |
+          cd ${{ github.workspace }}/final_output
+          export DEVICE_NAME=${{ github.event.inputs.DEVICE_NAME }}
+          export DATE_STR=${{ steps.props.outputs.date }}
+          
+          zip -9 ${DEVICE_NAME}-${DATE_STR}.zip zImage-dtb
+          unzip -l ${DEVICE_NAME}-${DATE_STR}.zip
+          
+          cp *.zip ${{ github.workspace }}/
+
+      - name: Upload Release
+        uses: ncipollo/release-action@v1.12.0
+        with:
+          artifacts: "${{ github.workspace }}/*.zip"
+          name: RooXie Kernel ${{ github.event.inputs.DEVICE_NAME }} - ${{ steps.props.outputs.date }}
+          tag: ${{ github.run_id }}-${{ steps.props.outputs.date }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          body: |
+            ## Build Summary
+            - **Device**: ${{ github.event.inputs.DEVICE_NAME }}
+            - **Compiler**: Pure AOSP GCC 4.9 (Stable)
+            - **Fixes**: No more Clang flag errors.
+            - **Date**: ${{ steps.props.outputs.date }}

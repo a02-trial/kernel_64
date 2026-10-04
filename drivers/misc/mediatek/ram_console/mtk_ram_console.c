@@ -34,19 +34,17 @@
 #include <linux/io.h>
 #include <mt-plat/aee.h>
 #include "ram_console.h"
+#include <mach/memory_layout.h>
 #ifdef CONFIG_SEC_DEBUG
 #include <linux/sec_debug.h>
 #endif
 
 #define RAM_CONSOLE_HEADER_STR_LEN 1024
 
-#define THERMAL_RESERVED_TZS (25)
+#define THERMAL_RESERVED_TZS (10)
 static int thermal_num = THERMAL_RESERVED_TZS;
 
 static int mtk_cpu_num;
-
-#define ARRAY_LEN_4 4
-#define ARRAY_LEN_8 8
 
 static int ram_console_init_done;
 static unsigned int old_wdt_status;
@@ -62,7 +60,7 @@ struct last_reboot_reason {
 	/* 0xaeedeadX: X=1 (HWT), X=2 (KE), X=3 (nested panic) */
 	uint32_t exp_type;
 	uint64_t kaslr_offset;
-	uint64_t oops_in_progress_addr;
+	uint64_t ram_console_buffer_addr;
 
 	uint32_t last_irq_enter[AEE_MTK_CPU_NUMS];
 	uint64_t jiffies_last_irq_enter[AEE_MTK_CPU_NUMS];
@@ -102,14 +100,14 @@ struct last_reboot_reason {
 	uint32_t spm_common_scenario_data;
 	uint32_t mtk_cpuidle_footprint[AEE_MTK_CPU_NUMS];
 	uint32_t mcdi_footprint[AEE_MTK_CPU_NUMS];
-	uint32_t clk_data[ARRAY_LEN_8];
+	uint32_t clk_data[8];
 	uint32_t suspend_debug_flag;
 	uint32_t fiq_cache_step;
 
 	uint32_t vcore_dvfs_opp;
 	uint32_t vcore_dvfs_status;
 
-	uint32_t ppm_cluster_limit[ARRAY_LEN_8];
+	uint32_t ppm_cluster_limit[8];
 	uint8_t ppm_step;
 	uint8_t ppm_cur_state;
 	uint32_t ppm_min_pwr_bgt;
@@ -129,7 +127,6 @@ struct last_reboot_reason {
 	uint8_t gpu_dvfs_vgpu;
 	uint8_t gpu_dvfs_oppidx;
 	uint8_t gpu_dvfs_status;
-	int8_t gpu_dvfs_power_count;
 
 	uint32_t drcc_0;
 	uint32_t drcc_1;
@@ -186,7 +183,7 @@ struct last_reboot_reason {
 	uint8_t etc_mode;
 
 
-	int16_t thermal_temp[THERMAL_RESERVED_TZS];
+	int8_t thermal_temp[THERMAL_RESERVED_TZS];
 	uint8_t thermal_status;
 	uint8_t thermal_ATM_status;
 	uint64_t thermal_ktime;
@@ -201,7 +198,7 @@ struct last_reboot_reason {
 	uint16_t idvfs_swreq_next_pct_x100;
 	uint8_t idvfs_state_manchine;
 
-	uint32_t ocp_target_limit[ARRAY_LEN_4];
+	uint32_t ocp_target_limit[4];
 	uint8_t ocp_enable;
 	uint32_t scp_pc;
 	uint32_t scp_lr;
@@ -861,6 +858,7 @@ static int __init ram_console_early_init(void)
 	else
 		return -ENODEV;
 }
+console_initcall(ram_console_early_init);
 
 static int ram_console_show(struct seq_file *m, void *v)
 {
@@ -899,7 +897,6 @@ static int __init ram_console_late_init(void)
 	return 0;
 }
 
-console_initcall(ram_console_early_init);
 late_initcall(ram_console_late_init);
 
 int ram_console_pstore_reserve_memory(struct reserved_mem *rmem)
@@ -960,8 +957,8 @@ static void ram_console_init_val(void)
 #else
 	LAST_RR_SET(kaslr_offset, 0xd15ab1e);
 #endif
-	LAST_RR_SET(oops_in_progress_addr,
-		(unsigned long)&oops_in_progress);
+	LAST_RR_SET(ram_console_buffer_addr,
+		(unsigned long)&ram_console_buffer);
 }
 
 void aee_rr_rec_fiq_step(u8 step)
@@ -1006,8 +1003,6 @@ void aee_rr_rec_last_irq_enter(int cpu, int irq, u64 jiffies)
 	if (cpu >= 0 && cpu < num_possible_cpus()) {
 		LAST_RR_SET_WITH_ID(last_irq_enter, cpu, irq);
 		LAST_RR_SET_WITH_ID(jiffies_last_irq_enter, cpu, jiffies);
-	} else {
-		pr_notice("%s invalid cpu= %d\n", __func__, cpu);
 	}
 	mb();			/*TODO:need add comments */
 }
@@ -1019,8 +1014,6 @@ void aee_rr_rec_last_irq_exit(int cpu, int irq, u64 jiffies)
 	if (cpu >= 0 && cpu < num_possible_cpus()) {
 		LAST_RR_SET_WITH_ID(last_irq_exit, cpu, irq);
 		LAST_RR_SET_WITH_ID(jiffies_last_irq_exit, cpu, jiffies);
-	} else {
-		pr_notice("%s invalid cpu= %d\n", __func__, cpu);
 	}
 	mb();			/*TODO:need add comments */
 }
@@ -1031,8 +1024,6 @@ void aee_rr_rec_hotplug_footprint(int cpu, u8 fp)
 		return;
 	if (cpu >= 0 && cpu < num_possible_cpus())
 		LAST_RR_SET_WITH_ID(hotplug_footprint, cpu, fp);
-	else
-		pr_notice("%s invalid cpu= %d\n", __func__, cpu);
 }
 
 void aee_rr_rec_hotplug_cpu_event(u8 val)
@@ -1157,10 +1148,7 @@ void aee_rr_rec_clk(int id, u32 val)
 {
 	if (!ram_console_init_done || !ram_console_buffer)
 		return;
-	if (id >= 0 && id < ARRAY_LEN_8)
-		LAST_RR_SET_WITH_ID(clk_data, id, val);
-	else
-		pr_notice("%s invalid id= %d\n", __func__, id);
+	LAST_RR_SET_WITH_ID(clk_data, id, val);
 }
 
 void aee_rr_rec_deepidle_val(u32 val)
@@ -1179,10 +1167,7 @@ void aee_rr_rec_mcdi_val(int id, u32 val)
 {
 	if (!ram_console_init_done || !ram_console_buffer)
 		return;
-	if (id >= 0 && id < num_possible_cpus())
-		LAST_RR_SET_WITH_ID(mcdi_footprint, id, val);
-	else
-		pr_notice("%s invalid id= %d\n", __func__, id);
+	LAST_RR_SET_WITH_ID(mcdi_footprint, id, val);
 }
 
 void aee_rr_rec_mcdi_wfi_val(u32 val)
@@ -1369,10 +1354,7 @@ void aee_rr_rec_ppm_cluster_limit(int id, u32 val)
 {
 	if (!ram_console_init_done || !ram_console_buffer)
 		return;
-	if (id >= 0 && id < ARRAY_LEN_8)
-		LAST_RR_SET_WITH_ID(ppm_cluster_limit, id, val);
-	else
-		pr_notice("%s invalid id= %d\n", __func__, id);
+	LAST_RR_SET_WITH_ID(ppm_cluster_limit, id, val);
 }
 
 void aee_rr_rec_ppm_step(u8 val)
@@ -1537,13 +1519,6 @@ void aee_rr_rec_gpu_dvfs_status(u8 val)
 u8 aee_rr_curr_gpu_dvfs_status(void)
 {
 	return LAST_RR_VAL(gpu_dvfs_status);
-}
-
-void aee_rr_rec_gpu_dvfs_power_count(int val)
-{
-	if (!ram_console_init_done || !ram_console_buffer)
-		return;
-	LAST_RR_SET(gpu_dvfs_power_count, val);
 }
 
 void aee_rr_rec_drcc_0(u32 val)
@@ -1907,7 +1882,7 @@ int aee_rr_init_thermal_temp(int num)
 	return 0;
 }
 
-int aee_rr_rec_thermal_temp(int index, s16 val)
+int aee_rr_rec_thermal_temp(int index, s8 val)
 {
 	if (!ram_console_init_done || !ram_console_buffer)
 		return -1;
@@ -2010,7 +1985,7 @@ void aee_rr_rec_ocp_target_limit(int id, u32 val)
 	if (!ram_console_init_done || !ram_console_buffer)
 		return;
 
-	if (id < 0 || id >= ARRAY_LEN_4) {
+	if (id < 0 || id >= 4) {
 		pr_notice("%s: Invalid ocp id = %d\n", __func__, id);
 		return;
 	}
@@ -2275,7 +2250,7 @@ u8 aee_rr_curr_etc_mode(void)
 	return LAST_RR_VAL(etc_mode);
 }
 
-s16 aee_rr_curr_thermal_temp(int index)
+s8 aee_rr_curr_thermal_temp(int index)
 {
 	if (index < 0 || index >= thermal_num)
 		return -127;
@@ -2345,12 +2320,10 @@ u8 aee_rr_curr_idvfs_state_manchine(void)
 
 u32 aee_rr_curr_ocp_target_limit(int id)
 {
-	if (id < 0 || id >= ARRAY_LEN_4) {
-		pr_notice("%s invalid id= %d\n", __func__, id);
+	if (id < 0 || id >= 4)
 		return 0;
-	}
-
-	return LAST_RR_VAL(ocp_target_limit[id]);
+	else
+		return LAST_RR_VAL(ocp_target_limit[id]);
 }
 
 u8 aee_rr_curr_ocp_enable(void)
@@ -2522,10 +2495,10 @@ void aee_rr_show_kaslr_offset(struct seq_file *m)
 
 void aee_rr_show_ram_console_buffer_addr(struct seq_file *m)
 {
-	uint64_t oops_in_progress_addr;
+	uint64_t ram_console_buffer_addr;
 
-	oops_in_progress_addr = LAST_RRR_VAL(oops_in_progress_addr);
-	seq_printf(m, "&oops_in_progress: 0x%llx\n", oops_in_progress_addr);
+	ram_console_buffer_addr = LAST_RRR_VAL(ram_console_buffer_addr);
+	seq_printf(m, "&ram_console_buffer: 0x%llx\n", ram_console_buffer_addr);
 }
 
 void aee_rr_show_last_irq_enter(struct seq_file *m, int cpu)
@@ -2688,7 +2661,7 @@ void aee_rr_show_clk(struct seq_file *m)
 {
 	int i = 0;
 
-	for (i = 0; i < ARRAY_LEN_8; i++)
+	for (i = 0; i < 8; i++)
 		seq_printf(m, "clk_data: 0x%x\n", LAST_RRR_VAL(clk_data[i]));
 }
 
@@ -2712,7 +2685,7 @@ void aee_rr_show_ppm_cluster_limit(struct seq_file *m)
 {
 	int i = 0;
 
-	for (i = 0; i < ARRAY_LEN_8; i++)
+	for (i = 0; i < 8; i++)
 		seq_printf(m, "ppm_cluster_limit: 0x%08x\n",
 				LAST_RRR_VAL(ppm_cluster_limit[i]));
 }
@@ -2808,12 +2781,6 @@ void aee_rr_show_gpu_dvfs_oppidx(struct seq_file *m)
 void aee_rr_show_gpu_dvfs_status(struct seq_file *m)
 {
 	seq_printf(m, "gpu_dvfs_status: 0x%x\n", LAST_RRR_VAL(gpu_dvfs_status));
-}
-
-void aee_rr_show_gpu_dvfs_power_count(struct seq_file *m)
-{
-	seq_printf(m, "gpu_dvfs_power_count: %d\n",
-		LAST_RRR_VAL(gpu_dvfs_power_count));
 }
 
 void aee_rr_show_drcc_0(struct seq_file *m)
@@ -3276,7 +3243,7 @@ void aee_rr_show_ocp_target_limit(struct seq_file *m)
 {
 	int i = 0;
 
-	for (i = 0; i < ARRAY_LEN_4; i++)
+	for (i = 0; i < 4; i++)
 		seq_printf(m, "ocp_target_limit[%d]: %d\n", i,
 				LAST_RRR_VAL(ocp_target_limit[i]));
 }
@@ -3496,7 +3463,6 @@ last_rr_show_t aee_rr_show[] = {
 	aee_rr_show_gpu_dvfs_vgpu,
 	aee_rr_show_gpu_dvfs_oppidx,
 	aee_rr_show_gpu_dvfs_status,
-	aee_rr_show_gpu_dvfs_power_count,
 	aee_rr_show_drcc_0,
 	aee_rr_show_drcc_1,
 	aee_rr_show_drcc_2,

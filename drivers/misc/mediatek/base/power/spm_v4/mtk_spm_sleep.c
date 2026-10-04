@@ -76,7 +76,7 @@
 #include <mtk_hps_internal.h>
 #endif
 
-#include <mtk_spm_sleep_internal.h>
+#include "mtk_spm_sleep_internal.h"
 
 static int spm_dormant_sta;
 int spm_ap_mdsrc_req_cnt;
@@ -490,18 +490,16 @@ RESTORE_IRQ:
 	return last_wr;
 }
 
-ssize_t get_spm_sleep_count(char *ToUserBuf, size_t sz, void *priv)
+int get_spm_sleep_count(struct seq_file *s, void *unused)
 {
-	int bLen = snprintf(ToUserBuf, sz, "0x%x\n", spm_sleep_count);
-
-	return (bLen > sz) ? sz : bLen;
+	seq_printf(s, "%d\n", spm_sleep_count);
+	return 0;
 }
 
-ssize_t get_spm_last_wakeup_src(char *ToUserBuf, size_t sz, void *priv)
+int get_spm_last_wakeup_src(struct seq_file *s, void *unused)
 {
-	int bLen = snprintf(ToUserBuf, sz, "0x%x\n", spm_wakesta.r12);
-
-	return (bLen > sz) ? sz : bLen;
+	seq_printf(s, "0x%x\n", spm_wakesta.r12);
+	return 0;
 }
 
 void spm_output_sleep_option(void)

@@ -26,7 +26,6 @@
 #include "smcdsd_board.h"
 #include "smcdsd_panel.h"
 #include "panels/dd.h"
-#include "disp_cust.h"
 
 #define dbg_info(fmt, ...)		pr_info(pr_fmt("smcdsd: "fmt), ##__VA_ARGS__)
 #define dbg_none(fmt, ...)		pr_debug(pr_fmt("smcdsd: "fmt), ##__VA_ARGS__)
@@ -35,18 +34,13 @@
 /* Global Variables */
 /* -------------------------------------------------------------------------- */
 struct mipi_dsi_lcd_common *g_lcd_common;
-unsigned int rx_offset;
+unsigned char rx_offset;
 unsigned char data_type;
-#if defined(CONFIG_SMCDSD_USE_POINT_GPARA)
-unsigned int gpara_len = 4;	/* dts compatibility temporary */
-#else
-unsigned int gpara_len = 2;	/* 4: pointing gpara 16bit offset, 3: pointing gpara 8bit offset, 2: default */
-#endif
 
 /* -------------------------------------------------------------------------- */
 /* Local Functions */
 /* -------------------------------------------------------------------------- */
-struct LCM_UTIL_FUNCS lcm_util = {0};
+static struct LCM_UTIL_FUNCS lcm_util = {0};
 
 /* -------------------------------------------------------------------------- */
 /* LCD Driver Implementations */
@@ -63,10 +57,6 @@ static void smcdsd_panel_get_params(struct LCM_PARAMS *params)
 	dbg_info("%s +\n", __func__);
 
 	smcdsd_panel_get_params_from_dt(params);
-
-/*	set value in each model file */
-	params->hbm_enable_wait_frame = 0;
-	params->hbm_disable_wait_frame = 0;
 
 	plcd->lcm_params = params;
 
@@ -138,15 +128,6 @@ static void smcdsd_panel_suspend(void)
 		call_drv_ops(plcd, exit);
 }
 
-static void smcdsd_panel_cmdq(unsigned int enable)
-{
-	struct mipi_dsi_lcd_common *plcd = get_lcd_common(0);
-
-	dbg_info("%s : %d\n", __func__, enable);
-
-	plcd->cmdq = !!enable;
-}
-
 static void smcdsd_set_backlight(void *handle, unsigned int level)
 {
 	/* unused. just prevent useless message */
@@ -158,89 +139,6 @@ static void smcdsd_partial_update(unsigned int x, unsigned int y, unsigned int w
 	/* unused. just prevent useless message */
 }
 
-static bool smcdsd_set_mask_wait(bool wait)
-{
-	struct mipi_dsi_lcd_common *plcd = get_lcd_common(0);
-
-	plcd->mask_wait = wait;
-
-	return 0;
-}
-
-static bool smcdsd_get_mask_wait(void)
-{
-	struct mipi_dsi_lcd_common *plcd = get_lcd_common(0);
-
-	return plcd->mask_wait;
-}
-
-static bool smcdsd_framedone_notify(void)
-{
-	struct mipi_dsi_lcd_common *plcd = get_lcd_common(0);
-
-	call_drv_ops(plcd, framedone_notify);
-
-	return 0;
-}
-
-static bool smcdsd_set_mask_cmdq(bool en, void *qhandle)
-{
-	struct mipi_dsi_lcd_common *plcd = get_lcd_common(0);
-
-	call_drv_ops(plcd, set_mask, !!en);
-
-	smcdsd_set_mask_wait(true);
-
-	return 0;
-}
-
-static bool smcdsd_get_mask_state(void)
-{
-	struct mipi_dsi_lcd_common *plcd = get_lcd_common(0);
-
-	return call_drv_ops(plcd, get_mask);
-}
-
-static bool smcdsd_path_lock(bool locking)
-{
-	struct mipi_dsi_lcd_common *plcd = get_lcd_common(0);
-
-	call_drv_ops(plcd, path_lock, locking);
-
-	return 0;
-}
-
-#ifdef CONFIG_MTK_HIGH_FRAME_RATE
-static bool smcdsd_is_new_fps(unsigned int from_level, unsigned int to_level,
-	struct LCM_PARAMS *params)
-{
-	struct mipi_dsi_lcd_common *plcd = get_lcd_common(0);
-
-	return call_drv_ops(plcd, is_new_fps, from_level, to_level, params);
-}
-
-static void smcdsd_set_fps(void *cmdq_handle,
-	unsigned int from_level, unsigned int to_level,
-	struct LCM_PARAMS *params)
-{
-	struct mipi_dsi_lcd_common *plcd = get_lcd_common(0);
-
-	call_drv_ops(plcd, set_fps, cmdq_handle, from_level, to_level, params);
-}
-#endif
-
-#if defined(CONFIG_SMCDSD_DOZE)
-static void smcdsd_panel_aod(int enter)
-{
-	struct mipi_dsi_lcd_common *plcd = get_lcd_common(0);
-
-	if (enter)
-		__smcdsd_panel_reset_enable(1);
-
-	call_drv_ops(plcd, doze_init, enter);
-}
-#endif
-
 struct LCM_DRIVER smcdsd_panel_drv = {
 	.set_util_funcs = smcdsd_panel_set_util_funcs,
 	.get_params = smcdsd_panel_get_params,
@@ -251,28 +149,30 @@ struct LCM_DRIVER smcdsd_panel_drv = {
 	.power_enable = smcdsd_panel_power_enable,
 	.set_backlight_cmdq = smcdsd_set_backlight,
 	.update = smcdsd_partial_update,
-#ifdef CONFIG_MTK_HIGH_FRAME_RATE
-	/*DynFPS*/
-	.dfps_send_lcm_cmd = smcdsd_set_fps,
-	.dfps_need_send_cmd = smcdsd_is_new_fps,
-#endif
-#if defined(CONFIG_SMCDSD_DOZE)
-	.aod = smcdsd_panel_aod,
-#endif
-	.get_hbm_state = smcdsd_get_mask_state,
-	.set_hbm_cmdq = smcdsd_set_mask_cmdq,
-	.get_hbm_wait = smcdsd_get_mask_wait,
-	.set_hbm_wait = smcdsd_set_mask_wait,
-	.framedone_notify = smcdsd_framedone_notify,
-	.path_lock = smcdsd_path_lock,
-	.cmdq = smcdsd_panel_cmdq,
 };
+
+static unsigned char data[259];
+int smcdsd_panel_dsi_command_rx(void *drvdata,
+	unsigned int id, unsigned int offset, u8 cmd, unsigned int len, u8 *buf, bool need_lock)
+{
+	struct mipi_dsi_lcd_common *plcd = drvdata ? drvdata : get_lcd_common(0);
+	int ret = 0;
+
+	if (!plcd->lcdconnected)
+		return ret;
+
+	rx_offset = offset;
+	data_type = id;
+
+	ret = lcm_util.dsi_dcs_read_lcm_reg_v2(cmd, buf, len);
+
+	return ret;
+}
 
 int smcdsd_panel_dsi_command_tx(void *drvdata,
 	unsigned int id, unsigned long data0, unsigned int data1, bool need_lock)
 {
 	struct mipi_dsi_lcd_common *plcd = drvdata ? drvdata : get_lcd_common(0);
-	struct LCM_setting_table_V3 tx_table = {0, };
 	int ret = 0;
 
 	if (!plcd->lcdconnected)
@@ -280,84 +180,40 @@ int smcdsd_panel_dsi_command_tx(void *drvdata,
 
 	dsi_write_data_dump(id, data0, data1);
 
-	BUG_ON(data1 == 0);
-	BUG_ON(data1 > 512);
+	if (unlikely(!lcm_util.dsi_set_cmdq_V2))
+		dbg_info("%s: dsi_set_cmdq_V2 is not exist\n", __func__);
 
 	switch (id) {
+	case MIPI_DSI_GENERIC_SHORT_WRITE_0_PARAM:
 	case MIPI_DSI_GENERIC_SHORT_WRITE_1_PARAM:
 	case MIPI_DSI_GENERIC_SHORT_WRITE_2_PARAM:
 	case MIPI_DSI_DCS_SHORT_WRITE:
+	{
+		lcm_util.dsi_set_cmdq_V2((unsigned int)data0, 0, NULL, 1);
+		break;
+	}
 	case MIPI_DSI_DCS_SHORT_WRITE_PARAM:
+	{
+		data[0] = data1;
+		lcm_util.dsi_set_cmdq_V2((unsigned int)data0, 1, &data[0], 1);
+		break;
+	}
+
 	case MIPI_DSI_GENERIC_LONG_WRITE:
 	case MIPI_DSI_DCS_LONG_WRITE:
+	{
+		memcpy(&data[0], (unsigned char *)data0, data1);
+		lcm_util.dsi_set_cmdq_V2((unsigned int)data[0], data1 - 1, &data[1], 1);
 		break;
+	}
+
 	default:
 		dbg_info("%s: id(%2x) is not supported\n", __func__, id);
 		ret = -EINVAL;
 		break;
 	}
 
-	tx_table.id = id;
-	tx_table.cmd = *(unsigned char *)data0;
-	tx_table.count = data1 - 1;
-	if (data1 > 1)
-		memcpy(&tx_table.para_list, (unsigned char *)data0 + 1, data1 - 1);
-
-	if (plcd->cmdq) {
-		set_lcm(&tx_table, 1, true, need_lock);
-	} else {
-		lcm_util.dsi_set_cmdq_V22(NULL, tx_table.cmd, tx_table.count, tx_table.para_list, 1);
-	}
-
 	return ret;
-}
-
-int smcdsd_panel_dsi_command_rx(void *drvdata,
-	unsigned int id, unsigned int offset, u8 cmd, unsigned int len, u8 *buf, bool need_lock)
-{
-	struct mipi_dsi_lcd_common *plcd = drvdata ? drvdata : get_lcd_common(0);
-	int ret = 0;
-	u8 gpara_buf[] = {0xB0, 0x00, 0x00, 0x00};
-
-	if (!plcd->lcdconnected)
-		return ret;
-
-	BUG_ON(gpara_len != clamp_t(unsigned int, gpara_len, 2, 4));
-	BUG_ON(gpara_len == 3 && offset > U8_MAX);
-
-	rx_offset = (gpara_len == 2) ? offset : 0;
-	data_type = id;
-
-	if (offset && gpara_len == clamp_t(unsigned int, gpara_len, 3, 4)) {
-		if (gpara_len == 3) {
-			gpara_buf[1] = (offset & 0x00ff);
-			gpara_buf[2] = cmd;
-		} else if (gpara_len == 4) {
-			gpara_buf[1] = (offset & 0xff00) >> 8;
-			gpara_buf[2] = (offset & 0x00ff);
-			gpara_buf[3] = cmd;
-		}
-
-		smcdsd_panel_dsi_command_tx(drvdata, MIPI_DSI_DCS_LONG_WRITE, (unsigned long)gpara_buf, gpara_len, need_lock);
-		dbg_info("%s: %*ph\n", __func__, gpara_len, gpara_buf);
-	}
-
-	if (plcd->cmdq)
-		ret = read_lcm(cmd, buf, len, true, need_lock, offset);
-	else
-		ret = lcm_util.dsi_dcs_read_lcm_reg_v2(cmd, buf, len);
-
-	return ret;
-}
-
-int smcdsd_panel_dsi_clk_change(unsigned int index)
-{
-#ifdef CONFIG_MACH_MT6768
-	struct mipi_dsi_lcd_common *plcd = get_lcd_common(0);
-
-	mipi_clk_change(plcd->data_rate[index], 1);
-#endif
-	return 0;
 }
 
 static int smcdsd_probe(struct platform_device *p)
@@ -376,10 +232,9 @@ static int smcdsd_probe(struct platform_device *p)
 
 	plcd->pdev = p;
 	plcd->drv = mipi_lcd_driver;
+	plcd->power = plcd->reset = 1;
 	plcd->tx = smcdsd_panel_dsi_command_tx;
 	plcd->rx = smcdsd_panel_dsi_command_rx;
-	plcd->power = plcd->reset = 1;
-	plcd->cmdq = 1;
 
 	dbg_info("%s: driver is found(%s)\n", __func__, plcd->drv->driver.name);
 
@@ -442,9 +297,6 @@ static int __init smcdsd_late_initcall(void)
 	}
 
 	run_list(&plcd->pdev->dev, "panel_regulator_init");
-
-	BUG_ON(!lcm_util.dsi_set_cmdq_V22);
-	BUG_ON(!lcm_util.dsi_dcs_read_lcm_reg_v2);
 
 	return 0;
 }

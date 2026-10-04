@@ -79,25 +79,11 @@ config TZDEV_SK_MULTICORE
 
 config ION_FD2PHYS
 	tristate "ION FD to physical address converter"
-	depends on ION && (ARCH_EXYNOS || ARCH_MSM || ARCH_WHALE || ARCH_MT6755 || ARCH_MT6735 || ARCH_RANCHU || MACH_MT6757 || MACH_MT6853 || MACH_MT6768)
+	depends on ION && (ARCH_EXYNOS || ARCH_MSM || ARCH_WHALE || ARCH_MT6755 || ARCH_MT6735 || ARCH_RANCHU || MACH_MT6757 || MACH_MT6853)
 	default y
 	help
 	  Provide a method for userspace to get physical address from ION buffer
 	  descriptor.
-
-config ION_FD2PHYS_VARIANT
-	int "ION FD2PHYS implementation variant"
-	depends on ION_FD2PHYS
-	default 0
-	help
-	  Select internal ionfd2phys implementation variant.
-
-config ION_FD2PHYS_USE_ION_FROM_STAGING
-	bool "ION FD2PHYS use ion.h from staging"
-	depends on ION_FD2PHYS
-	default n
-	help
-	  Select location from where ionfd2phys should include ion.h
 
 config TZIRS
 	bool "Integrity reporting system"
@@ -110,6 +96,13 @@ config TZTUI
 	default n
 	help
 	  Enable Trusted user interface support for Samsung Secure OS.
+
+config TZDEV_PAGE_MIGRATION
+	bool "Page migration"
+	depends on MIGRATION && CMA
+	default n
+	help
+	  Enable Page migration functionality for CMA Migration.
 
 config TZDEV_HOTPLUG
 	bool "Core hotplug"
@@ -125,13 +118,6 @@ config TZDEV_BOOST
 	help
 	  Switch high performance cluster to maximum frequency by NWd client
 	  request.
-
-config TZDEV_BOOST_CLUSTER
-	int "Choose high performance cluster"
-	depends on TZDEV_BOOST
-	default 1
-	help
-	  Select which cluster is high performance cluster.
 
 config TZ_BOOT_LOG
 	bool "TZ boot stage log"
@@ -166,6 +152,12 @@ config TZDEV_DEBUG
 	help
 	  Debug extensions for samsung TZ Based Secure OS interface driver.
 
+config TZ_NWFS
+	bool "Normal world file system interface driver"
+	default y
+	help
+	  Normal world file system interface driver.
+
 config TZ_SCMA
 	bool "Secure contiguous memory allocator"
 	default n
@@ -184,11 +176,18 @@ config TEEGRIS_VERSION
 	help
 	  TEEGRIS built with specific version of SDK
 
-config TZDEV_CPUFREQ_TRANSITION
-	bool "CPU frequency transition to Secure OS"
-	default y
+choice
+	prompt "Choose per-cpu kthread workers variant"
+	default TZDEV_KTHREADS_NOTIFIER
 	help
-	  Register notifier for CPU frequency transition to Secure OS
+	  This option selects implementation to manage per-cpu kthreads.
+
+	config TZDEV_KTHREADS_NOTIFIER
+		bool "Use old-style cpu notifiers"
+	config TZDEV_KTHREADS_SMPBOOT
+		depends on TZDEV_SK_MULTICORE
+		bool "Use smpboot hotplug subsystem"
+endchoice
 
 if TZDEV_DEBUG
 
@@ -235,13 +234,6 @@ config TZ_PMF
 	default n
 	help
 	  Enable Performance Measurement Framework in the tzdev.
-
-config TZDEV_TRACING
-	bool "TZDEV tracing"
-	depends on TZDEV
-	default n
-	help
-	  Enable trace events for tzdev.
 
 endif #TZDEV_DEBUG
 

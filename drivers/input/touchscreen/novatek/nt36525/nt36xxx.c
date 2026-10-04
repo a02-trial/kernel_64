@@ -102,7 +102,7 @@ const uint16_t gesture_key_array[] = {
 	KEY_WAKEUP,  //GESTURE_WORD_O
 	KEY_WAKEUP,  //GESTURE_WORD_e
 	KEY_WAKEUP,  //GESTURE_WORD_S
-	KEY_BLACK_UI_GESTURE,  //GESTURE_SLIDE_UP
+	KEY_WAKEUP,  //GESTURE_SLIDE_UP
 	KEY_WAKEUP,  //GESTURE_SLIDE_DOWN
 	KEY_WAKEUP,  //GESTURE_SLIDE_LEFT
 	KEY_WAKEUP,  //GESTURE_SLIDE_RIGHT
@@ -150,20 +150,14 @@ const struct mt_chip_conf spi_ctrdata = {
 const struct mtk_chip_config spi_ctrdata = {
 	.rx_mlsb = 1,
 	.tx_mlsb = 1,
+	.cs_pol = 0,
 	.sample_sel = 0,
 
 	.cs_setuptime = 25,
 	.cs_holdtime = 0,
 	.cs_idletime = 0,
-	.deassert_mode = false,
-	.tick_delay = 0,
+	.deassert_mode = 0,
 };
-#endif
-
-#ifdef CONFIG_SAMSUNG_TUI
-static int stui_tsp_exit(void);
-static int stui_tsp_enter(void);
-static struct nvt_ts_data *tsp_info;
 #endif
 
 /*******************************************************
@@ -207,11 +201,6 @@ static inline int32_t spi_read_write(struct spi_device *client, uint8_t *buf, si
 		.len    = len,
 	};
 	int ret;
-
-#ifdef CONFIG_SAMSUNG_TUI
-	if (STUI_MODE_TOUCH_SEC & stui_get_mode())
-		return -EBUSY;
-#endif
 
 	if (ts->power_status == POWER_OFF_STATUS) {
 		input_err(true, &ts->client->dev, "%s: POWER_STATUS : OFF!\n", __func__);
@@ -259,11 +248,6 @@ int32_t CTP_SPI_READ(struct spi_device *client, uint8_t *buf, uint16_t len)
 	int32_t ret = -1;
 	int32_t retries = 0;
 
-#ifdef CONFIG_SAMSUNG_TUI
-	if (STUI_MODE_TOUCH_SEC & stui_get_mode())
-		return -EBUSY;
-#endif
-
 	if (ts->power_status == POWER_OFF_STATUS) {
 		input_err(true, &client->dev, "%s: POWER_STATUS : OFF!\n", __func__);
 		return -EIO;
@@ -308,11 +292,6 @@ int32_t CTP_SPI_WRITE(struct spi_device *client, uint8_t *buf, uint16_t len)
 {
 	int32_t ret = -1;
 	int32_t retries = 0;
-
-#ifdef CONFIG_SAMSUNG_TUI
-	if (STUI_MODE_TOUCH_SEC & stui_get_mode())
-		return -EBUSY;
-#endif
 
 	if (ts->power_status == POWER_OFF_STATUS) {
 		input_err(true, &client->dev, "%s: POWER_STATUS : OFF!\n", __func__);
@@ -462,7 +441,7 @@ void nvt_boot_ready(void)
 	//---write BOOT_RDY status cmds---
 	nvt_write_addr(ts->mmap->BOOT_RDY_ADDR, 1);
 
-	mdelay(5);
+	usleep_range(5 * 1000, 5 * 1000);
 
 	if (!ts->hw_crc) {
 		//---write BOOT_RDY status cmds---
@@ -486,7 +465,8 @@ void nvt_eng_reset(void)
 	//---eng reset cmds to ENG_RST_ADDR---
 	nvt_write_addr(ENG_RST_ADDR, 0x5A);
 
-	mdelay(1);	//wait tMCU_Idle2TP_REX_Hi after TP_RST
+	usleep_range(1 * 1000, 1 * 1000);//wait tMCU_Idle2TP_REX_Hi after TP_RST
+
 }
 
 /*******************************************************
@@ -533,7 +513,7 @@ void nvt_bootloader_reset(void)
 	//---reset cmds to SWRST_N8_ADDR---
 	nvt_write_addr(SWRST_N8_ADDR, 0x69);
 
-	mdelay(5);	//wait tBRST2FR after Bootload RST
+	usleep_range(5 * 1000, 5 * 1000);//wait tBRST2FR after Bootload RST
 
 	if (SPI_RD_FAST_ADDR) {
 		/* disable SPI_RD_FAST */
@@ -1071,7 +1051,6 @@ void nvt_ts_wakeup_gesture_report(uint8_t gesture_id, uint8_t *data)
 		case GESTURE_SLIDE_UP:
 			input_info(true, &ts->client->dev,"Gesture : Slide UP.\n");
 			keycode = gesture_key_array[9];
-			ts->scrub_id = SPONGE_EVENT_TYPE_SPAY;
 			break;
 		case GESTURE_SLIDE_DOWN:
 			input_info(true, &ts->client->dev,"Gesture : Slide DOWN.\n");
@@ -1217,6 +1196,7 @@ static int nvt_parse_dt(struct device *dev)
 		if (gpio_is_valid(lcd_id3_gpio)) {
 			input_info(true, dev, "%s: lcd id3_gpio %d(%d)\n", __func__, lcd_id3_gpio, gpio_get_value(lcd_id3_gpio));
 			fw_sel_idx = (gpio_get_value(lcd_id3_gpio) << 2) | (gpio_get_value(lcd_id2_gpio) << 1) | gpio_get_value(lcd_id1_gpio);
+
 		} else {
 			input_err(true, dev, "%s: Failed to get novatek,lcdid3-gpio and use #1 &#2 id\n", __func__);
 			fw_sel_idx = (gpio_get_value(lcd_id2_gpio) << 1) | gpio_get_value(lcd_id1_gpio);
@@ -1371,14 +1351,6 @@ static int nvt_parse_dt(struct device *dev)
 	platdata->enable_sysinput_enabled = of_property_read_bool(np, "novatek,enable_sysinput_enabled");
 	input_info(true, dev, "%s: Sysinput enabled %s\n",
 				__func__, platdata->enable_sysinput_enabled ? "ON" : "OFF");
-
-	platdata->prox_lp_scan_enabled = of_property_read_bool(np, "novatek,prox_lp_scan_enabled");
-	input_info(true, dev, "%s: Prox LP Scan enabled %s\n",
-				__func__, platdata->prox_lp_scan_enabled ? "ON" : "OFF");
-
-	platdata->support_spay = of_property_read_bool(np, "novatek,support_spay");
-	input_info(true, dev, "%s: Sapy mode %s\n",
-				__func__, platdata->support_spay ? "ON" : "OFF");
 
 	input_info(true, dev, "%s: end!\n", __func__);
 
@@ -1578,10 +1550,10 @@ void nvt_print_info(void)
 		ts->print_info_cnt_release++;
 
 		input_info(true, &ts->client->dev,
-				"tc:%d ver:0x%02X%02X%02X%02X mode:%04X noise:%d lp:%x ed:%d res(%d,%d) // #%d %d\n",
+				"tc:%d ver:0x%02X%02X%02X%02X mode:%04X noise:%d aot:%d ed:%d res(%d,%d) // #%d %d\n",
 				ts->touch_count, ts->fw_ver_bin[0], ts->fw_ver_bin[1],
 				ts->fw_ver_bin[2], ts->fw_ver_bin[3],
-				ts->sec_function, ts->noise_mode, ts->lowpower_mode, ts->ear_detect_mode,
+				ts->sec_function, ts->noise_mode, ts->aot_enable, ts->ear_detect_mode,
 				ts->early_resume_cnt, ts->resume_cnt,
 				ts->print_info_cnt_open, ts->print_info_cnt_release);
 
@@ -1855,7 +1827,7 @@ static irqreturn_t nvt_ts_work_func(int irq, void *data)
    }
 #endif /* POINT_DATA_CHECKSUM */
 
-	if (ts->power_status == LP_MODE_STATUS && !ts->ear_detect_force_enable) {
+	if (ts->power_status == LP_MODE_STATUS && ts->lowpower_mode) {
 		id = (uint8_t)(point_data[1] >> 3);
 		nvt_ts_wakeup_gesture_report(id, point_data);
 		mutex_unlock(&ts->lock);
@@ -2095,7 +2067,6 @@ static void ts_remaining_var_init(void)
 #endif
 
 	ts->sec_function = 0;
-	ts->cover_mode_restored = 0;
 
 	// clear ts->coords data
 	memset(ts->coords, 0, sizeof(ts->coords));
@@ -2105,7 +2076,7 @@ static void ts_remaining_var_init(void)
 
 	ts->touch_count = 0;
 	ts->isUMS = false;
-	ts->lowpower_mode = 0;
+	ts->aot_enable = 0;
 	ts->power_status = POWER_ON_STATUS;
 	ts->noise_mode = 0;
 
@@ -2180,7 +2151,7 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 	ts->platdata->pinctrl = devm_pinctrl_get(&client->dev);
 	if (IS_ERR(ts->platdata->pinctrl))
 		input_info(true, &ts->client->dev, "%s: could not get pinctrl\n", __func__);
-	
+
 	pinctrl_configure(ts, true);
 
 	nvt_regulator_init(ts);
@@ -2436,11 +2407,11 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 		}
 #else
 		ts->fb_notif.notifier_call = nvt_fb_notifier_callback;
-//		ret = smcdsd_fb_register_client(&ts->fb_notif);
-//		if (ret) {
-//			input_err(true, &client->dev, "register fb_notifier failed. ret=%d\n", ret);
-//			goto err_register_notif_failed;
-//		}
+		ret = fb_register_client(&ts->fb_notif);
+		if (ret) {
+			input_err(true, &client->dev, "register fb_notifier failed. ret=%d\n", ret);
+			goto err_register_notif_failed;
+		}
 #endif
 	}
 #elif defined(CONFIG_HAS_EARLYSUSPEND)
@@ -2459,25 +2430,6 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 	nvt_irq_enable(true);
 	input_err(true, &client->dev, "%s : end\n", __func__);
 
-#ifdef CONFIG_BATTERY_SAMSUNG
-	if (lpcharge) {
-		input_info(true, &client->dev, "%s: enter sleep mode in lpcharge %d\n", __func__, lpcharge);
-		nvt_ts_suspend(&ts->client->dev);
-#if BOOT_UPDATE_FIRMWARE
-		if (nvt_fwu_wq) {
-			cancel_delayed_work_sync(&ts->nvt_fwu_work);
-			destroy_workqueue(nvt_fwu_wq);
-			nvt_fwu_wq = NULL;
-		}
-#endif
-	}
-#endif
-
-#ifdef CONFIG_SAMSUNG_TUI
-	tsp_info = ts;
-	return stui_set_info(stui_tsp_enter, stui_tsp_exit, STUI_TSP_TYPE_NOVATEK);
-#endif
-
 	return 0;
 
 #if defined(CONFIG_HAS_EARLYSUSPEND)
@@ -2488,8 +2440,8 @@ err_register_early_suspend_failed:
 		if (msm_drm_unregister_client(&ts->drm_notif))
 			input_err(true, &client->dev, "Error occurred while unregistering drm_notifier.\n");
 #else
-//		if (smcdsd_fb_unregister_client(&ts->fb_notif))
-//			input_err(true, &client->dev, "Error occurred while unregistering fb_notifier.\n");
+		if (fb_unregister_client(&ts->fb_notif))
+			input_err(true, &client->dev, "Error occurred while unregistering fb_notifier.\n");
 #endif
 	}
 err_register_notif_failed:
@@ -2602,8 +2554,8 @@ static int32_t nvt_ts_remove(struct spi_device *client)
 		if (msm_drm_unregister_client(&ts->drm_notif))
 			input_err(true, &client->dev, "Error occurred while unregistering drm_notifier.\n");
 #else
-//		if (smcdsd_fb_unregister_client(&ts->fb_notif))
-//			input_err(true, &client->dev, "Error occurred while unregistering fb_notifier.\n");
+		if (fb_unregister_client(&ts->fb_notif))
+			input_err(true, &client->dev, "Error occurred while unregistering fb_notifier.\n");
 #endif
 	}
 #elif defined(CONFIG_HAS_EARLYSUSPEND)
@@ -2688,7 +2640,7 @@ static int32_t nvt_ts_remove(struct spi_device *client)
 	return 0;
 }
 
-void nvt_ts_shutdown(struct spi_device *client)
+static void nvt_ts_shutdown(struct spi_device *client)
 {
 	input_info(true, &client->dev, "%s : Shutdown driver...\n", __func__);
 
@@ -2703,15 +2655,15 @@ void nvt_ts_shutdown(struct spi_device *client)
 		if (msm_drm_unregister_client(&ts->drm_notif))
 			input_err(true, &client->dev, "Error occurred while unregistering drm_notifier.\n");
 #else
-//		if (smcdsd_fb_unregister_client(&ts->fb_notif))
-//			input_err(true, &client->dev, "Error occurred while unregistering fb_notifier.\n");
+		if (fb_unregister_client(&ts->fb_notif))
+			input_err(true, &client->dev, "Error occurred while unregistering fb_notifier.\n");
 #endif
 	}
 #elif defined(CONFIG_HAS_EARLYSUSPEND)
 	unregister_early_suspend(&ts->early_suspend);
 #endif
-/* Cannot remove sysfs_remove_group when using sevice shutdown(enabled_store) */
-//	nvt_ts_sec_fn_remove(ts);
+
+	nvt_ts_sec_fn_remove(ts);
 
 #if NVT_TOUCH_MP
 	nvt_mp_proc_deinit();
@@ -2829,14 +2781,14 @@ int32_t nvt_ts_suspend(struct device *dev)
 	nvt_esd_check_enable(false);
 #endif /* #if NVT_TOUCH_ESD_PROTECT */
 
-	input_info(true, &ts->client->dev, "%s : start %d, %d\n", __func__, ts->ear_detect_mode, ts->lowpower_mode);
+	input_info(true, &ts->client->dev, "%s : start %d, %d\n", __func__, ts->ear_detect_mode, ts->aot_enable);
 
-	if ((ts->lowpower_mode && (ts->prox_power_off || ts->ear_detect_mode)) ||
-		(!ts->lowpower_mode && ts->ear_detect_mode))
-		ts->ear_detect_force_enable = true;
+	if (ts->aot_enable && (ts->prox_power_off || ts->ear_detect_mode))
+		ts->lowpower_mode = 0;	// for ed
 
-	if ((ts->lowpower_mode || ts->lcdoff_test) && !ts->ear_detect_force_enable
-			&& !(ts->sec_function & HOLSTER_MASK)) {
+	input_info(true, &ts->client->dev, "%s : start %d, %d\n", __func__, ts->ear_detect_mode, ts->aot_enable);
+
+	if (ts->lowpower_mode || ts->lcdoff_test) {
 		nvt_irq_enable(false);
 		nvt_ts_lcd_power_ctrl(true);
 		nvt_ts_lcd_reset_ctrl(true);
@@ -2852,9 +2804,9 @@ int32_t nvt_ts_suspend(struct device *dev)
 		nvt_irq_enable(true);
 		enable_irq_wake(ts->client->irq);
 
-		input_info(true, &ts->client->dev, "%s: LPGW mode\n", __func__);
+		input_info(true, &ts->client->dev, "%s: aot mode\n", __func__);
 
-	} else if (ts->ear_detect_mode && !(ts->sec_function & HOLSTER_MASK)) {
+	} else if (ts->ear_detect_mode) {
 
 		nvt_ts_lcd_power_ctrl(true);
 		nvt_ts_lcd_reset_ctrl(true);
@@ -2930,7 +2882,6 @@ void nvt_ts_early_resume(struct device *dev)
 	if (ts->power_status == LP_MODE_STATUS) {
 		if (device_may_wakeup(&ts->client->dev))
 			disable_irq_wake(ts->client->irq);
-
 		nvt_irq_enable(false);
 
 		mutex_lock(&ts->lock);
@@ -2968,8 +2919,9 @@ int32_t nvt_ts_resume(struct device *dev)
 		pinctrl_configure(ts, true);
 	}
 
+	ts->lowpower_mode = ts->aot_enable;
+
 	ts->prox_power_off = 0;
-	ts->ear_detect_force_enable = false;
 	ts->power_status = POWER_ON_STATUS;
 
 	// please make sure display reset(RESX) sequence and mipi dsi cmds sent before this
@@ -3022,45 +2974,6 @@ int32_t nvt_ts_resume(struct device *dev)
 	return 0;
 }
 
-#ifdef CONFIG_SAMSUNG_TUI
-extern int stui_spi_lock(struct spi_master *spi);
-extern int stui_spi_unlock(struct spi_master *spi);
-
-static int stui_tsp_enter(void)
-{
-	int ret = 0;
-
-	if (!tsp_info)
-		return -EINVAL;
-
-	nvt_irq_enable(false);
-
-	ret = stui_spi_lock(tsp_info->client->master);
-	if (ret) {
-		pr_err("[STUI] stui_spi_lock failed : %d\n", ret);
-		nvt_irq_enable(true);
-		return -1;
-	}
-
-	return 0;
-}
-
-static int stui_tsp_exit(void)
-{
-	int ret = 0;
-
-	if (!tsp_info)
-		return -EINVAL;
-
-	ret = stui_spi_unlock(tsp_info->client->master);
-	if (ret)
-		pr_err("[STUI] stui_spi_unlock failed : %d\n", ret);
-
-	nvt_irq_enable(true);
-
-	return ret;
-}
-#endif
 
 #if defined(CONFIG_FB)
 #ifdef _MSM_DRM_NOTIFY_H_
@@ -3159,9 +3072,8 @@ static struct of_device_id nvt_match_table[] = {
 
 static struct spi_driver nvt_spi_driver = {
 	.probe		= nvt_ts_probe,
-/* Shutdown is called from the SemInputDeviceManagerService. */
-//	.remove		= nvt_ts_remove,
-//	.shutdown	= nvt_ts_shutdown,
+	.remove		= nvt_ts_remove,
+	.shutdown	= nvt_ts_shutdown,
 	.id_table	= nvt_ts_id,
 	.driver = {
 		.name	= NVT_SPI_NAME,

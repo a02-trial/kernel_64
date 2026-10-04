@@ -43,6 +43,8 @@
 
 #ifdef CONFIG_MTK_AUDIODSP_SUPPORT
 #include <adsp_helper.h>
+#include <adsp_ipi.h>
+#include <adsp_service.h>
 #endif
 
 
@@ -62,6 +64,11 @@
 
 #ifdef CONFIG_MTK_AURISYS_PHONE_CALL_SUPPORT
 #include <audio_ipi_client_phone_call.h>
+#endif
+
+
+#ifdef CONFIG_MTK_AUDIO_TUNNELING_SUPPORT
+#include "audio_ipi_client_playback.h"
 #endif
 
 
@@ -720,7 +727,7 @@ static int __init audio_ipi_driver_init(void)
 	}
 
 #if defined(CONFIG_MTK_AUDIODSP_SUPPORT) && defined(CFG_RECOVERY_SUPPORT)
-	adsp_register_notify(&audio_ctrl_notifier);
+	adsp_A_register_notify(&audio_ctrl_notifier);
 #endif
 
 #if defined(CONFIG_MTK_AUDIO_CM4_SUPPORT) && defined(SCP_RECOVERY_SUPPORT)

@@ -4488,7 +4488,7 @@ int initialize_counters(int cpu_id)
 
 void allocate_output_buffer()
 {
-	output_buffer = calloc(1, (1 + topo.num_cpus) * 2048);
+	output_buffer = calloc(1, (1 + topo.num_cpus) * 1024);
 	outp = output_buffer;
 	if (outp == NULL)
 		err(-1, "calloc output buffer");
@@ -4650,9 +4650,9 @@ int add_counter(unsigned int msr_num, char *path, char *name,
 	}
 
 	msrp->msr_num = msr_num;
-	strncpy(msrp->name, name, NAME_BYTES - 1);
+	strncpy(msrp->name, name, NAME_BYTES);
 	if (path)
-		strncpy(msrp->path, path, PATH_BYTES - 1);
+		strncpy(msrp->path, path, PATH_BYTES);
 	msrp->width = width;
 	msrp->type = type;
 	msrp->format = format;

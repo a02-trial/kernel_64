@@ -50,24 +50,6 @@
 #define IST40XX_BIN_NAME		"ist40xx.bin"
 #define IST40XX_IUM_NAME		"ist40xx_ium.bin"
 
-//#define SPU_FW_SIGNED
-#ifdef SPU_FW_SIGNED
-#include <linux/spu-verify.h>
-#endif
-
-#define TSP_PATH_EXTERNAL_FW		"/sdcard/Firmware/TSP/tsp.bin"
-#define TSP_PATH_EXTERNAL_FW_SIGNED	"/sdcard/Firmware/TSP/tsp_signed.bin"
-#define TSP_PATH_SPU_FW_SIGNED		"/spu/TSP/ffu_tsp.bin"
-
-#define TSP_TYPE_BUILTIN_FW			0
-#define TSP_TYPE_EXTERNAL_FW		1
-#define TSP_TYPE_EXTERNAL_FW_SIGNED	2
-#define TSP_TYPE_SPU_FW_SIGNED		3
-
-#define TSP_SIZE_TAG				3
-#define TSP_SZIE_DIGEST				32
-#define TSP_SIZE_SIGNATURE			512
-
 // Update func
 #define MASK_UPDATE_INTERNAL		(1)
 #define MASK_UPDATE_FW			(2)

@@ -42,8 +42,7 @@
 #define SEC_BATTERY_CABLE_PREPARE_WIRELESS_20    37 
 #define SEC_BATTERY_CABLE_PDIC_APDO              38 
 #define SEC_BATTERY_CABLE_POGO                   39
-#define SEC_BATTERY_CABLE_9V_POGO				 40
-#define SEC_BATTERY_CABLE_MAX                    41
+#define SEC_BATTERY_CABLE_MAX                    40
 
 
 /* temperature check type */
@@ -210,8 +209,5 @@
  * use VCELL of LIMITER for recharging check
  */
 #define SEC_BATTERY_RECHARGE_CONDITION_LIMITER          8
-
-#define SIOP_DEFAULT	0xFFFF
-#define SIOP_SCENARIO_VT_CALL		20
 
 #endif /* _DT_BINDINGS_BATTERY_SEC_BATTERY_H */

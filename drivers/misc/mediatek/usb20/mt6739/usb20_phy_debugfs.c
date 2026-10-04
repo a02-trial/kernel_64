@@ -116,7 +116,7 @@ int usb20_phy_init_debugfs(void)
 	struct dentry *file;
 	int ret = 0;
 
-	file = debugfs_create_file("usb_phy", 0644,
+	file = debugfs_create_file("usb_phy", S_IRUGO|S_IWUSR,
 			usb20_debugfs, phy_data,
 			&usb20_phy_fops);
 	if (!file)

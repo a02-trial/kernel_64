@@ -661,7 +661,7 @@ static void lcm_setbacklight_cmdq(void *handle, unsigned int level)
 {
 	pr_info("%s,nt36525b_hdp backlight: level = %d\n", __func__, level);
 
-	bl_level[1].para_list[0] = level;
+	bl_level[0].para_list[0] = level;
 
 	push_table(handle, bl_level, ARRAY_SIZE(bl_level), 1);
 }

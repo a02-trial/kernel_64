@@ -123,12 +123,9 @@ MINT32 seninf_dump_reg(void)
 
 static irqreturn_t seninf_irq(MINT32 Irq, void *DeviceId)
 {
-#ifdef SENINF_IRQ
-	_seninf_irq(Irq, DeviceId, &gseninf);
-#else
+#if 0
 	seninf_dump_reg();
 #endif
-
 	return IRQ_HANDLED;
 }
 
@@ -153,8 +150,10 @@ static MINT32 seninf_release(struct inode *pInode, struct file *pFile)
 {
 #if SENINF_CLK_CONTROL
 	struct SENINF *pseninf = &gseninf;
+#endif
 
 	mutex_lock(&pseninf->seninf_mutex);
+#if SENINF_CLK_CONTROL
 	if (atomic_dec_and_test(&pseninf->seninf_open_cnt))
 		seninf_clk_release(&pseninf->clk);
 #endif
@@ -162,12 +161,9 @@ static MINT32 seninf_release(struct inode *pInode, struct file *pFile)
 #ifdef IMGSENSOR_DFS_CTRL_ENABLE
 		imgsensor_dfs_ctrl(DFS_RELEASE, NULL);
 #endif
-
-#if SENINF_CLK_CONTROL
 	PK_DBG("%s %d\n", __func__,
 	       atomic_read(&pseninf->seninf_open_cnt));
 	mutex_unlock(&pseninf->seninf_mutex);
-#endif
 
 	return 0;
 }
@@ -175,7 +171,7 @@ static MINT32 seninf_release(struct inode *pInode, struct file *pFile)
 static MINT32 seninf_mmap(struct file *pFile, struct vm_area_struct *pVma)
 {
 	unsigned long length = 0;
-	unsigned long pfn = 0x0;
+	MUINT32 pfn = 0x0;
 
 	/*PK_DBG("- E."); */
 	length = (pVma->vm_end - pVma->vm_start);
@@ -192,30 +188,30 @@ static MINT32 seninf_mmap(struct file *pFile, struct vm_area_struct *pVma)
 	case SENINF_MAP_BASE_REG:
 		if (length > SENINF_MAP_LENGTH_REG) {
 			PK_PR_ERR(
-			"mmap range error :module(0x%lx),length(0x%lx),SENINF_BASE_RANGE(0x%x)!\n",
+			"mmap range error :module(0x%x),length(0x%lx),SENINF_BASE_RANGE(0x%x)!\n",
 			pfn, length, SENINF_MAP_LENGTH_REG);
-			return -EINVAL;
+			return -EAGAIN;
 		}
 		break;
 	case SENINF_MAP_BASE_ANA:
 		if (length > SENINF_MAP_LENGTH_ANA) {
 			PK_PR_ERR(
-			"mmap range error :module(0x%lx),length(0x%lx),MIPI_RX_RANGE(0x%x)!\n",
+			"mmap range error :module(0x%x),length(0x%lx),MIPI_RX_RANGE(0x%x)!\n",
 			pfn, length, SENINF_MAP_LENGTH_ANA);
-			return -EINVAL;
+			return -EAGAIN;
 		}
 		break;
 	case SENINF_MAP_BASE_GPIO:
 		if (length > SENINF_MAP_LENGTH_GPIO) {
 			PK_PR_ERR(
-			"mmap range error :module(0x%lx),length(0x%lx),GPIO_RX_RANGE(0x%x)!\n",
+			"mmap range error :module(0x%x),length(0x%lx),GPIO_RX_RANGE(0x%x)!\n",
 			pfn, length, SENINF_MAP_LENGTH_GPIO);
-			return -EINVAL;
+			return -EAGAIN;
 		}
 		break;
 	default:
 		PK_PR_ERR("Illegal starting HW addr for mmap!\n");
-		return -EINVAL;
+		return -EAGAIN;
 
 	}
 
@@ -225,7 +221,7 @@ static MINT32 seninf_mmap(struct file *pFile, struct vm_area_struct *pVma)
 		pVma->vm_pgoff,
 		pVma->vm_end - pVma->vm_start,
 		pVma->vm_page_prot))
-		return -EINVAL;
+		return -EAGAIN;
 
 	return 0;
 }
@@ -259,8 +255,7 @@ static long seninf_ioctl(struct file *pfile,
 				ret = -EFAULT;
 				goto SENINF_IOCTL_EXIT;
 			}
-		} else
-			memset(pbuff, 0, _IOC_SIZE(cmd));
+		}
 	} else {
 		ret = -EFAULT;
 		goto SENINF_IOCTL_EXIT;

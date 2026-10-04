@@ -1,0 +1,139 @@
+name: Build Quake (debug)
+
+on:
+  workflow_dispatch:
+    inputs:
+      DEVICE_NAME:
+        description: 'Nama HP (Contoh: SM-A022F)'
+        required: true
+        default: 'SM-A022F'
+
+jobs:
+  building-kernel:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Apply Changes to a02_01_defconfig
+        run: |
+          # (TES REBOOT) baris paksa SAMSUNG_PRODUCT_SHIP mati dihapus, defconfig tes udah set =y kayak kernel A11
+          echo "CONFIG_BROKEN_ON_SAMSUNG=y" >> arch/arm/configs/a02_01_defconfig
+          sed -i '/CONFIG_LOCALVERSION_AUTO/d' arch/arm/configs/a02_01_defconfig
+          echo "# CONFIG_LOCALVERSION_AUTO is not set" >> arch/arm/configs/a02_01_defconfig
+          sed -i 's/CONFIG_CMDLINE=.*/CONFIG_CMDLINE="console=tty0 console=ttyMT3,921600n1 root=\/dev\/ram vmalloc=496M slub_max_order=0 slub_debug=O androidboot.os_patch_level=2026-05-01"/' arch/arm/configs/a02_01_defconfig
+          echo "CONFIG_MEMCG_FORCE_USE_VM_SWAPPINESS=y" >> arch/arm/configs/a02_01_defconfig
+          echo "CONFIG_NAMESPACES=y" >> arch/arm/configs/a02_01_defconfig
+          echo "CONFIG_PID_NS=y" >> arch/arm/configs/a02_01_defconfig
+          echo "CONFIG_NET_NS=y" >> arch/arm/configs/a02_01_defconfig
+
+      - name: Setup Build Environment
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential bc libssl-dev libfl-dev curl git wget zip ccache libarchive-tools
+          
+      - name: Download Toolchain (AOSP GCC 4.9)
+        run: |
+          mkdir -p toolchain
+          cd toolchain
+          # GCC 4.9 dari LineageOS (The Real Legend)
+          git clone --depth 1 https://github.com/lineageos/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9.git gcc-arm
+          git clone --depth 1 https://github.com/lineageos/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git gcc-aarch64
+          cd ..
+
+      - name: Start Building Kernel
+        run: |
+          # Setup Path GCC sesuai struktur loe
+          GCC64_PATH="${{ github.workspace }}/toolchain/gcc-aarch64/bin"
+          GCC32_PATH="${{ github.workspace }}/toolchain/gcc-arm/bin"
+          export PATH="$GCC64_PATH:$GCC32_PATH:$PATH"
+          
+          export KBUILD_BUILD_USER="${{ github.actor }}"
+          export KBUILD_BUILD_HOST="${{ github.event.inputs.DEVICE_NAME }}"
+          
+          # PAKE PURE GCC (Proven Success)
+          export OPTS="ARCH=arm \
+                       O=out \
+                       CROSS_COMPILE=arm-linux-androideabi- \
+                       CROSS_COMPILE_ARM32=arm-linux-androideabi- \
+                       KCFLAGS=-w"
+
+          # 1. Config
+          make $OPTS a02_01_defconfig
+          
+          # 2. SUNTIK CONFIG (PENYESUAIAN REBOOT & PERMISSIVE)
+          # Permissive Mode
+          scripts/config --file out/.config --disable CONFIG_SECURITY_SELINUX
+          
+          # Reboot Fix: Aktifin Watchdog & PSCI (Standard ARM Reset)
+          scripts/config --file out/.config --enable CONFIG_ARM_PSCI
+          scripts/config --file out/.config --enable CONFIG_ARM_PSCI_FW
+          scripts/config --file out/.config --enable CONFIG_MTK_WD_KICKER
+          scripts/config --file out/.config --enable CONFIG_MTK_REBOOT_REASON
+          
+          # Panic Handling (TES REBOOT): samain kernel A11 = 1
+          scripts/config --file out/.config --set-val CONFIG_PANIC_TIMEOUT 1
+          scripts/config --file out/.config --enable CONFIG_PANIC_ON_REBOOT
+          scripts/config --file out/.config --enable CONFIG_MAGIC_SYSRQ
+          
+          # 2b. Resolve config dulu, terus cetak hasil akhirnya (masuk log + file config_check.log)
+          make $OPTS olddefconfig
+          {
+            echo "=== Kconfig: SEC_DEBUG_SOFTDOG ada di source?"
+            grep -rn "config SEC_DEBUG_SOFTDOG" --include='Kconfig*' . || echo "TIDAK ADA di Kconfig -> opsi ini pasti dibuang"
+            echo
+            echo "=== Hasil akhir out/.config"
+            grep -E "^(# )?CONFIG_(SEC_DEBUG|SEC_REBOOT|SEC_MISC|SEC_BOOTSTAT|SEC_LOG_HOOK_PMSG|SAMSUNG_PRODUCT_SHIP|MTK_DEBUG_LATCH|POWER_RESET|PSTORE|PANIC_TIMEOUT|ARM_PSCI|MTK_WATCHDOG|MTK_WD_KICKER)" out/.config | sort
+          } 2>&1 | tee config_check.log
+          grep -q "^CONFIG_SEC_DEBUG=y" out/.config || echo "::warning::CONFIG_SEC_DEBUG ga nyangkut di .config"
+          grep -q "^CONFIG_SEC_DEBUG_SOFTDOG=y" out/.config || echo "::warning::CONFIG_SEC_DEBUG_SOFTDOG ga nyangkut (kemungkinan ga ada di Kconfig)"
+          grep -q "^CONFIG_MTK_DEBUG_LATCH=y" out/.config || echo "::warning::CONFIG_MTK_DEBUG_LATCH ga nyangkut"
+
+          # 3. Hajar Build
+          make -j$(nproc --all) $OPTS zImage-dtb 2>&1 | tee build.log
+
+      - name: Set Properties
+        id: props
+        run: echo "date=$(TZ=Asia/Jakarta date +%Y%m%d-%I%M%p)" >> $GITHUB_OUTPUT
+
+      - name: Make Artifact & Verify Size
+        run: |
+          mkdir -p ${{ github.workspace }}/final_output
+          if [ -f "out/arch/arm/boot/zImage-dtb" ]; then
+            cp -L out/arch/arm/boot/zImage-dtb ${{ github.workspace }}/final_output/zImage-dtb
+            cp out/.config ${{ github.workspace }}/final_output/config_used.txt
+            cp config_check.log ${{ github.workspace }}/final_output/config_check.log
+            SIZE=$(stat -c%s "${{ github.workspace }}/final_output/zImage-dtb")
+            echo "✅ zImage-dtb READY! Size: $SIZE bytes"
+            if [ "$SIZE" -lt 5000000 ]; then
+               echo "❌ Error: File terlalu kecil!"
+               exit 1
+            fi
+          else
+            echo "❌ ERROR: zImage-dtb GAK KELUAR!"
+            exit 1
+          fi
+
+      - name: Final Packing (Zip)
+        run: |
+          cd ${{ github.workspace }}/final_output
+          zip -9 ${{ github.event.inputs.DEVICE_NAME }}-${{ steps.props.outputs.date }}.zip zImage-dtb config_used.txt config_check.log
+          cp *.zip ${{ github.workspace }}/
+
+      - name: Upload Release
+        uses: ncipollo/release-action@v1.12.0
+        with:
+          artifacts: "${{ github.workspace }}/*.zip"
+          name: Quake Kernel REBOOT-TEST - ${{ steps.props.outputs.date }}
+          tag: ${{ github.run_id }}-${{ steps.props.outputs.date }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          body: |
+            ## 🎉 Quake Kernel (Android 10 Base)
+            - **Device**: ${{ github.event.inputs.DEVICE_NAME }}
+            - **Compiler**: Pure GCC 4.9 LineageOS
+            - **Status**: Booting OK, MTP OK, dt2w OK
+            - **Fixes**: SELinux Disabled (Permissive), ARM PSCI Reset Logic enabled.

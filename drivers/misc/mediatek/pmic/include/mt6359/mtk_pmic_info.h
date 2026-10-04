@@ -27,6 +27,8 @@
 /* disable for Bring up */
 #endif
 
+extern unsigned int pmic_ipi_test_code(void);
+
 /*
  * Debugfs
  */

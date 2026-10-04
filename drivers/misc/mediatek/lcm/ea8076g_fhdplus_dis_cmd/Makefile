@@ -19,3 +19,4 @@ obj-y += ea8076g_fhdplus_dis_cmd.o
 
 ccflags-$(CONFIG_MTK_LCM) += -I$(srctree)/drivers/misc/mediatek/lcm/inc
 
+ccflags-y += -DLCM_SET_DISPLAY_ON_DELAY

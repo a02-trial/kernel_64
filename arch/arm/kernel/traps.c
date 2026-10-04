@@ -222,12 +222,12 @@ static void dump_instr(const char *lvl, struct pt_regs *regs)
 }
 
 #ifdef CONFIG_ARM_UNWIND
-void dump_backtrace(struct pt_regs *regs, struct task_struct *tsk)
+static inline void dump_backtrace(struct pt_regs *regs, struct task_struct *tsk)
 {
 	unwind_backtrace(regs, tsk);
 }
 #else
-void dump_backtrace(struct pt_regs *regs, struct task_struct *tsk)
+static void dump_backtrace(struct pt_regs *regs, struct task_struct *tsk)
 {
 	unsigned int fp, mode;
 	int ok = 1;
@@ -314,14 +314,6 @@ void show_stack(struct task_struct *tsk, unsigned long *sp)
 	dump_backtrace(NULL, tsk);
 	barrier();
 }
-
-#ifdef CONFIG_SEC_DEBUG_AUTO_COMMENT
-void show_stack_auto_comment(struct task_struct *tsk, unsigned long *sp)
-{
-	dump_backtrace_auto_comment(NULL, tsk);
-	barrier();
-}
-#endif /* CONFIG_SEC_DEBUG_AUTO_COMMENT */
 
 #ifdef CONFIG_PREEMPT
 #define S_PREEMPT " PREEMPT"
@@ -531,14 +523,10 @@ asmlinkage void __exception do_undefinstr(struct pt_regs *regs)
 		thread->cpu_excp++;
 		if (thread->cpu_excp == 1) {
 			thread->regs_on_excp = (void *)regs;
-#ifdef CONFIG_MTK_AEE_IPANIC
 			aee_excp_regs = (void *)regs;
-#endif
 		}
-#ifdef CONFIG_MTK_AEE_IPANIC
 		if (thread->cpu_excp >= 2)
 			aee_stop_nested_panic(regs);
-#endif
 	}
 
 	pc = (void __user *)instruction_pointer(regs);
@@ -633,9 +621,9 @@ asmlinkage void bad_mode(struct pt_regs *regs, int reason)
 	console_verbose();
 
 #ifdef CONFIG_SEC_DEBUG_AUTO_COMMENT
-	pr_auto(ASL1, "Bad mode in %s handler detected\n", handler[reason]);
+	pr_auto(ASL1, "Bad mode in %s handler detected on CPU%d\n", handler[reason], smp_processor_id());
 #else
-	pr_crit("Bad mode in %s handler detected\n", handler[reason]);
+	pr_crit("Bad mode in %s handler detected on CPU%d\n", handler[reason], smp_processor_id());
 #endif
 
 #ifdef CONFIG_SEC_DEBUG_EXTRA_INFO
@@ -971,3 +959,4 @@ void __init early_trap_init(void *vectors_base)
 	 */
 #endif
 }
+

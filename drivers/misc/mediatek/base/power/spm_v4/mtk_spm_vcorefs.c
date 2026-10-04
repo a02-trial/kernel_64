@@ -577,15 +577,15 @@ static int spm_trigger_dvfs(int kicker, int opp, bool fix)
 		spm_read(DVFSRC_VCORE_REQUEST), spm_read(DVFSRC_EMI_REQUEST),
 		spm_read(DVFSRC_MD_REQUEST));
 #if 1
-	udelay(1);
-	/* check DVFS idle */
-	r = wait_spm_complete_by_condition(is_dvfs_in_progress() == 0,
-		SPM_DVFS_TIMEOUT);
-	if (r < 0)
-		spm_vcorefs_warn("DVFSRC_LEVEL (0x%x)\n",
+		udelay(1);
+		/* check DVFS idle */
+		r = wait_spm_complete_by_condition(is_dvfs_in_progress() == 0,
+			SPM_DVFS_TIMEOUT);
+		if (r < 0)
+			spm_vcorefs_warn("DVFSRC_LEVEL (0x%x)\n",
 			spm_read(DVFSRC_LEVEL));
-
-	udelay(1);
+	
+		udelay(1);
 #endif
 #if 1
 	/* check DVFS timer */

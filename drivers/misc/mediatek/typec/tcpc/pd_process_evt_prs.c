@@ -153,8 +153,6 @@ static inline bool pd_process_hw_msg(
 
 #ifdef CONFIG_USB_PD_PR_SWAP_ERROR_RECOVERY
 	case PD_HW_TX_FAILED:
-	/* fallthrough */
-	case PD_HW_TX_DISCARD:
 		return PE_MAKE_STATE_TRANSIT(PD_HW_TX_FAILED);
 #endif	/* CONFIG_USB_PD_PR_SWAP_ERROR_RECOVERY */
 

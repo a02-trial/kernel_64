@@ -28,6 +28,7 @@
 #include "wlan_typedef.h"
 #include "queue.h"
 
+
 extern BOOLEAN fgIsResetting;
 
 /*******************************************************************************

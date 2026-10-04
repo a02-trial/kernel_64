@@ -258,9 +258,6 @@ int usb_function_activate(struct usb_function *);
 
 int usb_interface_id(struct usb_configuration *, struct usb_function *);
 
-int config_ep_by_speed_and_alt(struct usb_gadget *g, struct usb_function *f,
-				struct usb_ep *_ep, u8 alt);
-
 int config_ep_by_speed(struct usb_gadget *g, struct usb_function *f,
 			struct usb_ep *_ep);
 
@@ -467,7 +464,6 @@ static inline struct usb_composite_driver *to_cdriver(
  * sure doing that won't hurt too much.
  *
  * One notion for how to handle Wireless USB devices involves:
- *
  * (a) a second gadget here, discovery mechanism TBD, but likely
  *     needing separate "register/unregister WUSB gadget" calls;
  * (b) updates to usb_gadget to include flags "is it wireless",
@@ -603,11 +599,6 @@ struct usb_function_instance {
 	int (*set_inst_name)(struct usb_function_instance *inst,
 			      const char *name);
 	void (*free_func_inst)(struct usb_function_instance *inst);
-
-#ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
-	int (*set_inst_eth_addr)(struct usb_function_instance *inst,
-			   u8 * ethaddr);
-#endif
 };
 
 void usb_function_unregister(struct usb_function_driver *f);

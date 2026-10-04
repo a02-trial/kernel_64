@@ -308,7 +308,7 @@ static void rx_complete(struct usb_ep *ep, struct usb_request *req)
 		}
 		if (!status)
 			queue = 1;
-		rndis_test_rx_usb_in++;
+	rndis_test_rx_usb_in++;
 		break;
 
 	/* software-driven interface shutdown */
@@ -342,12 +342,12 @@ clean:
 	if (queue && dev->rx_frames.qlen <= u_ether_rx_pending_thld) {
 		if (rx_submit(dev, req, GFP_ATOMIC) < 0) {
 			spin_lock(&dev->reqrx_lock);
-			list_add(&req->list, &dev->rx_reqs);
+		list_add(&req->list, &dev->rx_reqs);
 			spin_unlock(&dev->reqrx_lock);
-		}
+	}
 	} else {
 		spin_lock(&dev->reqrx_lock);
-		list_add(&req->list, &dev->rx_reqs);
+	list_add(&req->list, &dev->rx_reqs);
 		spin_unlock(&dev->reqrx_lock);
 	}
 
@@ -500,6 +500,20 @@ static void process_rx_w(struct work_struct *work)
 		if (status < 0
 				|| ETH_HLEN > skb->len
 				|| skb->len > ETH_FRAME_LEN) {
+#ifdef CONFIG_USB_NCM_SUPPORT_MTU_CHANGE
+		/*
+		  Need to revisit net->mtu	does not include header size incase of changed MTU
+		*/
+			if(!strcmp(dev->port_usb->func.name,"ncm")) {
+				if (status < 0
+					|| ETH_HLEN > skb->len
+					|| skb->len > (dev->net->mtu + ETH_HLEN)) {
+					printk(KERN_ERR "usb: %s  drop incase of NCM rx length %d\n",__func__,skb->len);
+				} else {
+					goto process_frame;
+				}
+			}
+#endif
 			dev->net->stats.rx_errors++;
 			dev->net->stats.rx_length_errors++;
 			rndis_test_rx_error++;
@@ -507,6 +521,9 @@ static void process_rx_w(struct work_struct *work)
 			dev_kfree_skb_any(skb);
 			continue;
 		}
+#ifdef CONFIG_USB_NCM_SUPPORT_MTU_CHANGE
+process_frame:
+#endif
 		skb->protocol = eth_type_trans(skb, dev->net);
 		dev->net->stats.rx_packets++;
 		dev->net->stats.rx_bytes += skb->len;
@@ -577,6 +594,9 @@ static void tx_complete(struct usb_ep *ep, struct usb_request *req)
 	default:
 		dev->net->stats.tx_errors++;
 		VDBG(dev, "tx err %d\n", req->status);
+#ifdef CONFIG_USB_NCM_SUPPORT_MTU_CHANGE
+		printk(KERN_ERR"usb:%s tx err %d\n",__func__, req->status);
+#endif
 		/* FALLTHROUGH */
 	case -ECONNRESET:		/* unlink */
 	case -ESHUTDOWN:		/* disconnect etc */
@@ -735,8 +755,8 @@ free_buf:
 	/* tx_req_bufsize = 0 retries mem alloc on next eth_start_xmit */
 	dev->tx_req_bufsize = 0;
 	list_for_each(act, &dev->tx_reqs) {
-	req = container_of(act, struct usb_request, list);
-	kfree(req->buf);
+		req = container_of(act, struct usb_request, list);
+		kfree(req->buf);
 	req->buf = NULL;
 	}
 	return -ENOMEM;
@@ -972,7 +992,6 @@ static netdev_tx_t eth_start_xmit(struct sk_buff *skb,
 	switch (retval) {
 	default:
 		U_ETHER_DBG("tx queue err %d\n", retval);
-		dev->no_tx_req_used--;
 		break;
 	case 0:
 		rndis_test_tx_usb_out++;
@@ -1185,9 +1204,13 @@ struct eth_dev *gether_setup_name(struct usb_gadget *g,
 	dev->net = net;
 	dev->qmult = qmult;
 	snprintf(net->name, sizeof(net->name), "%s%%d", netname);
-#ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
-	memcpy(dev->host_mac, ethaddr, ETH_ALEN);
-	printk(KERN_DEBUG "usb: set unique host mac\n");
+
+#if 0
+	if (get_ether_addr(dev_addr, net->dev_addr))
+		dev_info(&g->dev, "using random %s ethernet address\n", "self");
+
+	if (get_ether_addr(host_addr, dev->host_mac))
+		dev_info(&g->dev, "using random %s ethernet address\n", "host");
 #else
 	if (get_ether_addr(dev_addr, net->dev_addr))
 		dev_warn(&g->dev,
@@ -1288,7 +1311,7 @@ int gether_register_netdev(struct net_device *net)
 		dev_dbg(&g->dev, "register_netdev failed, %d\n", status);
 		return status;
 	} else {
-		DBG(dev, "HOST MAC %pM\n", dev->host_mac);
+		INFO(dev, "HOST MAC %pM\n", dev->host_mac);
 
 		/* two kinds of host-initiated state changes:
 		 *  - iff DATA transfer is active, carrier is "on"
@@ -1304,7 +1327,7 @@ int gether_register_netdev(struct net_device *net)
 	if (status)
 		pr_warn("cannot set self ethernet address: %d\n", status);
 	else
-		DBG(dev, "MAC %pM\n", dev->dev_mac);
+		INFO(dev, "MAC %pM\n", dev->dev_mac);
 
 	return status;
 }

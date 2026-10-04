@@ -176,12 +176,11 @@ INT32 osal_snprintf(PINT8 buf, UINT32 len, const PINT8 fmt, ...)
 	INT32 iRet = 0;
 	va_list args;
 
+	/*va_start(args, fmt); */
 	va_start(args, fmt);
+	/*iRet = snprintf(buf, len, fmt, args); */
 	iRet = vsnprintf(buf, len, fmt, args);
 	va_end(args);
-
-	if (iRet < 0)
-		pr_info("vsnprintf error:%d\n", iRet);
 
 	return iRet;
 }
@@ -189,49 +188,43 @@ INT32 osal_snprintf(PINT8 buf, UINT32 len, const PINT8 fmt, ...)
 INT32 osal_err_print(const PINT8 str, ...)
 {
 	va_list args;
-	INT32 ret;
 	INT8 tempString[DBG_LOG_STR_SIZE];
 
 	va_start(args, str);
-	ret = vsnprintf(tempString, DBG_LOG_STR_SIZE, str, args);
+	vsnprintf(tempString, DBG_LOG_STR_SIZE, str, args);
 	va_end(args);
 
-	if (ret > 0)
-		pr_err("%s", tempString);
+	pr_err("%s", tempString);
 
-	return ret;
+	return 0;
 }
 
 INT32 osal_dbg_print(const PINT8 str, ...)
 {
 	va_list args;
-	INT32 ret;
 	INT8 tempString[DBG_LOG_STR_SIZE];
 
 	va_start(args, str);
-	ret = vsnprintf(tempString, DBG_LOG_STR_SIZE, str, args);
+	vsnprintf(tempString, DBG_LOG_STR_SIZE, str, args);
 	va_end(args);
 
-	if (ret > 0)
-		pr_debug("%s", tempString);
+	pr_debug("%s", tempString);
 
-	return ret;
+	return 0;
 }
 
 INT32 osal_warn_print(const PINT8 str, ...)
 {
 	va_list args;
-	INT32 ret;
 	INT8 tempString[DBG_LOG_STR_SIZE];
 
 	va_start(args, str);
-	ret = vsnprintf(tempString, DBG_LOG_STR_SIZE, str, args);
+	vsnprintf(tempString, DBG_LOG_STR_SIZE, str, args);
 	va_end(args);
 
-	if (ret > 0)
-		pr_warn("%s", tempString);
+	pr_warn("%s", tempString);
 
-	return ret;
+	return 0;
 }
 
 INT32 osal_dbg_assert(INT32 expr, const PINT8 file, INT32 line)
@@ -258,18 +251,12 @@ INT32 osal_dbg_assert_aee(const PINT8 module, const PINT8 detail_description, ..
 	va_list args;
 
 	va_start(args, detail_description);
-	if (vsnprintf(tempString, DBG_LOG_STR_SIZE, detail_description, args) > 0) {
-		osal_err_print("[WMT-ASSERT][E][Module]:%s, [INFO]%s\n", module, tempString);
+	vsnprintf(tempString, DBG_LOG_STR_SIZE, detail_description, args);
+	osal_err_print("[WMT-ASSERT][E][Module]:%s, [INFO]%s\n", module, tempString);
 #ifdef WMT_PLAT_ALPS
-		/* There exists Format-String vulnerability. For safety, we must use the %s
-		 * format parameter to read data.
-		 */
-#if IS_ENABLED(CONFIG_MTK_AEE_AED)
-		aee_kernel_warning_api(__FILE__, __LINE__, DB_OPT_WCN_ISSUE_INFO, module,
-			detail_description, "%s", tempString);
+	/* There exists Format-String vulnerability. For safety, we must use the %s format parameter to read data */
+	aee_kernel_warning_api(__FILE__, __LINE__, DB_OPT_WCN_ISSUE_INFO, module, detail_description, "%s", tempString);
 #endif
-#endif
-	}
 	va_end(args);
 	return 0;
 }
@@ -281,8 +268,6 @@ INT32 osal_sprintf(PINT8 str, const PINT8 format, ...)
 
 	va_start(args, format);
 	iRet = vsnprintf(str, DBG_LOG_STR_SIZE, format, args);
-	if (iRet < 0)
-		osal_err_print("vsnprintf error [%d]\n", iRet);
 	va_end(args);
 
 	return iRet;
@@ -350,9 +335,7 @@ UINT16 osal_crc16(const PUINT8 buffer, const UINT32 length)
 
 VOID osal_dump_thread_state(const PUINT8 name)
 {
-#if defined(KERNEL_dump_thread_state)
-	return KERNEL_dump_thread_state(name);
-#endif
+	return connectivity_export_dump_thread_state(name);
 }
 
 VOID osal_thread_show_stack(P_OSAL_THREAD pThread)
@@ -394,7 +377,7 @@ INT32 osal_thread_stop(P_OSAL_THREAD pThread)
 
 	if ((pThread) && (pThread->pThread)) {
 		iRet = kthread_stop(pThread->pThread);
-		pThread->pThread = NULL;
+		/* pThread->pThread = NULL; */
 		return iRet;
 	}
 	return -1;
@@ -749,10 +732,6 @@ INT32 osal_bit_op_unlock(P_OSAL_UNSLEEPABLE_LOCK pLock)
 #endif
 INT32 osal_clear_bit(UINT32 bitOffset, P_OSAL_BIT_OP_VAR pData)
 {
-	if (bitOffset >= BITS_PER_LONG) {
-		pr_info("bitOffset(%d) is out of range.\n", bitOffset);
-		return -1;
-	}
 	osal_bit_op_lock(&(pData->opLock));
 	clear_bit(bitOffset, &pData->data);
 	osal_bit_op_unlock(&(pData->opLock));
@@ -761,10 +740,6 @@ INT32 osal_clear_bit(UINT32 bitOffset, P_OSAL_BIT_OP_VAR pData)
 
 INT32 osal_set_bit(UINT32 bitOffset, P_OSAL_BIT_OP_VAR pData)
 {
-	if (bitOffset >= BITS_PER_LONG) {
-		pr_info("bitOffset(%d) is out of range.\n", bitOffset);
-		return -1;
-	}
 	osal_bit_op_lock(&(pData->opLock));
 	set_bit(bitOffset, &pData->data);
 	osal_bit_op_unlock(&(pData->opLock));
@@ -775,10 +750,6 @@ INT32 osal_test_bit(UINT32 bitOffset, P_OSAL_BIT_OP_VAR pData)
 {
 	UINT32 iRet = 0;
 
-	if (bitOffset >= BITS_PER_LONG) {
-		pr_info("bitOffset(%d) is out of range.\n", bitOffset);
-		return -1;
-	}
 	osal_bit_op_lock(&(pData->opLock));
 	iRet = test_bit(bitOffset, &pData->data);
 	osal_bit_op_unlock(&(pData->opLock));
@@ -789,10 +760,6 @@ INT32 osal_test_and_clear_bit(UINT32 bitOffset, P_OSAL_BIT_OP_VAR pData)
 {
 	UINT32 iRet = 0;
 
-	if (bitOffset >= BITS_PER_LONG) {
-		pr_info("bitOffset(%d) is out of range.\n", bitOffset);
-		return -1;
-	}
 	osal_bit_op_lock(&(pData->opLock));
 	iRet = test_and_clear_bit(bitOffset, &pData->data);
 	osal_bit_op_unlock(&(pData->opLock));
@@ -804,10 +771,6 @@ INT32 osal_test_and_set_bit(UINT32 bitOffset, P_OSAL_BIT_OP_VAR pData)
 {
 	UINT32 iRet = 0;
 
-	if (bitOffset >= BITS_PER_LONG) {
-		pr_info("bitOffset(%d) is out of range.\n", bitOffset);
-		return -1;
-	}
 	osal_bit_op_lock(&(pData->opLock));
 	iRet = test_and_set_bit(bitOffset, &pData->data);
 	osal_bit_op_unlock(&(pData->opLock));
@@ -828,13 +791,9 @@ INT32 osal_timer_create(P_OSAL_TIMER pTimer)
 {
 	struct timer_list *timer = &pTimer->timer;
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0))
-	timer_setup(timer, pTimer->timeoutHandler, 0);
-#else
 	init_timer(timer);
 	timer->function = pTimer->timeoutHandler;
 	timer->data = (ULONG)pTimer->timeroutHandlerData;
-#endif
 	return 0;
 }
 
@@ -1235,11 +1194,7 @@ INT32 osal_wake_lock_init(P_OSAL_WAKE_LOCK pLock)
 		return -1;
 
 	if (pLock->init_flag == 0) {
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 149))
-		pLock->wake_lock = wakeup_source_register(NULL, pLock->name);
-#else
 		pLock->wake_lock = wakeup_source_register(pLock->name);
-#endif
 		pLock->init_flag = 1;
 	}
 
@@ -1331,11 +1286,6 @@ INT32 osal_unlock_unsleepable_lock(P_OSAL_UNSLEEPABLE_LOCK pUSL)
 	return 0;
 }
 
-INT32 osal_trylock_unsleepable_lock(P_OSAL_UNSLEEPABLE_LOCK pUSL)
-{
-	return spin_trylock_irqsave(&(pUSL->lock), pUSL->flag);
-}
-
 INT32 osal_unsleepable_lock_deinit(P_OSAL_UNSLEEPABLE_LOCK pUSL)
 {
 	return 0;
@@ -1404,7 +1354,7 @@ INT32 osal_gettimeofday(PINT32 sec, PINT32 usec)
 	INT32 ret = 0;
 	struct timeval now;
 
-	osal_do_gettimeofday(&now);
+	do_gettimeofday(&now);
 
 	if (sec != NULL)
 		*sec = now.tv_sec;
@@ -1417,15 +1367,6 @@ INT32 osal_gettimeofday(PINT32 sec, PINT32 usec)
 		ret = -1;
 
 	return ret;
-}
-
-void osal_do_gettimeofday(struct timeval *tv)
-{
-	struct timespec64 now;
-
-	ktime_get_real_ts64(&now);
-	tv->tv_sec = now.tv_sec;
-	tv->tv_usec = now.tv_nsec / NSEC_PER_USEC;
 }
 
 INT32 osal_printtimeofday(const PUINT8 prefix)
@@ -1464,7 +1405,7 @@ VOID osal_buffer_dump(const PUINT8 buf, const PUINT8 title, const UINT32 len, co
 	UINT32 dump_len;
 	char str[DBG_LOG_STR_SIZE] = {""};
 	INT32 strlen = 0;
-	char *p = NULL;
+	char *p;
 
 	pr_info("[%s] len=%d, limit=%d, start dump\n", title, len, limit);
 
@@ -1493,14 +1434,12 @@ VOID osal_buffer_dump_data(const PUINT32 buf, const PUINT8 title, const UINT32 l
 	UINT32 dump_len;
 	char str[DBG_LOG_STR_SIZE] = {""};
 	INT32 strlen = 0;
-	char *p = NULL;
-	INT32 count = 0;
+	char *p;
 
 	dump_len = ((limit != 0) && (len > limit)) ? limit : len;
 	p = str;
 	for (k = 0; k < dump_len; k++) {
-		count++;
-		if (count % 8 != 0) {
+		if (((k+1) % 8 != 0) && (k < (dump_len - 1))) {
 			strlen = osal_sprintf(p, "0x%08x,", buf[k]);
 			p += strlen;
 		} else {
@@ -1512,11 +1451,11 @@ VOID osal_buffer_dump_data(const PUINT32 buf, const PUINT8 title, const UINT32 l
 			p = str;
 		}
 	}
-	if (count % 8 != 0) {
+	if (k % 8 != 0) {
 		if (flag)
-			osal_ftrace_print("%s%s\n", title, str);
+			osal_ftrace_print("%s%s", title, str);
 		else
-			pr_info("%s%s\n", title, str);
+			pr_info("%s%s", title, str);
 	}
 }
 
@@ -1540,21 +1479,19 @@ VOID osal_op_raise_signal(P_OSAL_OP pOp, INT32 result)
 
 INT32 osal_ftrace_print(const PINT8 str, ...)
 {
-	int ret = 0;
 #ifdef CONFIG_TRACING
 	va_list args;
 	INT8 tempString[DBG_LOG_STR_SIZE];
 
 	if (ftrace_flag) {
 		va_start(args, str);
-		ret = vsnprintf(tempString, DBG_LOG_STR_SIZE, str, args);
+		vsnprintf(tempString, DBG_LOG_STR_SIZE, str, args);
 		va_end(args);
 
-		if (ret > 0)
-			trace_printk("%s\n", tempString);
+		trace_printk("%s\n", tempString);
 	}
 #endif
-	return ret;
+	return 0;
 }
 
 INT32 osal_ftrace_print_ctrl(INT32 flag)
@@ -1627,15 +1564,11 @@ static VOID _osal_opq_dump(const char *qName, P_OSAL_OP_Q pOpQ)
 			for (opDataIdx = 0; opDataIdx < OPQ_DUMP_OPDATA_PER_OP; opDataIdx++)
 				printed += snprintf(buf + printed, OPQ_DUMP_LINE_BUF_SIZE - printed,
 						"%zx,", op->op.au4OpData[opDataIdx]);
-			if (printed > 0)
-				buf[printed-1] = ' ';
+			buf[printed-1] = ' ';
 		} else {
 			printed += snprintf(buf + printed, OPQ_DUMP_LINE_BUF_SIZE - printed,
 						"[%u(%u)]%p ", idx, (rd & RB_MASK(pOpQ)), op);
 		}
-		if (printed < 1 || printed >= (sizeof(buf) - 1))
-			return;
-
 		buf[printed++] = ' ';
 
 		if (idxInBuf == OPQ_DUMP_OP_PER_LINE - 1  || rd == wt - 1) {
@@ -1691,7 +1624,7 @@ static VOID osal_op_history_print_work(struct work_struct *work)
 	struct ring *ring_buffer = &log_history->dump_ring_buffer;
 	struct ring_segment seg;
 	struct osal_op_history_entry *queue = ring_buffer->base;
-	struct osal_op_history_entry *entry = NULL;
+	struct osal_op_history_entry *entry;
 	INT32 index = 0;
 
 	if (queue == NULL) {
@@ -1742,8 +1675,8 @@ VOID osal_op_history_init(struct osal_op_history *log_history, INT32 queue_size)
 
 VOID osal_op_history_print(struct osal_op_history *log_history, PINT8 name)
 {
-	struct osal_op_history_entry *queue = NULL;
-	struct ring *ring_buffer = NULL, *dump_ring_buffer = NULL;
+	struct osal_op_history_entry *queue;
+	struct ring *ring_buffer, *dump_ring_buffer;
 	INT32 queue_size;
 	ULONG flags;
 	struct work_struct *work = &log_history->dump_work;
@@ -1760,7 +1693,7 @@ VOID osal_op_history_print(struct osal_op_history *log_history, PINT8 name)
 			 * RING_SIZE(ring_buffer);
 
 	/* Allocate memory before getting lock to save time of holding lock */
-	queue = kmalloc(queue_size, GFP_ATOMIC);
+	queue = kmalloc(queue_size, GFP_KERNEL);
 	if (queue == NULL) {
 		spin_unlock_irqrestore(lock, flags);
 		return;

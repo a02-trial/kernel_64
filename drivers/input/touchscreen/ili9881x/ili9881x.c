@@ -76,7 +76,7 @@ void ili_resume_by_ddi(void)
 	ili_reset_ctrl(ilits->reset);
 	ili_ice_mode_ctrl(ENABLE, OFF);
 	ilits->ddi_rest_done = true;
-	mdelay(5);
+	usleep_range(5 * 1000, 5 * 1000);
 	queue_work(resume_by_ddi_wq, &(resume_by_ddi_work));
 
 	mutex_unlock(&ilits->touch_mutex);
@@ -402,7 +402,7 @@ void set_current_ic_mode(int mode)
 
 	input_info(true, ilits->dev, "%s,mode:%d\n", __func__, mode);
 
-	if ((ilits->power_status == POWER_OFF_STATUS) || ilits->tp_shutdown) {
+	if (ilits->power_status == POWER_OFF_STATUS) {
 		input_info(true, ilits->dev, "%s power off satus\n", __func__);
 		return;
 	}
@@ -424,12 +424,6 @@ void set_current_ic_mode(int mode)
 			ret = ili_ic_func_ctrl("lock_point", GAME_MODE_ENABLE);
 			if (ret < 0)
 				input_err(true, ilits->dev, "%s GAME_MODE_ENABLE failed\n", __func__);
-		}
-
-		if (ilits->clear_cover_mode_enabled > 0) {
-			ret = ili_ic_func_ctrl("cover_mode", ilits->clear_cover_type);
-			if (ret < 0)
-				input_err(true, ilits->dev, "%s clear_cover_mode_enabled failed\n", __func__);
 		}
 
 		if (ilits->prox_face_mode) {
@@ -525,7 +519,7 @@ int ili_sleep_handler(int mode)
 		}
 		input_info(true, ilits->dev, "%s prox_power_off:%d, prox_face_mode:%d, gesture:%d, ges_sym:0x%x, incell_power_state:%d\n",
 				__func__, ilits->prox_power_off, ilits->prox_face_mode,
-				ilits->gesture, ilits->ges_sym, ilits->incell_power_state, ilits->incell_power_state, ilits->incell_power_state);
+				ilits->gesture, ilits->ges_sym, ilits->incell_power_state);
 		if (ilits->prox_face_mode || ilits->gesture) {
 			ili_incell_power_control(ENABLE);
 			ilits->power_status = LP_AOT_STATUS;
@@ -557,8 +551,7 @@ int ili_sleep_handler(int mode)
 	case TP_EARLY_RESUME:
 		input_info(true, ilits->dev, "%s ilits->power_status:%d, ges_sym:0x%x\n",
 				__func__, ilits->power_status, ilits->ges_sym);
-		if ((ilits->power_status != POWER_OFF_STATUS) && (ilits->power_status != POWER_ON_STATUS)
-			&& !ilits->tp_shutdown) {
+		if ((ilits->power_status != POWER_OFF_STATUS) && (ilits->power_status != POWER_ON_STATUS)) {
 			ili_irq_wake_disable();
 			if (ilits->power_status == LP_PROX_STATUS) {
 				ilits->actual_tp_mode = P5_X_FW_AP_MODE;
@@ -570,8 +563,8 @@ int ili_sleep_handler(int mode)
 				ilits->prox_power_off = 0;
 				ilits->prox_lp_scan_mode_enabled = false;
 			}
-			if ((ilits->power_status != LP_FACTORY_STATUS) && !ilits->tp_shutdown) {
-				if ((ilits->chip->id == ILI7807_CHIP) || (ilits->chip->id == ILI9882_CHIP)) {
+			if (ilits->power_status != LP_FACTORY_STATUS) {
+				if (ilits->chip->id == ILI7807_CHIP) {
 					ilitek_pin_control(false);
 					usleep_range(5 * 1000, 5 * 1000);
 					ili_incell_power_control(DISABLE);
@@ -611,7 +604,7 @@ int ili_sleep_handler(int mode)
 		ili_wq_ctrl(WQ_ESD, ENABLE);
 		ili_wq_ctrl(WQ_BAT, ENABLE);
 
-		mdelay(ilits->rst_edge_delay);//resume, after 10ms enable irq , for INT noisy
+		msleep(ilits->rst_edge_delay);//resume, after 10ms enable irq , for INT noisy
 
 		set_current_ic_mode(SET_MODE_NORMAL);
 
@@ -1237,7 +1230,11 @@ int ili_tddi_init(void)
 	ilits->boot = true;
 #endif
 
-	ilits->ws = wakeup_source_register(ilits->dev, "ili_wakelock");
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 9, 0)
+	ilits->ws = wakeup_source_register(ilits->dev, "ili_wakelock"); //4.19
+#else
+	ilits->ws = wakeup_source_register("ili_wakelock"); //4.9
+#endif
 	if (!ilits->ws)
 		input_err(true, ilits->dev, "%s wakeup source request failed\n", __func__);
 
@@ -1273,8 +1270,7 @@ void ili_dev_remove(void)
 		flush_workqueue(bat_wq);
 		destroy_workqueue(bat_wq);
 	}
-/* Cannot remove sysfs_remove_group when using sevice shutdown(enabled_store) */
-//	ili_sec_fn_remove();
+	ili_sec_fn_remove();
 	if (ilits->ws)
 		wakeup_source_unregister(ilits->ws);
 
@@ -1287,8 +1283,7 @@ void ili_dev_remove(void)
 
 	kfree(ilits->tr_buf);
 	kfree(ilits->gcoord);
-/* Cannot free "&info" when using sevice shutdown(enabled_store) */
-//	ili_interface_dev_exit(ilits);
+	ili_interface_dev_exit(ilits);
 }
 
 int ili_dev_init(struct ilitek_hwif_info *hwif)

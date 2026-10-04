@@ -905,7 +905,6 @@ typedef struct _PARAM_SCAN_REQUEST_ADV_T {
 	PUINT_8 pucIE;
 	/* partial scan temp save request info */
 	PUINT_8 puPartialScanReq;
-	UINT_8 aucRandomMac[MAC_ADDR_LEN];
 } PARAM_SCAN_REQUEST_ADV_T, *P_PARAM_SCAN_REQUEST_ADV_T;
 
 /*--------------------------------------------------------------*/
@@ -924,9 +923,6 @@ typedef struct _PARAM_SCHED_SCAN_REQUEST_T {
 	UINT_32 u4IELength;
 	PUINT_8 pucIE;
 	UINT_16 u2ScanInterval;	/* in milliseconds */
-	UINT_8 ucScnFuncMask;
-	UINT_8 aucRandomMac[MAC_ADDR_LEN];
-	UINT_8 aucRandomMacMask[MAC_ADDR_LEN];
 } PARAM_SCHED_SCAN_REQUEST, *P_PARAM_SCHED_SCAN_REQUEST;
 
 #if CFG_SUPPORT_HOTSPOT_2_0
@@ -2027,8 +2023,3 @@ wlanoidExternalAuthDone(IN P_ADAPTER_T prAdapter,
 			IN void *pvSetBuffer,
 			IN uint32_t u4SetBufferLen,
 			OUT uint32_t *pu4SetInfoLen);
-
-uint32_t
-wlanoidSetScanMacOui(IN P_ADAPTER_T prAdapter,
-		IN void *pvSetBuffer, IN uint32_t u4SetBufferLen,
-		OUT uint32_t *pu4SetInfoLen);

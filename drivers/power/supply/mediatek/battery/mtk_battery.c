@@ -127,9 +127,6 @@ static enum power_supply_property battery_props[] = {
 	POWER_SUPPLY_PROP_CHARGE_FULL,
 	POWER_SUPPLY_PROP_CHARGE_COUNTER,
 	POWER_SUPPLY_PROP_TEMP,
-	POWER_SUPPLY_PROP_CAPACITY_LEVEL,
-	POWER_SUPPLY_PROP_TIME_TO_FULL_NOW,
-	POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN,
 };
 
 /* weak function */
@@ -369,22 +366,6 @@ signed int battery_meter_get_VSense(void)
 		return pmic_get_ibus();
 }
 
-int check_cap_level(int uisoc)
-{
-	if (uisoc >= 100)
-		return POWER_SUPPLY_CAPACITY_LEVEL_FULL;
-	else if (uisoc >= 80 && uisoc < 100)
-		return POWER_SUPPLY_CAPACITY_LEVEL_HIGH;
-	else if (uisoc >= 20 && uisoc < 80)
-		return POWER_SUPPLY_CAPACITY_LEVEL_NORMAL;
-	else if (uisoc > 0 && uisoc < 20)
-		return POWER_SUPPLY_CAPACITY_LEVEL_LOW;
-	else if (uisoc == 0)
-		return POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL;
-	else
-		return POWER_SUPPLY_CAPACITY_LEVEL_UNKNOWN;
-}
-
 void battery_update_psd(struct battery_data *bat_data)
 {
 	bat_data->BAT_batt_vol = battery_get_bat_voltage();
@@ -450,57 +431,6 @@ static int battery_get_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_TEMP:
 		val->intval = gm.tbat_precise;
 		break;
-	case POWER_SUPPLY_PROP_CAPACITY_LEVEL:
-		val->intval = check_cap_level(data->BAT_CAPACITY);
-		break;
-	case POWER_SUPPLY_PROP_TIME_TO_FULL_NOW:
-		/* full or unknown must return 0 */
-		ret = check_cap_level(data->BAT_CAPACITY);
-		if ((ret == POWER_SUPPLY_CAPACITY_LEVEL_FULL) ||
-			(ret == POWER_SUPPLY_CAPACITY_LEVEL_UNKNOWN))
-			val->intval = 0;
-		else {
-			int q_max_now = fg_table_cust_data.fg_profile[
-						gm.battery_id].q_max;
-			int remain_ui = 100 - data->BAT_CAPACITY;
-			int remain_mah = remain_ui * q_max_now / 10;
-			int time_to_full = 0;
-
-			gauge_get_current(&fgcurrent);
-
-			if (fgcurrent != 0)
-				time_to_full = remain_mah * 3600 / fgcurrent;
-
-			bm_debug("time_to_full:%d, remain:ui:%d mah:%d, fgcurrent:%d, qmax:%d\n",
-				time_to_full, remain_ui, remain_mah,
-				fgcurrent, q_max_now);
-
-			val->intval = abs(time_to_full);
-		}
-		ret = 0;
-		break;
-	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
-		if (check_cap_level(data->BAT_CAPACITY) ==
-			POWER_SUPPLY_CAPACITY_LEVEL_UNKNOWN)
-			val->intval = 0;
-		else {
-			int q_max_mah = 0;
-			int q_max_uah = 0;
-
-			q_max_mah =
-				fg_table_cust_data.fg_profile[
-				gm.battery_id].q_max / 10;
-
-			q_max_uah = q_max_mah * 1000;
-			if (q_max_uah <= 100000) {
-				bm_debug("%s q_max_mah:%d q_max_uah:%d\n",
-					__func__, q_max_mah, q_max_uah);
-				q_max_uah = 100001;
-			}
-			val->intval = q_max_uah;
-		}
-		break;
-
 
 	default:
 		ret = -EINVAL;
@@ -841,20 +771,6 @@ static void proc_dump_dtsi(struct seq_file *m)
 		fg_cust_data.aging1_update_soc);
 	seq_printf(m, "AGING1_LOAD_SOC = %d\n",
 		fg_cust_data.aging1_load_soc);
-
-	seq_printf(m, "AGING4_UPDATE_SOC = %d\n",
-		fg_cust_data.aging4_update_soc);
-	seq_printf(m, "AGING4_LOAD_SOC = %d\n",
-		fg_cust_data.aging4_load_soc);
-	seq_printf(m, "AGING5_UPDATE_SOC = %d\n",
-		fg_cust_data.aging5_update_soc);
-	seq_printf(m, "AGING5_LOAD_SOC = %d\n",
-		fg_cust_data.aging5_load_soc);
-	seq_printf(m, "AGING6_UPDATE_SOC = %d\n",
-		fg_cust_data.aging6_update_soc);
-	seq_printf(m, "AGING6_LOAD_SOC = %d\n",
-		fg_cust_data.aging6_load_soc);
-
 	seq_printf(m, "AGING_TEMP_DIFF = %d\n",
 		fg_cust_data.aging_temp_diff);
 	seq_printf(m, "AGING_100_EN = %d\n",
@@ -863,12 +779,6 @@ static void proc_dump_dtsi(struct seq_file *m)
 		fg_cust_data.aging_two_en);
 	seq_printf(m, "AGING_THIRD_EN = %d\n",
 		fg_cust_data.aging_third_en);
-	seq_printf(m, "AGING_4_EN = %d\n",
-		fg_cust_data.aging_4_en);
-	seq_printf(m, "AGING_5_EN = %d\n",
-		fg_cust_data.aging_5_en);
-	seq_printf(m, "AGING_6_EN = %d\n",
-		fg_cust_data.aging_6_en);
 	seq_printf(m, "DIFF_SOC_SETTING = %d\n",
 		fg_cust_data.diff_soc_setting);
 	seq_printf(m, "DIFF_BAT_TEMP_SETTING = %d\n",
@@ -1222,14 +1132,6 @@ static ssize_t store_Battery_Temperature(
 	signed int temp;
 
 	if (kstrtoint(buf, 10, &temp) == 0) {
-
-		if (temp > 58 || temp < -10) {
-			bm_err(
-				"%s: setting tmp:%d!,reject set\n",
-				__func__,
-				temp);
-			return size;
-		}
 
 		gm.fixed_bat_tmp = temp;
 		if (gm.fixed_bat_tmp == 0xffff)
@@ -2051,15 +1953,6 @@ void fg_ocv_query_soc(int ocv)
 
 	bm_trace("[%s] ocv:%d\n",
 		__func__, ocv);
-}
-
-void fg_test_ag_cmd(int cmd)
-{
-	wakeup_fg_algo_cmd(
-		FG_INTR_KERNEL_CMD, FG_KERNEL_CMD_AG_LOG_TEST, cmd);
-
-	bm_err("[%s]FG_KERNEL_CMD_AG_LOG_TEST:%d\n",
-		__func__, cmd);
 }
 
 void exec_BAT_EC(int cmd, int param)
@@ -3039,62 +2932,6 @@ void exec_BAT_EC(int cmd, int param)
 				cmd);
 		}
 		break;
-	case 795:
-		{
-			wakeup_fg_algo_cmd(
-				FG_INTR_KERNEL_CMD,
-				FG_KERNEL_CMD_REQ_CHANGE_AGING_DATA,
-				param * 100);
-
-			bm_err(
-				"exe_BAT_EC cmd %d,change aging to=%d\n",
-				cmd, param);
-		}
-		break;
-	case 796:
-		{
-			bm_err(
-				"exe_BAT_EC cmd %d,FG_KERNEL_CMD_AG_LOG_TEST=%d\n",
-				cmd, param);
-
-			wakeup_fg_algo_cmd(
-				FG_INTR_KERNEL_CMD,
-				FG_KERNEL_CMD_AG_LOG_TEST, param);
-		}
-		break;
-	case 797:
-		{
-			gm.soc_decimal_rate = param;
-			bm_err(
-				"exe_BAT_EC cmd %d,soc_decimal_rate=%d\n",
-				cmd, param);
-
-		}
-		break;
-	case 798:
-		{
-			bm_err(
-				"exe_BAT_EC cmd %d,FG_KERNEL_CMD_CHG_DECIMAL_RATE=%d\n",
-				cmd, param);
-
-			gm.soc_decimal_rate = param;
-
-			wakeup_fg_algo_cmd(
-				FG_INTR_KERNEL_CMD,
-				FG_KERNEL_CMD_CHG_DECIMAL_RATE, param);
-		}
-		break;
-	case 799:
-		{
-			bm_err(
-				"exe_BAT_EC cmd %d, Send INTR_CHR_FULL to daemon, force_full =%d\n",
-				cmd, param);
-
-			gm.is_force_full = param;
-			wakeup_fg_algo(FG_INTR_CHR_FULL);
-		}
-		break;
-
 
 	default:
 		bm_err(

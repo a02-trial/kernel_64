@@ -12,16 +12,13 @@
 #
 
 # common driver code for CMDQ
-ifeq ($(CONFIG_MTK_CMDQ_V3),y)
-ifneq (,$(filter $(CONFIG_MTK_PLATFORM), "mt6739" "mt6768" "mt6771" "mt8168" "mt6785"))
+ifneq (,$(filter $(CONFIG_MTK_PLATFORM), "mt6739" "mt6768" "mt6771" "mt6885" "mt8168" "mt6785" "mt6765"))
 	obj-y += v3/
-endif
 else ifneq (,$(filter $(CONFIG_MTK_PLATFORM), "mt8167"))
 	obj-y += v2/
+else
+	obj-y += mailbox/
 endif
-obj-$(CONFIG_MTK_CMDQ_MBOX_EXT) += mailbox/
 # mdp_sw_sync
-ifeq (,$(filter $(CONFIG_MTK_PLATFORM), "mt6885" "mt6873" "mt6853" "mt6893"))
-	obj-y += mdp_sync/
-endif
+obj-y += mdp_sync/
 # EOF

@@ -100,6 +100,10 @@ authComposeAuthFrameHeaderAndFF(IN PUINT_8 pucBuffer,
 	P_WLAN_AUTH_FRAME_T prAuthFrame;
 	UINT_16 u2FrameCtrl;
 
+	ASSERT(pucBuffer);
+	ASSERT(aucPeerMACAddress);
+	ASSERT(aucMACAddress);
+
 	prAuthFrame = (P_WLAN_AUTH_FRAME_T) pucBuffer;
 
 	/* 4 <1> Compose the frame header of the Authentication frame. */
@@ -172,10 +176,14 @@ VOID authAddIEChallengeText(IN P_ADAPTER_T prAdapter, IN OUT P_MSDU_INFO_T prMsd
 	P_STA_RECORD_T prStaRec;
 	UINT_16 u2TransactionSeqNum;
 
+	ASSERT(prMsduInfo);
+
 	prStaRec = cnmGetStaRecByIndex(prAdapter, prMsduInfo->ucStaRecIndex);
 
 	if (!prStaRec)
 		return;
+
+	ASSERT(prStaRec);
 
 	/* For Management, frame header and payload are in a continuous buffer */
 	prAuthFrame = (P_WLAN_AUTH_FRAME_T) prMsduInfo->prPacket;
@@ -217,6 +225,8 @@ WLAN_STATUS authSendAuthFrame(IN P_ADAPTER_T prAdapter, IN P_STA_RECORD_T prStaR
 	UINT_32 i;
 
 	DBGLOG(SAA, LOUD, "Send Auth Frame\n");
+
+	ASSERT(prStaRec);
 
 	/* 4 <1> Allocate a PKT_INFO_T for Authentication Frame */
 	/* Init with MGMT Header Length + Length of Fixed Fields */
@@ -448,9 +458,13 @@ WLAN_STATUS authCheckTxAuthFrame(IN P_ADAPTER_T prAdapter, IN P_MSDU_INFO_T prMs
 	UINT_16 u2TxAuthAlgNum;
 	UINT_16 u2TxTransactionSeqNum;
 
+	ASSERT(prMsduInfo);
+
 	prAuthFrame = (P_WLAN_AUTH_FRAME_T) (prMsduInfo->prPacket);
+	ASSERT(prAuthFrame);
 
 	prStaRec = cnmGetStaRecByIndex(prAdapter, prMsduInfo->ucStaRecIndex);
+	ASSERT(prStaRec);
 
 	if (!prStaRec)
 		return WLAN_STATUS_INVALID_PACKET;
@@ -487,6 +501,8 @@ WLAN_STATUS authCheckRxAuthFrameTransSeq(IN P_ADAPTER_T prAdapter, IN P_SW_RFB_T
 	P_WLAN_AUTH_FRAME_T prAuthFrame;
 	UINT_16 u2RxTransactionSeqNum;
 	P_STA_RECORD_T prStaRec;
+
+	ASSERT(prSwRfb);
 
 	/* 4 <1> locate the Authentication Frame. */
 	prAuthFrame = (P_WLAN_AUTH_FRAME_T) prSwRfb->pvHeader;
@@ -580,7 +596,11 @@ authCheckRxAuthFrameStatus(IN P_ADAPTER_T prAdapter,
 	UINT_16 u2RxTransactionSeqNum;
 	/* UINT_16 u2RxStatusCode; // NOTE(Kevin): Optimized for ARM */
 
+	ASSERT(prSwRfb);
+	ASSERT(pu2StatusCode);
+
 	prStaRec = cnmGetStaRecByIndex(prAdapter, prSwRfb->ucStaRecIdx);
+	ASSERT(prStaRec);
 
 	if (!prStaRec)
 		return WLAN_STATUS_INVALID_PACKET;
@@ -629,6 +649,9 @@ VOID authHandleIEChallengeText(P_ADAPTER_T prAdapter, P_SW_RFB_T prSwRfb, P_IE_H
 	P_WLAN_AUTH_FRAME_T prAuthFrame;
 	P_STA_RECORD_T prStaRec;
 	UINT_16 u2TransactionSeqNum;
+
+	ASSERT(prSwRfb);
+	ASSERT(prIEHdr);
 
 	prStaRec = cnmGetStaRecByIndex(prAdapter, prSwRfb->ucStaRecIdx);
 	ASSERT(prStaRec);
@@ -683,6 +706,8 @@ WLAN_STATUS authProcessRxAuth2_Auth4Frame(IN P_ADAPTER_T prAdapter, IN P_SW_RFB_
 	UINT_8 ucIEID;
 	UINT_32 i;
 
+	ASSERT(prSwRfb);
+
 	prAuthFrame = (P_WLAN_AUTH_FRAME_T) prSwRfb->pvHeader;
 
 	pucIEsBuffer = &prAuthFrame->aucInfoElem[0];
@@ -730,6 +755,11 @@ authComposeDeauthFrameHeaderAndFF(IN PUINT_8 pucBuffer,
 {
 	P_WLAN_DEAUTH_FRAME_T prDeauthFrame;
 	UINT_16 u2FrameCtrl;
+
+	ASSERT(pucBuffer);
+	ASSERT(aucPeerMACAddress);
+	ASSERT(aucMACAddress);
+	ASSERT(aucBssid);
 
 	prDeauthFrame = (P_WLAN_DEAUTH_FRAME_T) pucBuffer;
 
@@ -1023,6 +1053,10 @@ WLAN_STATUS authProcessRxDeauthFrame(IN P_SW_RFB_T prSwRfb, IN UINT_8 aucBSSID[]
 	P_WLAN_DEAUTH_FRAME_T prDeauthFrame;
 	UINT_16 u2RxReasonCode;
 
+	ASSERT(prSwRfb);
+	ASSERT(aucBSSID);
+	ASSERT(pu2ReasonCode);
+
 	/* 4 <1> locate the Deauthentication Frame. */
 	prDeauthFrame = (P_WLAN_DEAUTH_FRAME_T) prSwRfb->pvHeader;
 
@@ -1077,6 +1111,10 @@ authProcessRxAuth1Frame(IN P_ADAPTER_T prAdapter,
 	P_WLAN_AUTH_FRAME_T prAuthFrame;
 	UINT_16 u2ReturnStatusCode = STATUS_CODE_SUCCESSFUL;
 
+	ASSERT(prSwRfb);
+	ASSERT(aucExpectedBSSID);
+	ASSERT(pu2ReturnStatusCode);
+
 	/* 4 <1> locate the Authentication Frame. */
 	prAuthFrame = (P_WLAN_AUTH_FRAME_T) prSwRfb->pvHeader;
 
@@ -1110,6 +1148,9 @@ authProcessRxAuthFrame(IN P_ADAPTER_T prAdapter,
 {
 	P_WLAN_AUTH_FRAME_T prAuthFrame;
 	UINT_16 u2ReturnStatusCode = STATUS_CODE_SUCCESSFUL;
+
+	ASSERT(prSwRfb);
+	ASSERT(pu2ReturnStatusCode);
 
 	if (!prBssInfo)
 		return WLAN_STATUS_FAILURE;
@@ -1154,8 +1195,8 @@ VOID authAddMDIE(IN P_ADAPTER_T prAdapter, IN OUT P_MSDU_INFO_T prMsduInfo)
 	PUINT_8 pucBuffer = (PUINT_8)prMsduInfo->prPacket + prMsduInfo->u2FrameLength;
 	UINT_8 ucBssIdx = prMsduInfo->ucNetworkType;
 
-	if (!IS_BSS_INDEX_VALID(ucBssIdx) ||
-		!IS_BSS_AIS(GET_BSS_INFO_BY_INDEX(prAdapter, ucBssIdx)) || !prFtIEs->prMDIE)
+	if (!prFtIEs->prMDIE ||
+	    !rsnIsFtOverTheAir(prAdapter, ucBssIdx, prMsduInfo->ucStaRecIndex))
 		return;
 	prMsduInfo->u2FrameLength += 5; /* IE size for MD IE is fixed, it is 5 */
 	kalMemCopy(pucBuffer, prFtIEs->prMDIE, 5);
@@ -1164,29 +1205,33 @@ VOID authAddMDIE(IN P_ADAPTER_T prAdapter, IN OUT P_MSDU_INFO_T prMsduInfo)
 UINT_32 authCalculateRSNIELen(P_ADAPTER_T prAdapter,
 	ENUM_NETWORK_TYPE_INDEX_T eNetTypeIndex, P_STA_RECORD_T prStaRec)
 {
-	ENUM_PARAM_AUTH_MODE_T eAuthMode = prAdapter->rWifiVar.rConnSettings.eAuthMode;
 	struct FT_IES *prFtIEs = &prAdapter->prGlueInfo->rFtIeForTx;
 
-	if (!IS_BSS_INDEX_VALID(eNetTypeIndex) || eNetTypeIndex < 0 ||
-		!IS_BSS_AIS(GET_BSS_INFO_BY_INDEX(prAdapter, eNetTypeIndex)) ||
-		!prFtIEs->prRsnIE || (eAuthMode != AUTH_MODE_WPA2_FT && eAuthMode != AUTH_MODE_WPA2_FT_PSK))
+	if (!prFtIEs->prRsnIE ||
+	    !rsnIsFtOverTheAir(prAdapter, eNetTypeIndex, prStaRec->ucIndex))
 		return 0;
 	return IE_SIZE(prFtIEs->prRsnIE);
 }
 
 VOID authAddRSNIE(IN P_ADAPTER_T prAdapter, IN OUT P_MSDU_INFO_T prMsduInfo)
 {
-	ENUM_PARAM_AUTH_MODE_T eAuthMode = prAdapter->rWifiVar.rConnSettings.eAuthMode;
+	authAddRSNIE_impl(prAdapter, prMsduInfo);
+}
+
+UINT_32 authAddRSNIE_impl(IN P_ADAPTER_T prAdapter, IN OUT P_MSDU_INFO_T prMsduInfo)
+{
 	struct FT_IES *prFtIEs = &prAdapter->prGlueInfo->rFtIeForTx;
 	PUINT_8 pucBuffer = (PUINT_8)prMsduInfo->prPacket + prMsduInfo->u2FrameLength;
 	UINT_32 ucRSNIeSize = 0;
 	UINT_8 ucBssIdx = prMsduInfo->ucNetworkType;
 
-	if (!IS_BSS_INDEX_VALID(ucBssIdx) || !IS_BSS_AIS(GET_BSS_INFO_BY_INDEX(prAdapter, ucBssIdx)) ||
-		!prFtIEs->prRsnIE || (eAuthMode != AUTH_MODE_WPA2_FT && eAuthMode != AUTH_MODE_WPA2_FT_PSK))
-		return;
+	if (!prFtIEs->prRsnIE ||
+	    !rsnIsFtOverTheAir(prAdapter, ucBssIdx, prMsduInfo->ucStaRecIndex))
+		return FALSE;
+
 	ucRSNIeSize = IE_SIZE(prFtIEs->prRsnIE);
 	prMsduInfo->u2FrameLength += ucRSNIeSize;
 	kalMemCopy(pucBuffer, prFtIEs->prRsnIE, ucRSNIeSize);
+	return TRUE;
 }
 

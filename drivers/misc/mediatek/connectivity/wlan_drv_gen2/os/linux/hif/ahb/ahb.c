@@ -137,11 +137,7 @@ static int HifAhbPltmResume(IN struct platform_device *PDev);
 #endif /* CONF_HIF_DEV_MISC */
 
 #if (CONF_HIF_LOOPBACK_AUTO == 1)	/* only for development test */
-#if KERNEL_VERSION(4, 15, 0) <= CFG80211_VERSION_CODE
-static VOID HifAhbLoopbkAuto(struct timer_list *timer);
-#else
 static VOID HifAhbLoopbkAuto(IN unsigned long arg);
-#endif
 #endif /* CONF_HIF_LOOPBACK_AUTO */
 
 #if (CONF_HIF_DMA_INT == 1)
@@ -399,13 +395,10 @@ VOID glSetHifInfo(GLUE_INFO_T *GlueInfo, ULONG ulCookie)
 	/* Start loopback test after 10 seconds */
 #if (CONF_HIF_LOOPBACK_AUTO == 1)	/* only for development test */
 	{
-#if KERNEL_VERSION(4, 15, 0) <= CFG80211_VERSION_CODE
-		timer_setup(&HifInfo->HifTmrLoopbkFn, HifAhbLoopbkAuto, 0);
-#else
 		init_timer(&(HifInfo->HifTmrLoopbkFn));
 		HifInfo->HifTmrLoopbkFn.function = HifAhbLoopbkAuto;
 		HifInfo->HifTmrLoopbkFn.data = (unsigned long)GlueInfo;
-#endif
+
 		init_waitqueue_head(&HifInfo->HifWaitq);
 		HifInfo->HifTaskLoopbkFn = kthread_run(kalDevLoopbkThread, GlueInfo->prDevHandler, "LoopbkThread");
 		HifInfo->HifLoopbkFlg = 0;
@@ -1659,18 +1652,12 @@ static int HifAhbPltmResume(IN struct platform_device *PDev)
 * \retval None
 */
 /*----------------------------------------------------------------------------*/
-#if KERNEL_VERSION(4, 15, 0) <= CFG80211_VERSION_CODE
-static VOID HifAhbLoopbkAuto(struct timer_list *timer)
-#else
 static VOID HifAhbLoopbkAuto(IN unsigned long arg)
-#endif
 {
-#if KERNEL_VERSION(4, 15, 0) <= CFG80211_VERSION_CODE
-	GL_HIF_INFO_T *HifInfo = from_timer(HifInfo, timer, HifTmrLoopbkFn);
-#else
+
 	P_GLUE_INFO_T GlueInfo = (P_GLUE_INFO_T) arg;
 	GL_HIF_INFO_T *HifInfo = &GlueInfo->rHifInfo;
-#endif
+
 	ASSERT(GlueInfo);
 
 	HIF_DBG(("[WiFi/HIF] Trigger to do loopback test...\n"));

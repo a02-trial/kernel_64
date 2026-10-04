@@ -49,10 +49,6 @@ trusted_mem-y += tests/ut_server.o
 trusted_mem-y += tests/ut_cases.o
 endif # !TCORE_UT_TESTS_SUPPORT
 
-ifeq ($(CONFIG_MTK_GZ_KREE),y)
-trusted_mem-y += mpu_vio_checker.o
-endif
-
 #==========================================================================
 # TEE Seecure Memory Devices & Trustzone Peer Driver
 #==========================================================================
@@ -61,7 +57,7 @@ obj-y += tee_devices.o
 obj-y += tee_impl.o
 tee_impl-y += tee_impl/tee_invoke.o
 
-ifneq ($(filter y,$(CONFIG_MTK_TEE_GP_SUPPORT) $(CONFIG_TRUSTONIC_TEE_SUPPORT) $(CONFIG_TEEGRIS_TEE_SUPPORT)),)
+ifneq ($(filter y,$(CONFIG_MTK_TEE_GP_SUPPORT) $(CONFIG_TRUSTONIC_TEE_SUPPORT)),)
 tee_impl-y += tee_impl/tee_ops.o
 endif
 endif
@@ -91,7 +87,6 @@ ifeq ($(CONFIG_MTK_GZ_KREE),y)
 ccflags-y += -I$(srctree)/drivers/misc/mediatek/geniezone/public
 ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/mt-plat/gz/
 endif # !CONFIG_MTK_GZ_KREE
-ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/mt-plat/
 
 ifeq ($(CONFIG_MTK_SVP),y)
 ccflags-y += -I$(srctree)/drivers/misc/mediatek/memory-ssvp/
@@ -114,18 +109,12 @@ endif # !CONFIG_MTK_TEE_GP_SUPPORT
 
 ifeq ($(CONFIG_TRUSTONIC_TEE_SUPPORT),y)
 include $(srctree)/drivers/misc/mediatek/gud/Makefile.include
-else ifeq ($(CONFIG_TEEGRIS_TEE_SUPPORT),y)
-	ccflags-y += -I$(srctree)/drivers/misc/tzdev/include/tzdev
 endif # !CONFIG_TRUSTONIC_TEE_SUPPORT
 
 ifeq ($(CONFIG_MICROTRUST_TEE_SUPPORT),y)
 include $(srctree)/drivers/misc/mediatek/teei/Makefile.include
 endif # !CONFIG_MICROTRUST_TEE_SUPPORT
 
-ifeq ($(CONFIG_TEEGRIS_TEE_SUPPORT),y)
-ccflags-y += -I$(srctree)/drivers/misc/tzdev/include/tzdev
-else
 ifeq ($(CONFIG_BLOWFISH_TEE_SUPPORT),y)
 ccflags-y += -I$(srctree)/drivers/misc/tzdev
 endif # !CONFIG_BLOWFISH_TEE_SUPPORT
-endif # CONFIG_TEEGRIS_TEE_SUPPORT

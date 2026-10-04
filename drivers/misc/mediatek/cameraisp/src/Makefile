@@ -25,14 +25,6 @@ ifeq ($(CONFIG_MACH_MT6885),y)
   obj-y += $(subst ",,$(CONFIG_MTK_PLATFORM))/
 endif
 
-ifeq ($(CONFIG_MACH_MT6873),y)
-  obj-y += $(subst ",,$(CONFIG_MTK_PLATFORM))/
-endif
-
-ifeq ($(CONFIG_MACH_MT6853),y)
-  obj-y += $(subst ",,$(CONFIG_MTK_PLATFORM))/
-endif
-
 ifeq ($(CONFIG_MACH_MT8167),y)
   obj-y += $(subst ",,$(CONFIG_MTK_PLATFORM))/
 endif
@@ -53,10 +45,3 @@ ifeq ($(CONFIG_MACH_MT6765),y)
   obj-y += $(subst ",,$(CONFIG_MTK_PLATFORM))/
 endif
 
-ifeq ($(CONFIG_MACH_MT6893),y)
-  obj-y += $(subst ",,$(CONFIG_MTK_PLATFORM))/
-endif
-
-ifeq ($(CONFIG_MACH_MT8168),y)
-  obj-y += $(subst ",,$(CONFIG_MTK_PLATFORM))/
-endif

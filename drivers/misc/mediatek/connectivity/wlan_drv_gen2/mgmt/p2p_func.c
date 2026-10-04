@@ -490,14 +490,12 @@ WLAN_STATUS p2pFuncProcessBeacon(IN P_ADAPTER_T prAdapter,
 
 		/* Beacon template from upper layer (without TIM IE) */
 
-#if DBG
 		if (prBcnUpdateInfo->pucBcnHdr != NULL)
 			ASSERT(prBcnUpdateInfo->pucBcnHdr == (PUINT_8)prBcnFrame);
 
 		if (prBcnUpdateInfo->pucBcnBody != NULL)
 			ASSERT(prBcnUpdateInfo->pucBcnBody ==
 			       (prBcnUpdateInfo->pucBcnHdr + prBcnUpdateInfo->u4BcnHdrLen));
-#endif
 
 		if (!pucNewBcnBody) {
 			/* Cache old Beacon body in case of only new Beacon head update. */
@@ -1547,7 +1545,8 @@ p2pFuncValidateAuth(IN P_ADAPTER_T prAdapter,
 			break;
 		}
 
-		if (kalP2PCmpBlackList(prAdapter->prGlueInfo, prAuthFrame->aucSrcAddr)) {
+		if (prAuthFrame->aucSrcAddr &&
+		    kalP2PCmpBlackList(prAdapter->prGlueInfo, prAuthFrame->aucSrcAddr)) {
 			/* STA in the black list of Hotspot */
 			*pu2StatusCode = STATUS_CODE_ASSOC_DENIED_OUTSIDE_STANDARD;
 			break;
@@ -1582,9 +1581,7 @@ p2pFuncValidateAuth(IN P_ADAPTER_T prAdapter,
 #if CFG_SUPPORT_802_11W
 			/* AP PMF. if PMF connection, do not reset state & FSM */
 			fgPmfConn = rsnCheckBipKeyInstalled(prAdapter, prStaRec);
-			if (fgPmfConn &&
-				prP2pBssInfo->u4RsnSelectedAKMSuite !=
-				RSN_AKM_SUITE_SAE) {
+			if (fgPmfConn) {
 				DBGLOG(P2P, WARN, "PMF Connction, return false\n");
 				return FALSE;
 			}
@@ -2360,7 +2357,6 @@ VOID p2pFuncParseBeaconIEs(IN P_ADAPTER_T prAdapter,
 						pucIE, IE_SIZE(pucIE));
 					prP2pSpecificBssInfo->u2RsnIeLen
 						= IE_SIZE(pucIE);
-
 					if (rsnParseRsnIE(prAdapter, RSN_IE(pucIE), &rRsnIe)) {
 						prP2pBssInfo = &prAdapter->rWifiVar.arBssInfo[NETWORK_TYPE_P2P_INDEX];
 						prP2pBssInfo->u4RsnSelectedGroupCipher = RSN_CIPHER_SUITE_CCMP;
@@ -2500,11 +2496,11 @@ VOID p2pFuncParseBeaconIEs(IN P_ADAPTER_T prAdapter,
 					    && (u2SubTypeVersion == VERSION_WPA)) {
 						kalP2PSetCipher(prAdapter->prGlueInfo, IW_AUTH_CIPHER_TKIP);
 						ucNewSecMode = TRUE;
-						if (IE_LEN(pucIE) > ELEM_MAX_LEN_WPA) {
-							DBGLOG(P2P, ERROR,
-								"WPA IE length is unexpected !!\n");
-							return;
-						}
+					if (IE_LEN(pucIE) > ELEM_MAX_LEN_WPA) {
+						DBGLOG(P2P, ERROR,
+							"WPA IE length is unexpected !!\n");
+						return;
+					}
 						kalMemCopy(prP2pSpecificBssInfo->aucWpaIeBuffer, pucIE,
 							   IE_SIZE(pucIE));
 						prP2pSpecificBssInfo->u2WpaIeLen = IE_SIZE(pucIE);

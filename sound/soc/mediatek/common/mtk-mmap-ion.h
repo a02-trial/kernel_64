@@ -9,8 +9,7 @@
 #ifndef _MTK_MMAP_ION_H_
 #define _MTK_MMAP_ION_H_
 
-#define MMAP_BUFFER_SIZE    (24*1024)
-
+#define MMAP_BUFFER_SIZE    8192
 
 int mtk_get_ion_buffer(void);
 

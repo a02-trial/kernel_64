@@ -16,15 +16,12 @@
 #define __PHY_MTK_SSUSB_H
 #include <linux/types.h>
 #include <linux/clk.h>
-#include <linux/platform_device.h>
 
 struct mtk_phy_tuning {
-	const char *name;
-	u32 offset;
-	u32 shift;
-	u32 mask;
-	u32 value;
-	u32 host;
+	s32 u2_vrt_ref;
+	s32 u2_term_ref;
+	s32 u2_enhance;
+	bool inited;
 };
 
 struct mtk_phy_instance {
@@ -45,9 +42,9 @@ struct mtk_phy_instance {
 	bool sib_mode;
 	bool uart_mode;
 	int phy_number;
-	struct mtk_phy_tuning *phy_tuning;
-	int phy_data_cnt;
+	struct mtk_phy_tuning phy_tuning;
 };
+
 
 struct mtk_phy_interface {
 	int  (*usb_phy_init)(struct mtk_phy_instance *instance);

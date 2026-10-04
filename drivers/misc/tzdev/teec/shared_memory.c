@@ -11,7 +11,6 @@
  * GNU General Public License for more details.
  */
 
-#include <linux/export.h>
 #include <linux/slab.h>
 #include <linux/vmalloc.h>
 #include <asm/page.h>
@@ -26,6 +25,8 @@
 #include "core/wait.h"
 
 #define PTR_ALIGN_PGDN(p)	((typeof(p))(((uintptr_t)(p)) & PAGE_MASK))
+#define OFFSET_IN_PAGE(x)	((x) & (~PAGE_MASK))
+#define NUM_PAGES(size)		(((size) >> PAGE_SHIFT) + !!OFFSET_IN_PAGE(size))
 
 static void tzdev_teec_release_shared_memory(void *data)
 {
@@ -262,7 +263,6 @@ out:
 
 	return result;
 }
-EXPORT_SYMBOL(TEEC_RegisterSharedMemory);
 
 TEEC_Result TEEC_AllocateSharedMemory(TEEC_Context *context, TEEC_SharedMemory *sharedMem)
 {
@@ -328,7 +328,6 @@ out:
 
 	return result;
 }
-EXPORT_SYMBOL(TEEC_AllocateSharedMemory);
 
 void TEEC_ReleaseSharedMemory(TEEC_SharedMemory *sharedMem)
 {
@@ -366,4 +365,3 @@ out:
 	log_debug(tzdev_teec, "Exit, sharedMem = %pK result = %x origin = %u\n",
 			sharedMem, result, origin);
 }
-EXPORT_SYMBOL(TEEC_ReleaseSharedMemory);

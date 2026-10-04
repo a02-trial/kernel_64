@@ -17,7 +17,6 @@
 #include <linux/of_device.h>
 #include <linux/of_irq.h>
 #include <linux/regmap.h>
-#include <linux/wakeup_reason.h>
 #if defined(CONFIG_MTK_PMIC_CHIP_MT6357)
 #include <linux/mfd/mt6357/irq.h>
 #include <linux/mfd/mt6357/registers.h>
@@ -30,16 +29,16 @@
 #elif defined(CONFIG_MTK_PMIC_CHIP_MT6359P)
 #include <linux/mfd/mt6359p/irq.h>
 #include <linux/mfd/mt6359p/registers.h>
-#elif defined(CONFIG_MTK_PMIC_CHIP_MT6390)
-#include <linux/mfd/mt6390/irq.h>
-#include <linux/mfd/mt6390/registers.h>
 #endif
 #include <linux/mfd/mt6358/core.h>
+
+#ifdef CONFIG_SEC_PM
+#include <linux/wakeup_reason.h>
+#endif
 
 #define MT6357_CID_CODE		0x5700
 #define MT6358_CID_CODE		0x5800
 #define MT6359_CID_CODE		0x5900
-#define MT6390_CID_CODE		0x9000
 
 static const struct mfd_cell mt6357_devs[] = {
 	{
@@ -48,15 +47,6 @@ static const struct mfd_cell mt6357_devs[] = {
 	}, {
 		.name = "mt635x-auxadc",
 		.of_compatible = "mediatek,mt6357-auxadc",
-	}, {
-		.name = "mt6357-rtc",
-		.of_compatible = "mediatek,mt6357-rtc",
-	}, {
-		.name = "mt6357-misc",
-		.of_compatible = "mediatek,mt6357-misc",
-	}, {
-		.name = "mt6357-dcxo",
-		.of_compatible = "mediatek,mt6357-dcxo",
 	},
 };
 
@@ -98,15 +88,10 @@ static const struct mfd_cell mt6359_devs[] = {
 	}, {
 		.name = "mt6359-misc",
 		.of_compatible = "mediatek,mt6359-misc",
-	}, {
+	},
+	{
 		.name = "mt6359p-misc",
 		.of_compatible = "mediatek,mt6359p-misc",
-	}, {
-		.name = "mt635x-ot-debug",
-		.of_compatible = "mediatek,mt635x-ot-debug",
-	}, {
-		.name = "pmic-oc-debug",
-		.of_compatible = "mediatek,pmic-oc-debug",
 	},
 };
 
@@ -138,6 +123,21 @@ static struct sp_top_t sp_top_ints[] = {
 };
 
 static struct pmic_irq_t *pmic_irqs;
+
+#ifdef CONFIG_SEC_PM
+static bool suspended;
+static int pmic_irq_suspend(struct platform_device *pdev, pm_message_t state)
+{
+	suspended = true;
+	return 0;
+}
+
+static int pmic_irq_resume(struct platform_device *pdev)
+{
+	suspended = false;
+	return 0;
+}
+#endif
 
 unsigned int mt6358_irq_get_virq(struct device *dev, unsigned int hwirq)
 {
@@ -179,16 +179,15 @@ static void mt6358_irq_sp_handler(struct mt6358_chip *chip,
 				continue;
 			hwirq = sp_top_ints[sp].hwirq_base + 16 * i + j;
 			virq = irq_find_mapping(chip->irq_domain, hwirq);
+#ifdef CONFIG_SEC_PM
+			if (suspended)
+				log_wakeup_reason(virq);
+#endif
 			dev_info(chip->dev,
 				"Reg[0x%x]=0x%x,name=%s,hwirq=%d,type=%d\n",
 				sta_reg, sp_int_status,
 				pmic_irqs[hwirq].name, hwirq,
 				irq_get_trigger_type(virq));
-			if (!strncmp(pmic_irqs[hwirq].name, "chrdet_edge", 11)) {
-				regmap_write(chip->regmap, sta_reg, BIT(j));
-				sp_int_status &= ~BIT(j);
-			}
-			log_threaded_irq_wakeup_reason(virq, chip->irq);
 			if (virq)
 				handle_nested_irq(virq);
 		}
@@ -229,17 +228,7 @@ static void mt6358_irq_enable(struct irq_data *data)
 
 	int_regs = (hwirq - sp_top->hwirq_base) / 16;
 	en_reg = sp_top->en_reg + 0x6 * int_regs;
-#if defined(CONFIG_MTK_PMIC_CHIP_MT6359) || \
-defined(CONFIG_MTK_PMIC_CHIP_MT6359P)
-	/* PMIC MT6359 miss LDO_INT_CON1_SET/CLR, use LDO_INT_CON1 */
-	if (en_reg == MT6359_LDO_TOP_INT_CON1)
-		regmap_update_bits(chip->regmap,
-				   en_reg, BIT(hwirq % 16), BIT(hwirq % 16));
-	else
-		regmap_write(chip->regmap, en_reg + 0x2, 0x1 << (hwirq % 16));
-#else
 	regmap_write(chip->regmap, en_reg + 0x2, 0x1 << (hwirq % 16));
-#endif
 }
 
 static void mt6358_irq_disable(struct irq_data *data)
@@ -251,17 +240,7 @@ static void mt6358_irq_disable(struct irq_data *data)
 
 	int_regs = (hwirq - sp_top->hwirq_base) / 16;
 	en_reg = sp_top->en_reg + 0x6 * int_regs;
-#if defined(CONFIG_MTK_PMIC_CHIP_MT6359) || \
-defined(CONFIG_MTK_PMIC_CHIP_MT6359P)
-	/* PMIC MT6359 miss LDO_INT_CON1_SET/CLR, use LDO_INT_CON1 */
-	if (en_reg == MT6359_LDO_TOP_INT_CON1)
-		regmap_update_bits(chip->regmap,
-				   en_reg, BIT(hwirq % 16), 0);
-	else
-		regmap_write(chip->regmap, en_reg + 0x4, 0x1 << (hwirq % 16));
-#else
 	regmap_write(chip->regmap, en_reg + 0x4, 0x1 << (hwirq % 16));
-#endif
 }
 
 static void mt6358_irq_lock(struct irq_data *data)
@@ -391,9 +370,7 @@ static int mt6358_irq_init(struct mt6358_chip *chip)
 	}
 
 	ret = devm_request_threaded_irq(chip->dev, chip->irq, NULL,
-					mt6358_irq_handler,
-					IRQF_ONESHOT,
-					mt6358_irq_chip.name, chip);
+		mt6358_irq_handler, IRQF_ONESHOT, mt6358_irq_chip.name, chip);
 	if (ret) {
 		dev_notice(chip->dev, "failed to register irq=%d; err: %d\n",
 			chip->irq, ret);
@@ -451,7 +428,6 @@ static int mt6358_probe(struct platform_device *pdev)
 
 	switch (id & 0xFF00) {
 	case MT6357_CID_CODE:
-	case MT6390_CID_CODE:
 		chip->top_int_status_reg = PMIC_INT_STATUS_TOP_RSV_ADDR;
 		ret = mt6358_irq_init(chip);
 		if (ret)
@@ -512,6 +488,10 @@ static struct platform_driver mt6358_driver = {
 		.name = "mt6358-pmic",
 		.of_match_table = of_match_ptr(mt6358_of_match),
 	},
+#ifdef CONFIG_SEC_PM
+	.suspend = pmic_irq_suspend,
+	.resume = pmic_irq_resume,
+#endif
 };
 
 static int __init mt6358_init(void)

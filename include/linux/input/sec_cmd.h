@@ -13,15 +13,15 @@
 #include <linux/sched/clock.h>
 #if defined(CONFIG_DRV_SAMSUNG)
 #include <linux/sec_class.h>
+#else
+extern struct class *sec_class;
+//struct class *tsp_sec_class;
 #endif
+#include <linux/input/sec_tsp_log.h>
 
 #ifndef CONFIG_SEC_FACTORY
 #define USE_SEC_CMD_QUEUE
 #include <linux/kfifo.h>
-#endif
-
-#ifndef CONFIG_DRV_SAMSUNG
-extern struct class *sec_class;
 #endif
 
 #define SEC_CLASS_DEVT_TSP		10

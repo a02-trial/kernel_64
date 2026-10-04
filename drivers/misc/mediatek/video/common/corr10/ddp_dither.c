@@ -23,9 +23,7 @@
 	defined(CONFIG_MACH_MT6765) || defined(CONFIG_MACH_MT6761) || \
 	defined(CONFIG_MACH_MT6771) || defined(CONFIG_MACH_MT3967) || \
 	defined(CONFIG_MACH_MT6768) || defined(CONFIG_MACH_MT8168) || \
-	defined(CONFIG_MACH_MT6885) || defined(CONFIG_MACH_MT6785) || \
-	defined(CONFIG_MACH_MT6873) || defined(CONFIG_MACH_MT6853) || \
-	defined(CONFIG_MACH_MT6893) || defined(CONFIG_MACH_MT6833)
+	defined(CONFIG_MACH_MT6885) || defined(CONFIG_MACH_MT6785)
 
 #include <ddp_clkmgr.h>
 #endif
@@ -42,9 +40,7 @@
 	defined(CONFIG_MACH_MT6765) || defined(CONFIG_MACH_MT6761) || \
 	defined(CONFIG_MACH_MT6771) || defined(CONFIG_MACH_MT3967) || \
 	defined(CONFIG_MACH_MT6768) || defined(CONFIG_MACH_MT8168) || \
-	defined(CONFIG_MACH_MT6885) || defined(CONFIG_MACH_MT6785) || \
-	defined(CONFIG_MACH_MT6873) || defined(CONFIG_MACH_MT6853) || \
-	defined(CONFIG_MACH_MT6893) || defined(CONFIG_MACH_MT6833)
+	defined(CONFIG_MACH_MT6885) || defined(CONFIG_MACH_MT6785)
 
 #include <disp_helper.h>
 #endif
@@ -57,9 +53,7 @@
 	defined(CONFIG_MACH_MT6761) || defined(CONFIG_MACH_MT6771) || \
 	defined(CONFIG_MACH_MT3967) || defined(CONFIG_MACH_MT6768) || \
 	defined(CONFIG_MACH_MT8168) || defined(CONFIG_MACH_MT6885) || \
-	defined(CONFIG_MACH_MT6785) || defined(CONFIG_MACH_MT6873) || \
-	defined(CONFIG_MACH_MT6853) || defined(CONFIG_MACH_MT6893) || \
-	defined(CONFIG_MACH_MT6833)
+	defined(CONFIG_MACH_MT6785)
 
 #define DITHER0_BASE_NAMING (DISPSYS_DITHER0_BASE)
 #define DITHER0_MODULE_NAMING (DISP_MODULE_DITHER0)
@@ -73,9 +67,7 @@
 	defined(CONFIG_MACH_MT6765) || defined(CONFIG_MACH_MT6761) || \
 	defined(CONFIG_MACH_MT6771) || defined(CONFIG_MACH_MT3967) || \
 	defined(CONFIG_MACH_MT6768) || defined(CONFIG_MACH_MT8168) || \
-	defined(CONFIG_MACH_MT6885) || defined(CONFIG_MACH_MT6785) || \
-	defined(CONFIG_MACH_MT6873) || defined(CONFIG_MACH_MT6853) || \
-	defined(CONFIG_MACH_MT6893) || defined(CONFIG_MACH_MT6833)
+	defined(CONFIG_MACH_MT6885) || defined(CONFIG_MACH_MT6785)
 
 #define DITHER0_CLK_NAMING (DISP0_DISP_DITHER0)
 #else
@@ -89,9 +81,7 @@
 	defined(CONFIG_MACH_MT6761) || defined(CONFIG_MACH_MT6771) || \
 	defined(CONFIG_MACH_MT3967) || defined(CONFIG_MACH_MT6768) || \
 	defined(CONFIG_MACH_MT8168) || defined(CONFIG_MACH_MT6885) || \
-	defined(CONFIG_MACH_MT6785) || defined(CONFIG_MACH_MT6873) || \
-	defined(CONFIG_MACH_MT6853) || defined(CONFIG_MACH_MT6893) || \
-	defined(CONFIG_MACH_MT6833)
+	defined(CONFIG_MACH_MT6785)
 
 #define DITHER_SUPPORT_PARTIAL_UPDATE
 #endif
@@ -239,9 +229,7 @@ static int disp_dither_power_on(enum DISP_MODULE_ENUM module, void *handle)
 	defined(CONFIG_MACH_MT6765) || defined(CONFIG_MACH_MT6761) || \
 	defined(CONFIG_MACH_MT6771) || defined(CONFIG_MACH_MT3967) || \
 	defined(CONFIG_MACH_MT6768) || defined(CONFIG_MACH_MT8168) || \
-	defined(CONFIG_MACH_MT6885) || defined(CONFIG_MACH_MT6785) || \
-	defined(CONFIG_MACH_MT6873) || defined(CONFIG_MACH_MT6853) || \
-	defined(CONFIG_MACH_MT6893) || defined(CONFIG_MACH_MT6833)
+	defined(CONFIG_MACH_MT6885) || defined(CONFIG_MACH_MT6785)
 
 	ddp_clk_prepare_enable(ddp_get_module_clk_id(module));
 #else
@@ -274,9 +262,7 @@ static int disp_dither_power_off(enum DISP_MODULE_ENUM module, void *handle)
 	defined(CONFIG_MACH_MT6765) || defined(CONFIG_MACH_MT6761) || \
 	defined(CONFIG_MACH_MT6771) || defined(CONFIG_MACH_MT3967) || \
 	defined(CONFIG_MACH_MT6768) || defined(CONFIG_MACH_MT8168) || \
-	defined(CONFIG_MACH_MT6885) || defined(CONFIG_MACH_MT6785) || \
-	defined(CONFIG_MACH_MT6873) || defined(CONFIG_MACH_MT6853) || \
-	defined(CONFIG_MACH_MT6893) || defined(CONFIG_MACH_MT6833)
+	defined(CONFIG_MACH_MT6885) || defined(CONFIG_MACH_MT6785)
 
 	ddp_clk_disable_unprepare(ddp_get_module_clk_id(module));
 #else

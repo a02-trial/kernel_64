@@ -39,25 +39,25 @@
 /* ---------------------------------------------------------------  */
 
 #define pmic_set_sw_en(addr, val)             \
-		pmic_config_interface_nolock(addr, val, 1, 0)
+			pmic_config_interface_nolock(addr, val, 1, 0)
 #define pmic_set_sw_lp(addr, val)             \
-		pmic_config_interface_nolock(addr, val, 1, 1)
+			pmic_config_interface_nolock(addr, val, 1, 1)
 #define pmic_set_buck_op_mode(user, addr, val)   \
-		pmic_config_interface_nolock(addr, val, 1, user)
-#define pmic_set_ldo_op_mode(user, addr, val, shift)    \
-		pmic_config_interface_nolock(addr, val, 1, (user) + shift)
+			pmic_config_interface_nolock(addr, val, 1, user)
+#define pmic_set_ldo_op_mode(user, addr, val)    \
+			pmic_config_interface_nolock(addr, val, 1, (user) + 10)
 #define pmic_set_op_en(user, addr, val)       \
-		pmic_config_interface_nolock(addr, val, 1, user)
+			pmic_config_interface_nolock(addr, val, 1, user)
 #define pmic_set_op_cfg(user, addr, val)      \
-		pmic_config_interface_nolock(addr, val, 1, user)
+			pmic_config_interface_nolock(addr, val, 1, user)
 #define pmic_get_buck_op_mode(user, addr, pval)      \
-		pmic_read_interface_nolock(addr, pval, 1, user)
-#define pmic_get_ldo_op_mode(user, addr, pval, shift)      \
-		pmic_read_interface_nolock(addr, pval, 1, (user) + shift)
+			pmic_read_interface_nolock(addr, pval, 1, user)
+#define pmic_get_ldo_op_mode(user, addr, pval)      \
+			pmic_read_interface_nolock(addr, pval, 1, (user) + 10)
 #define pmic_get_op_en(user, addr, pval)      \
-		pmic_read_interface_nolock(addr, pval, 1, user)
+			pmic_read_interface_nolock(addr, pval, 1, user)
 #define pmic_get_op_cfg(user, addr, pval)     \
-		pmic_read_interface_nolock(addr, pval, 1, user)
+			pmic_read_interface_nolock(addr, pval, 1, user)
 
 #define en_cfg_shift  0x6
 
@@ -324,10 +324,8 @@ int pmic_ldo_vsram_proc1_lp(
 		unsigned char op_cfg)
 {
 	if (user <= SRCLKEN2)
-		pmic_set_ldo_op_mode(user,
-				     PMIC_RG_LDO_VSRAM_PROC1_OP_MODE_ADDR,
-				     op_mode,
-				     PMIC_RG_LDO_VSRAM_PROC1_OP_MODE_SHIFT);
+		pmic_set_ldo_op_mode(user, MT6359_LDO_VSRAM_PROC1_CON0,
+				     op_mode);
 	return pmic_lp_type_set(MT6359_LDO_VSRAM_PROC1_OP_EN,
 				VSRAM_PROC1, user, op_en, op_cfg);
 }
@@ -339,10 +337,8 @@ int pmic_ldo_vsram_proc2_lp(
 		unsigned char op_cfg)
 {
 	if (user <= SRCLKEN2)
-		pmic_set_ldo_op_mode(user,
-				     PMIC_RG_LDO_VSRAM_PROC2_OP_MODE_ADDR,
-				     op_mode,
-				     PMIC_RG_LDO_VSRAM_PROC2_OP_MODE_SHIFT);
+		pmic_set_ldo_op_mode(user, MT6359_LDO_VSRAM_PROC2_CON0,
+				     op_mode);
 	return pmic_lp_type_set(MT6359_LDO_VSRAM_PROC2_OP_EN,
 				VSRAM_PROC2, user, op_en, op_cfg);
 }
@@ -354,10 +350,8 @@ int pmic_ldo_vsram_others_lp(
 		unsigned char op_cfg)
 {
 	if (user <= SRCLKEN2)
-		pmic_set_ldo_op_mode(user,
-				     PMIC_RG_LDO_VSRAM_OTHERS_OP_MODE_ADDR,
-				     op_mode,
-				     PMIC_RG_LDO_VSRAM_OTHERS_OP_MODE_SHIFT);
+		pmic_set_ldo_op_mode(user, MT6359_LDO_VSRAM_OTHERS_CON0,
+				     op_mode);
 	return pmic_lp_type_set(MT6359_LDO_VSRAM_OTHERS_OP_EN,
 				VSRAM_OTHERS, user, op_en, op_cfg);
 }
@@ -369,10 +363,7 @@ int pmic_ldo_vsram_md_lp(
 		unsigned char op_cfg)
 {
 	if (user <= SRCLKEN2)
-		pmic_set_ldo_op_mode(user,
-				     PMIC_RG_LDO_VSRAM_MD_OP_MODE_ADDR,
-				     op_mode,
-				     PMIC_RG_LDO_VSRAM_MD_OP_MODE_SHIFT);
+		pmic_set_ldo_op_mode(user, MT6359_LDO_VSRAM_MD_CON0, op_mode);
 	return pmic_lp_type_set(MT6359_LDO_VSRAM_MD_OP_EN,
 				VSRAM_MD, user, op_en, op_cfg);
 }
@@ -384,10 +375,7 @@ int pmic_ldo_vcamio_lp(
 		unsigned char op_cfg)
 {
 	if (user <= SRCLKEN2)
-		pmic_set_ldo_op_mode(user,
-				     PMIC_RG_LDO_VCAMIO_OP_MODE_ADDR,
-				     op_mode,
-				     PMIC_RG_LDO_VCAMIO_OP_MODE_SHIFT);
+		pmic_set_ldo_op_mode(user, MT6359_LDO_VCAMIO_CON0, op_mode);
 	return pmic_lp_type_set(MT6359_LDO_VCAMIO_OP_EN,
 				VCAMIO, user, op_en, op_cfg);
 }
@@ -399,10 +387,7 @@ int pmic_ldo_vm18_lp(
 		unsigned char op_cfg)
 {
 	if (user <= SRCLKEN2)
-		pmic_set_ldo_op_mode(user,
-				     PMIC_RG_LDO_VM18_OP_MODE_ADDR,
-				     op_mode,
-				     PMIC_RG_LDO_VM18_OP_MODE_SHIFT);
+		pmic_set_ldo_op_mode(user, MT6359_LDO_VM18_CON0, op_mode);
 	return pmic_lp_type_set(MT6359_LDO_VM18_OP_EN,
 				VM18, user, op_en, op_cfg);
 }
@@ -414,10 +399,7 @@ int pmic_ldo_vcn18_lp(
 		unsigned char op_cfg)
 {
 	if (user <= SRCLKEN2)
-		pmic_set_ldo_op_mode(user,
-				     PMIC_RG_LDO_VCN18_OP_MODE_ADDR,
-				     op_mode,
-				     PMIC_RG_LDO_VCN18_OP_MODE_SHIFT);
+		pmic_set_ldo_op_mode(user, MT6359_LDO_VCN18_CON0, op_mode);
 	return pmic_lp_type_set(MT6359_LDO_VCN18_OP_EN,
 				VCN18, user, op_en, op_cfg);
 }
@@ -429,10 +411,7 @@ int pmic_ldo_vcn13_lp(
 		unsigned char op_cfg)
 {
 	if (user <= SRCLKEN2)
-		pmic_set_ldo_op_mode(user,
-				     PMIC_RG_LDO_VCN13_OP_MODE_ADDR,
-				     op_mode,
-				     PMIC_RG_LDO_VCN13_OP_MODE_SHIFT);
+		pmic_set_ldo_op_mode(user, MT6359_LDO_VCN13_CON0, op_mode);
 	return pmic_lp_type_set(MT6359_LDO_VCN13_OP_EN,
 				VCN13, user, op_en, op_cfg);
 }
@@ -444,10 +423,7 @@ int pmic_ldo_vrf18_lp(
 		unsigned char op_cfg)
 {
 	if (user <= SRCLKEN2)
-		pmic_set_ldo_op_mode(user,
-				     PMIC_RG_LDO_VRF18_OP_MODE_ADDR,
-				     op_mode,
-				     PMIC_RG_LDO_VRF18_OP_MODE_SHIFT);
+		pmic_set_ldo_op_mode(user, MT6359_LDO_VRF18_CON0, op_mode);
 	return pmic_lp_type_set(MT6359_LDO_VRF18_OP_EN,
 				VRF18, user, op_en, op_cfg);
 }
@@ -459,10 +435,7 @@ int pmic_ldo_vio18_lp(
 		unsigned char op_cfg)
 {
 	if (user <= SRCLKEN2)
-		pmic_set_ldo_op_mode(user,
-				     PMIC_RG_LDO_VIO18_OP_MODE_ADDR,
-				     op_mode,
-				     PMIC_RG_LDO_VIO18_OP_MODE_SHIFT);
+		pmic_set_ldo_op_mode(user, MT6359_LDO_VIO18_CON0, op_mode);
 	return pmic_lp_type_set(MT6359_LDO_VIO18_OP_EN,
 				VIO18, user, op_en, op_cfg);
 }
@@ -474,10 +447,7 @@ int pmic_ldo_vefuse_lp(
 		unsigned char op_cfg)
 {
 	if (user <= SRCLKEN2)
-		pmic_set_ldo_op_mode(user,
-				     PMIC_RG_LDO_VEFUSE_OP_MODE_ADDR,
-				     op_mode,
-				     PMIC_RG_LDO_VEFUSE_OP_MODE_SHIFT);
+		pmic_set_ldo_op_mode(user, MT6359_LDO_VEFUSE_CON0, op_mode);
 	return pmic_lp_type_set(MT6359_LDO_VEFUSE_OP_EN,
 				VEFUSE, user, op_en, op_cfg);
 }
@@ -489,10 +459,7 @@ int pmic_ldo_vrf12_lp(
 		unsigned char op_cfg)
 {
 	if (user <= SRCLKEN2)
-		pmic_set_ldo_op_mode(user,
-				     PMIC_RG_LDO_VRF12_OP_MODE_ADDR,
-				     op_mode,
-				     PMIC_RG_LDO_VRF12_OP_MODE_SHIFT);
+		pmic_set_ldo_op_mode(user, MT6359_LDO_VRF12_CON0, op_mode);
 	return pmic_lp_type_set(MT6359_LDO_VRF12_OP_EN,
 				VRF12, user, op_en, op_cfg);
 }
@@ -504,10 +471,7 @@ int pmic_ldo_vrfck_lp(
 		unsigned char op_cfg)
 {
 	if (user <= SRCLKEN2)
-		pmic_set_ldo_op_mode(user,
-				     PMIC_RG_LDO_VRFCK_OP_MODE_ADDR,
-				     op_mode,
-				     PMIC_RG_LDO_VRFCK_OP_MODE_SHIFT);
+		pmic_set_ldo_op_mode(user, MT6359_LDO_VRFCK_CON0, op_mode);
 	return pmic_lp_type_set(MT6359_LDO_VRFCK_OP_EN,
 				VRFCK, user, op_en, op_cfg);
 }
@@ -519,10 +483,7 @@ int pmic_ldo_va12_lp(
 		unsigned char op_cfg)
 {
 	if (user <= SRCLKEN2)
-		pmic_set_ldo_op_mode(user,
-				     PMIC_RG_LDO_VA12_OP_MODE_ADDR,
-				     op_mode,
-				     PMIC_RG_LDO_VA12_OP_MODE_SHIFT);
+		pmic_set_ldo_op_mode(user, MT6359_LDO_VA12_CON0, op_mode);
 	return pmic_lp_type_set(MT6359_LDO_VA12_OP_EN,
 				VA12, user, op_en, op_cfg);
 }
@@ -534,10 +495,7 @@ int pmic_ldo_va09_lp(
 		unsigned char op_cfg)
 {
 	if (user <= SRCLKEN2)
-		pmic_set_ldo_op_mode(user,
-				     PMIC_RG_LDO_VA09_OP_MODE_ADDR,
-				     op_mode,
-				     PMIC_RG_LDO_VA09_OP_MODE_SHIFT);
+		pmic_set_ldo_op_mode(user, MT6359_LDO_VA09_CON0, op_mode);
 	return pmic_lp_type_set(MT6359_LDO_VA09_OP_EN,
 				VA09, user, op_en, op_cfg);
 }
@@ -549,10 +507,7 @@ int pmic_ldo_vbbck_lp(
 		unsigned char op_cfg)
 {
 	if (user <= SRCLKEN2)
-		pmic_set_ldo_op_mode(user,
-				     PMIC_RG_LDO_VBBCK_OP_MODE_ADDR,
-				     op_mode,
-				     PMIC_RG_LDO_VBBCK_OP_MODE_SHIFT);
+		pmic_set_ldo_op_mode(user, MT6359_LDO_VBBCK_CON0, op_mode);
 	return pmic_lp_type_set(MT6359_LDO_VBBCK_OP_EN,
 				VBBCK, user, op_en, op_cfg);
 }
@@ -564,10 +519,7 @@ int pmic_ldo_vfe28_lp(
 		unsigned char op_cfg)
 {
 	if (user <= SRCLKEN2)
-		pmic_set_ldo_op_mode(user,
-				     PMIC_RG_LDO_VFE28_OP_MODE_ADDR,
-				     op_mode,
-				     PMIC_RG_LDO_VFE28_OP_MODE_SHIFT);
+		pmic_set_ldo_op_mode(user, MT6359_LDO_VFE28_CON0, op_mode);
 	return pmic_lp_type_set(MT6359_LDO_VFE28_OP_EN,
 				VFE28, user, op_en, op_cfg);
 }
@@ -579,10 +531,7 @@ int pmic_ldo_vbif28_lp(
 		unsigned char op_cfg)
 {
 	if (user <= SRCLKEN2)
-		pmic_set_ldo_op_mode(user,
-				     PMIC_RG_LDO_VBIF28_OP_MODE_ADDR,
-				     op_mode,
-				     PMIC_RG_LDO_VBIF28_OP_MODE_SHIFT);
+		pmic_set_ldo_op_mode(user, MT6359_LDO_VBIF28_CON0, op_mode);
 	return pmic_lp_type_set(MT6359_LDO_VBIF28_OP_EN,
 				VBIF28, user, op_en, op_cfg);
 }
@@ -594,10 +543,7 @@ int pmic_ldo_vaud18_lp(
 		unsigned char op_cfg)
 {
 	if (user <= SRCLKEN2)
-		pmic_set_ldo_op_mode(user,
-				     PMIC_RG_LDO_VAUD18_OP_MODE_ADDR,
-				     op_mode,
-				     PMIC_RG_LDO_VAUD18_OP_MODE_SHIFT);
+		pmic_set_ldo_op_mode(user, MT6359_LDO_VAUD18_CON0, op_mode);
 	return pmic_lp_type_set(MT6359_LDO_VAUD18_OP_EN,
 				VAUD18, user, op_en, op_cfg);
 }
@@ -609,10 +555,7 @@ int pmic_ldo_vaux18_lp(
 		unsigned char op_cfg)
 {
 	if (user <= SRCLKEN2)
-		pmic_set_ldo_op_mode(user,
-				     PMIC_RG_LDO_VAUX18_OP_MODE_ADDR,
-				     op_mode,
-				     PMIC_RG_LDO_VAUX18_OP_MODE_SHIFT);
+		pmic_set_ldo_op_mode(user, MT6359_LDO_VAUX18_CON0, op_mode);
 	return pmic_lp_type_set(MT6359_LDO_VAUX18_OP_EN,
 				VAUX18, user, op_en, op_cfg);
 }
@@ -624,10 +567,7 @@ int pmic_ldo_vxo22_lp(
 		unsigned char op_cfg)
 {
 	if (user <= SRCLKEN2)
-		pmic_set_ldo_op_mode(user,
-				     PMIC_RG_LDO_VXO22_OP_MODE_ADDR,
-				     op_mode,
-				     PMIC_RG_LDO_VXO22_OP_MODE_SHIFT);
+		pmic_set_ldo_op_mode(user, MT6359_LDO_VXO22_CON0, op_mode);
 	return pmic_lp_type_set(MT6359_LDO_VXO22_OP_EN,
 				VXO22, user, op_en, op_cfg);
 }
@@ -641,10 +581,7 @@ int pmic_ldo_vcn33_1_lp(
 	int ret = 0;
 
 	if (user <= SRCLKEN2)
-		pmic_set_ldo_op_mode(user,
-				     PMIC_RG_LDO_VCN33_1_OP_MODE_ADDR,
-				     op_mode,
-				     PMIC_RG_LDO_VCN33_1_OP_MODE_SHIFT);
+		pmic_set_ldo_op_mode(user, MT6359_LDO_VCN33_1_CON0, op_mode);
 	ret = pmic_lp_type_set(MT6359_LDO_VCN33_1_OP_EN,
 			VCN33_1_0, user, op_en, op_cfg);
 	if (ret)
@@ -664,10 +601,7 @@ int pmic_ldo_vcn33_2_lp(
 	int ret = 0;
 
 	if (user <= SRCLKEN2)
-		pmic_set_ldo_op_mode(user,
-				     PMIC_RG_LDO_VCN33_2_OP_MODE_ADDR,
-				     op_mode,
-				     PMIC_RG_LDO_VCN33_2_OP_MODE_SHIFT);
+		pmic_set_ldo_op_mode(user, MT6359_LDO_VCN33_2_CON0, op_mode);
 	ret = pmic_lp_type_set(MT6359_LDO_VCN33_2_OP_EN,
 			VCN33_2_0, user, op_en, op_cfg);
 	if (ret)
@@ -687,10 +621,7 @@ int pmic_ldo_vusb_lp(
 	int ret = 0;
 
 	if (user <= SRCLKEN2)
-		pmic_set_ldo_op_mode(user,
-				     PMIC_RG_LDO_VUSB_OP_MODE_ADDR,
-				     op_mode,
-				     PMIC_RG_LDO_VUSB_OP_MODE_SHIFT);
+		pmic_set_ldo_op_mode(user, MT6359_LDO_VUSB_CON0, op_mode);
 	ret = pmic_lp_type_set(MT6359_LDO_VUSB_OP_EN,
 			VUSB_0, user, op_en, op_cfg);
 	if (ret)
@@ -708,10 +639,7 @@ int pmic_ldo_vemc_lp(
 		unsigned char op_cfg)
 {
 	if (user <= SRCLKEN2)
-		pmic_set_ldo_op_mode(user,
-				     PMIC_RG_LDO_VEMC_OP_MODE_ADDR,
-				     op_mode,
-				     PMIC_RG_LDO_VEMC_OP_MODE_SHIFT);
+		pmic_set_ldo_op_mode(user, MT6359_LDO_VEMC_CON0, op_mode);
 	return pmic_lp_type_set(MT6359_LDO_VEMC_OP_EN,
 				VEMC, user, op_en, op_cfg);
 }
@@ -723,10 +651,7 @@ int pmic_ldo_vio28_lp(
 		unsigned char op_cfg)
 {
 	if (user <= SRCLKEN2)
-		pmic_set_ldo_op_mode(user,
-				     PMIC_RG_LDO_VIO28_OP_MODE_ADDR,
-				     op_mode,
-				     PMIC_RG_LDO_VIO28_OP_MODE_SHIFT);
+		pmic_set_ldo_op_mode(user, MT6359_LDO_VIO28_CON0, op_mode);
 	return pmic_lp_type_set(MT6359_LDO_VIO28_OP_EN,
 				VIO28, user, op_en, op_cfg);
 }
@@ -738,10 +663,7 @@ int pmic_ldo_vsim1_lp(
 		unsigned char op_cfg)
 {
 	if (user <= SRCLKEN2)
-		pmic_set_ldo_op_mode(user,
-				     PMIC_RG_LDO_VSIM1_OP_MODE_ADDR,
-				     op_mode,
-				     PMIC_RG_LDO_VSIM1_OP_MODE_SHIFT);
+		pmic_set_ldo_op_mode(user, MT6359_LDO_VSIM1_CON0, op_mode);
 	return pmic_lp_type_set(MT6359_LDO_VSIM1_OP_EN,
 				VSIM1, user, op_en, op_cfg);
 }
@@ -753,10 +675,7 @@ int pmic_ldo_vsim2_lp(
 		unsigned char op_cfg)
 {
 	if (user <= SRCLKEN2)
-		pmic_set_ldo_op_mode(user,
-				     PMIC_RG_LDO_VSIM2_OP_MODE_ADDR,
-				     op_mode,
-				     PMIC_RG_LDO_VSIM2_OP_MODE_SHIFT);
+		pmic_set_ldo_op_mode(user, MT6359_LDO_VSIM2_CON0, op_mode);
 	return pmic_lp_type_set(MT6359_LDO_VSIM2_OP_EN,
 				VSIM2, user, op_en, op_cfg);
 }
@@ -768,10 +687,7 @@ int pmic_ldo_vufs_lp(
 		unsigned char op_cfg)
 {
 	if (user <= SRCLKEN2)
-		pmic_set_ldo_op_mode(user,
-				     PMIC_RG_LDO_VUFS_OP_MODE_ADDR,
-				     op_mode,
-				     PMIC_RG_LDO_VUFS_OP_MODE_SHIFT);
+		pmic_set_ldo_op_mode(user, MT6359_LDO_VUFS_CON0, op_mode);
 	return pmic_lp_type_set(MT6359_LDO_VUFS_OP_EN,
 				VUFS, user, op_en, op_cfg);
 }
@@ -783,10 +699,7 @@ int pmic_ldo_vibr_lp(
 		unsigned char op_cfg)
 {
 	if (user <= SRCLKEN2)
-		pmic_set_ldo_op_mode(user,
-				     PMIC_RG_LDO_VIBR_OP_MODE_ADDR,
-				     op_mode,
-				     PMIC_RG_LDO_VIBR_OP_MODE_SHIFT);
+		pmic_set_ldo_op_mode(user, MT6359_LDO_VIBR_CON0, op_mode);
 	return pmic_lp_type_set(MT6359_LDO_VIBR_OP_EN,
 				VIBR, user, op_en, op_cfg);
 }

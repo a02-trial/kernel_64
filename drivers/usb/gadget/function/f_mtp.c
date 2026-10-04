@@ -258,9 +258,9 @@ static struct usb_interface_descriptor mtp_interface_desc = {
 	.bDescriptorType        = USB_DT_INTERFACE,
 	.bInterfaceNumber       = 0,
 	.bNumEndpoints          = 3,
-	.bInterfaceClass        = USB_CLASS_STILL_IMAGE,
-	.bInterfaceSubClass     = 1,
-	.bInterfaceProtocol     = 1,
+	.bInterfaceClass        = USB_CLASS_VENDOR_SPEC,
+	.bInterfaceSubClass     = USB_SUBCLASS_VENDOR_SPEC,
+	.bInterfaceProtocol     = 0,
 };
 
 static struct usb_interface_descriptor ptp_interface_desc = {
@@ -816,21 +816,11 @@ static ssize_t mtp_read(struct file *fp, char __user *buf,
 		goto done;
 	}
 
-	spin_lock_irq(&dev->lock);
-
 	/* update cdev after online */
 	cdev = dev->cdev;
 
-	if (dev->state == STATE_OFFLINE) {
-		spin_unlock_irq(&dev->lock);
-		return -ENODEV;
-	}
+	spin_lock_irq(&dev->lock);
 	if (dev->ep_out->desc) {
-		if (!cdev) {
-			spin_unlock_irq(&dev->lock);
-			return -ENODEV;
-		}
-
 		len = usb_ep_align_maybe(cdev->gadget, dev->ep_out, count);
 		if (len > MTP_BULK_BUFFER_SIZE) {
 			spin_unlock_irq(&dev->lock);
@@ -2022,11 +2012,6 @@ mtp_function_unbind(struct usb_configuration *c, struct usb_function *f)
 	struct usb_request *req;
 	int i;
 
-	if (dev->wq) {
-		flush_workqueue(dev->wq);
-		pr_debug("[USB]: %s flush workqueue\n", __func__);
-	}
-
 	mtp_string_defs[INTERFACE_STRING_INDEX].id = 0;
 	while ((req = mtp_req_get(dev, &dev->tx_idle)))
 		mtp_request_free(req, dev->ep_in);
@@ -2034,11 +2019,7 @@ mtp_function_unbind(struct usb_configuration *c, struct usb_function *f)
 		mtp_request_free(dev->rx_req[i], dev->ep_out);
 	while ((req = mtp_req_get(dev, &dev->intr_idle)))
 		mtp_request_free(req, dev->ep_intr);
-
-	spin_lock_irq(&dev->lock);
 	dev->state = STATE_OFFLINE;
-	dev->cdev = NULL;
-	spin_unlock_irq(&dev->lock);
 	kfree(f->os_desc_table);
 	f->os_desc_n = 0;
 }

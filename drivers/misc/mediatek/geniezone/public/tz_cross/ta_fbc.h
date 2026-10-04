@@ -11,7 +11,6 @@
  * GNU General Public License for more details.
  */
 
-
 #ifndef __TRUSTZONE_TA_FBC__
 #define __TRUSTZONE_TA_FBC__
 

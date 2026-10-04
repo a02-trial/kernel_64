@@ -16,7 +16,7 @@
 #include <linux/fs.h>
 #include <linux/ioctl.h>
 #include <linux/module.h>
-#include <linux/mutex.h>
+#include <linux/spinlock.h>
 #include <linux/uaccess.h>
 
 #include "tzdev_internal.h"
@@ -35,7 +35,7 @@ MODULE_LICENSE("GPL");
 
 static char *tz_panic_dump;
 static unsigned long tz_panic_dump_size;
-static DEFINE_MUTEX(tz_panic_dump_mutex);
+static DEFINE_SPINLOCK(tz_panic_dump_slock);
 
 static ssize_t tz_panic_dump_read(struct file *file, char __user *buf,
 		size_t count, loff_t *ppos)
@@ -45,7 +45,7 @@ static ssize_t tz_panic_dump_read(struct file *file, char __user *buf,
 	if (!count)
 		return 0;
 
-	mutex_lock(&tz_panic_dump_mutex);
+	spin_lock(&tz_panic_dump_slock);
 
 	if (!tz_panic_dump || !tz_panic_dump_size) {
 		ret = -EPERM;
@@ -69,7 +69,7 @@ static ssize_t tz_panic_dump_read(struct file *file, char __user *buf,
 	ret = count;
 
 out:
-	mutex_unlock(&tz_panic_dump_mutex);
+	spin_unlock(&tz_panic_dump_slock);
 
 	return ret;
 }

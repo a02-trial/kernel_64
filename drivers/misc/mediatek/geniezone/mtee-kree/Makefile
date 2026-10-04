@@ -24,8 +24,7 @@ ifeq ($(CONFIG_MTK_TEE_GP_SUPPORT),y)
     include $(srctree)/drivers/misc/mediatek/teei/Makefile.include
   else ifeq ($(CONFIG_BLOWFISH_TEE_SUPPORT),y)
     ccflags-y += -I$(srctree)/drivers/misc/tzdev
-  else ifeq ($(CONFIG_TEEGRIS_TEE_SUPPORT),y)
-		ccflags-y += -I$(srctree)/drivers/misc/tzdev/include/tzdev
+  else
   endif
 else # Legacy
   ifeq ($(CONFIG_TRUSTONIC_TEE_SUPPORT),y)

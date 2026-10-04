@@ -106,6 +106,9 @@ UINT_32 authCalculateRSNIELen(P_ADAPTER_T prAdapter, ENUM_NETWORK_TYPE_INDEX_T e
 
 VOID authAddRSNIE(IN P_ADAPTER_T prAdapter, IN OUT P_MSDU_INFO_T prMsduInfo);
 
+UINT_32 authAddRSNIE_impl(IN P_ADAPTER_T prAdapter,
+		  IN OUT P_MSDU_INFO_T prMsduInfo);
+
 VOID authHandleFtIEs(P_ADAPTER_T prAdapter, P_SW_RFB_T prSwRfb, P_IE_HDR_T prIEHdr);
 /*******************************************************************************
 *                              F U N C T I O N S

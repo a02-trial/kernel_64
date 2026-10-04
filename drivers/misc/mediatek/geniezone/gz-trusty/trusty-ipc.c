@@ -987,11 +987,9 @@ static long tipc_ioctl(struct file *filp,
 	if (_IOC_TYPE(cmd) != TIPC_IOC_MAGIC)
 		return -EINVAL;
 
-#if IS_ENABLED(CONFIG_COMPAT)
 	if (is_compat)
 		user_req = (char __user *)compat_ptr(arg);
 	else
-#endif
 		user_req = (char __user *)arg;
 
 	switch (cmd) {
@@ -1015,7 +1013,7 @@ static long tipc_ioctl_entry(struct file *filp,
 	return tipc_ioctl(filp, cmd, arg, false);
 }
 
-#if IS_ENABLED(CONFIG_COMPAT)
+#if defined(CONFIG_COMPAT)
 static long tipc_compat_ioctl_entry(struct file *filp,
 					unsigned int cmd, unsigned long arg)
 {
@@ -1178,7 +1176,7 @@ static const struct file_operations tipc_fops = {
 	.open = tipc_open,
 	.release = tipc_release,
 	.unlocked_ioctl = tipc_ioctl_entry,
-#if IS_ENABLED(CONFIG_COMPAT)
+#if defined(CONFIG_COMPAT)
 	.compat_ioctl = tipc_compat_ioctl_entry,
 #endif
 	.read_iter = tipc_read_iter,

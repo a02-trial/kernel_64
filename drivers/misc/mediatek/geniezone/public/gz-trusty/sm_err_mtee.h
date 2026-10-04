@@ -21,7 +21,6 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-
 #ifndef __SM_ERR_MTEE_H__
 #define __SM_ERR_MTEE_H__
 

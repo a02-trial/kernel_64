@@ -444,7 +444,6 @@ static struct SV_LOG_STR gSvLog[OWE_IRQ_TYPE_AMOUNT];
 	unsigned int *ptr2 = &gSvLog[irq]._cnt[ppb][logT];\
 	unsigned int str_leng;\
 	unsigned int logi;\
-	int ret; \
 	struct SV_LOG_STR *pSrc = &gSvLog[irq];\
 	if (logT == _LOG_ERR) {\
 		str_leng = NORMAL_STR_LEN*ERR_PAGE; \
@@ -460,11 +459,8 @@ static struct SV_LOG_STR gSvLog[OWE_IRQ_TYPE_AMOUNT];
 			_cnt[ppb][logT]]);    \
 	avaLen = str_leng - 1 - gSvLog[irq]._cnt[ppb][logT];\
 	if (avaLen > 1) {\
-		ret = snprintf((char *)(pDes), avaLen, fmt,\
+		snprintf((char *)(pDes), avaLen, fmt,\
 			##__VA_ARGS__);   \
-		if (ret < 0) { \
-			LOG_ERR("snprintf fail(%d)\n", ret); \
-		} \
 		if ('\0' != gSvLog[irq]._str[ppb][logT][str_leng - 1]) {\
 			LOG_ERR("log str over flow(%d)", irq);\
 		} \
@@ -529,10 +525,7 @@ static struct SV_LOG_STR gSvLog[OWE_IRQ_TYPE_AMOUNT];
 			ptr = pDes = (char *)&(\
 			     pSrc->_str[ppb][logT][pSrc->_cnt[ppb][logT]]);\
 			ptr2 = &(pSrc->_cnt[ppb][logT]);\
-		ret = snprintf((char *)(pDes), avaLen, fmt, ##__VA_ARGS__);\
-		if (ret < 0) { \
-			LOG_ERR("snprintf fail(%d)\n", ret); \
-		} \
+			snprintf((char *)(pDes), avaLen, fmt, ##__VA_ARGS__);\
 			while (*ptr++ != '\0') {\
 				(*ptr2)++;\
 			} \
@@ -3083,13 +3076,13 @@ EXIT:
 /******************************************************************************
  *
  ******************************************************************************/
-/*
 static signed int OWE_mmap(struct file *pFile, struct vm_area_struct *pVma)
 {
 	unsigned long length = 0;
 	unsigned int pfn = 0x0;
 
 	length = pVma->vm_end - pVma->vm_start;
+	/*  */
 	pVma->vm_page_prot = pgprot_noncached(pVma->vm_page_prot);
 	pfn = pVma->vm_pgoff << PAGE_SHIFT;
 
@@ -3119,10 +3112,10 @@ static signed int OWE_mmap(struct file *pFile, struct vm_area_struct *pVma)
 		pVma->vm_page_prot)) {
 		return -EAGAIN;
 	}
-
+	/*  */
 	return 0;
 }
-*/
+
 /******************************************************************************
  *
  ******************************************************************************/
@@ -3136,7 +3129,7 @@ static const struct file_operations OWEFileOper = {
 	.open = OWE_open,
 	.release = OWE_release,
 	/* .flush   = mt_OWE_flush, */
-	/* .mmap = OWE_mmap, */
+	.mmap = OWE_mmap,
 	.unlocked_ioctl = OWE_ioctl,
 #ifdef CONFIG_COMPAT
 	.compat_ioctl = OWE_ioctl_compat,

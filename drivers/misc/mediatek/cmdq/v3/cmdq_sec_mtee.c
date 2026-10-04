@@ -11,7 +11,7 @@
  * GNU General Public License for more details.
  */
 
-#include <linux/soc/mediatek/mtk-cmdq.h>
+#include "cmdq_core.h"
 #include "cmdq_sec_mtee.h"
 
 void cmdq_sec_mtee_setup_context(struct cmdq_sec_mtee_context *tee)
@@ -30,25 +30,25 @@ s32 cmdq_sec_init_context(struct cmdq_sec_tee_context *tee)
 {
 	s32 status;
 
-	cmdq_msg("[SEC] enter %s", __func__);
+	CMDQ_MSG("[SEC] enter %s\n", __func__);
 #if defined(CONFIG_MICROTRUST_TEE_SUPPORT)
 	while (!is_teei_ready()) {
-		cmdq_msg("[SEC] Microtrust TEE is not ready, wait...");
+		CMDQ_MSG("[SEC] Microtrust TEE is not ready, wait...\n");
 		msleep(1000);
 	}
 #elif defined(CONFIG_TRUSTONIC_TEE_SUPPORT)
 	while (!is_mobicore_ready()) {
-		cmdq_msg("[SEC] Trustonic TEE is not ready, wait...");
+		CMDQ_MSG("[SEC] Trustonic TEE is not ready, wait...\n");
 		msleep(1000);
 	}
 #endif
-	cmdq_log("[SEC]TEE is ready");
+	CMDQ_LOG("[SEC]TEE is ready\n");
 
 	status = TEEC_InitializeContext(NULL, &tee->gp_context);
 	if (status != TEEC_SUCCESS)
-		cmdq_err("[SEC]init_context fail: status:0x%x", status);
+		CMDQ_ERR("[SEC]init_context fail: status:0x%x\n", status);
 	else
-		cmdq_msg("[SEC]init_context: status:0x%x", status);
+		CMDQ_MSG("[SEC]init_context: status:0x%x\n", status);
 	return status;
 }
 
@@ -69,84 +69,59 @@ s32 cmdq_sec_mtee_allocate_shared_memory(struct cmdq_sec_mtee_context *tee,
 	status = KREE_RegisterSharedmem(tee->wsm_pHandle,
 		&tee->mem_handle, &tee->mem_param);
 	if (status != TZ_RESULT_SUCCESS)
-		cmdq_err("%s: session:%#x handle:%#x size:%#x buffer:%#x",
+		CMDQ_ERR("%s: session:%#x handle:%#x size:%#x buffer:%#x\n",
 			__func__, tee->wsm_pHandle, tee->mem_handle,
 			tee->mem_param.size, tee->mem_param.buffer);
 	else
-		cmdq_log("%s: session:%#x handle:%#x size:%#x buffer:%#x",
+		CMDQ_LOG("%s: session:%#x handle:%#x size:%#x buffer:%#x\n",
 			__func__, tee->wsm_pHandle, tee->mem_handle,
 			tee->mem_param.size, tee->mem_param.buffer);
 	return status;
 }
 
 s32 cmdq_sec_mtee_allocate_wsm(struct cmdq_sec_mtee_context *tee,
-	void **wsm_buffer, u32 size, void **wsm_buf_ex, u32 size_ex,
-	void **wsm_buf_ex2, u32 size_ex2)
+	void **wsm_buffer, u32 size, void **wsm_buf_ex, u32 size_ex)
 {
 	s32 status;
 
-	if (!wsm_buffer || !wsm_buf_ex || !wsm_buf_ex2)
+	if (!wsm_buffer || !wsm_buf_ex)
 		return -EINVAL;
 
-#ifndef CMDQ_LATE_INIT_SUPPORT
 	/* region_id = 0, mapAry = NULL for continuous */
 	*wsm_buffer = kzalloc(size, GFP_KERNEL);
 	if (!*wsm_buffer)
 		return -ENOMEM;
-#endif
 
 	tee->wsm_param.size = size;
 	tee->wsm_param.buffer = (void *)(u64)virt_to_phys(*wsm_buffer);
 	status = KREE_RegisterSharedmem(tee->wsm_pHandle,
 		&tee->wsm_handle, &tee->wsm_param);
 	if (status != TZ_RESULT_SUCCESS) {
-		cmdq_err("%s: session:%#x handle:%#x size:%#x buffer:%p:%#x",
+		CMDQ_ERR("%s: session:%#x handle:%#x size:%#x buffer:%p:%#x\n",
 			__func__, tee->wsm_pHandle, tee->wsm_handle,
 			tee->wsm_param.size, *wsm_buffer, *wsm_buffer);
 		return status;
 	}
-	cmdq_log("%s: session:%#x handle:%#x size:%#x buffer:%p:%#x",
+	CMDQ_LOG("%s: session:%#x handle:%#x size:%#x buffer:%p:%#x\n",
 		__func__, tee->wsm_pHandle, tee->wsm_handle,
 		tee->wsm_param.size, *wsm_buffer, *wsm_buffer);
 
-#ifndef CMDQ_LATE_INIT_SUPPORT
 	*wsm_buf_ex = kzalloc(size_ex, GFP_KERNEL);
 	if (!*wsm_buf_ex)
 		return -ENOMEM;
-#endif
 
 	tee->wsm_ex_param.size = size_ex;
 	tee->wsm_ex_param.buffer = (void *)(u64)virt_to_phys(*wsm_buf_ex);
 	status = KREE_RegisterSharedmem(tee->wsm_pHandle,
 		&tee->wsm_ex_handle, &tee->wsm_ex_param);
 	if (status != TZ_RESULT_SUCCESS)
-		cmdq_err("%s: session:%#x handle:%#x size:%#x buffer:%p:%#x",
+		CMDQ_ERR("%s: session:%#x handle:%#x size:%#x buffer:%p:%#x\n",
 			__func__, tee->wsm_pHandle, tee->wsm_ex_handle,
 			tee->wsm_ex_param.size, *wsm_buf_ex, *wsm_buf_ex);
 	else
-		cmdq_log("%s: session:%#x handle:%#x size:%#x buffer:%p:%#x",
+		CMDQ_LOG("%s: session:%#x handle:%#x size:%#x buffer:%p:%#x\n",
 			__func__, tee->wsm_pHandle, tee->wsm_ex_handle,
 			tee->wsm_ex_param.size, *wsm_buf_ex, *wsm_buf_ex);
-
-#ifndef CMDQ_LATE_INIT_SUPPORT
-	*wsm_buf_ex2 = kzalloc(size_ex2, GFP_KERNEL);
-	if (!*wsm_buf_ex2)
-		return -ENOMEM;
-#endif
-
-	tee->wsm_ex2_param.size = size_ex2;
-	tee->wsm_ex2_param.buffer = (void *)(u64)virt_to_phys(*wsm_buf_ex2);
-	status = KREE_RegisterSharedmem(tee->wsm_pHandle,
-		&tee->wsm_ex2_handle, &tee->wsm_ex2_param);
-	if (status != TZ_RESULT_SUCCESS)
-		cmdq_err("%s: session:%#x handle:%#x size:%#x buffer:%p:%#x",
-			__func__, tee->wsm_pHandle, tee->wsm_ex2_handle,
-			tee->wsm_ex2_param.size, *wsm_buf_ex2, *wsm_buf_ex2);
-	else
-		cmdq_log("%s: session:%#x handle:%#x size:%#x buffer:%p:%#x",
-			__func__, tee->wsm_pHandle, tee->wsm_ex2_handle,
-			tee->wsm_ex2_param.size, *wsm_buf_ex2, *wsm_buf_ex2);
-
 	return status;
 }
 
@@ -169,18 +144,18 @@ s32 cmdq_sec_mtee_open_session(struct cmdq_sec_mtee_context *tee,
 
 	status = KREE_CreateSession(tee->ta_uuid, &tee->pHandle);
 	if (status != TZ_RESULT_SUCCESS) {
-		cmdq_err("%s:%s:%d", __func__, tee->ta_uuid, status);
+		CMDQ_ERR("%s:%s:%d\n", __func__, tee->ta_uuid, status);
 		return status;
 	}
-	cmdq_log("%s: tee:%p ta_uuid:%s session:%#x",
+	CMDQ_LOG("%s: tee:%p ta_uuid:%s session:%#x\n",
 		__func__, tee, tee->ta_uuid, tee->pHandle);
 
 	status = KREE_CreateSession(tee->wsm_uuid, &tee->wsm_pHandle);
 	if (status != TZ_RESULT_SUCCESS) {
-		cmdq_err("%s:%s:%d", __func__, tee->ta_uuid, status);
+		CMDQ_ERR("%s:%s:%d\n", __func__, tee->ta_uuid, status);
 		return status;
 	}
-	cmdq_log("%s: tee:%p ta_uuid:%s session:%#x",
+	CMDQ_LOG("%s: tee:%p ta_uuid:%s session:%#x\n",
 		__func__, tee, tee->wsm_uuid, tee->wsm_pHandle);
 	return status;
 }
@@ -192,12 +167,11 @@ s32 cmdq_sec_mtee_close_session(struct cmdq_sec_mtee_context *tee)
 }
 
 s32 cmdq_sec_mtee_execute_session(struct cmdq_sec_mtee_context *tee,
-	u32 cmd, s32 timeout_ms, bool share_mem_ex, bool share_mem_ex2)
+	u32 cmd, s32 timeout_ms, bool share_mem_ex)
 {
 	s32 status;
-	u32 types = TZ_ParamTypes4(TZPT_VALUE_INOUT,
+	u32 types = TZ_ParamTypes3(TZPT_VALUE_INOUT,
 		share_mem_ex ? TZPT_VALUE_INOUT : TZPT_NONE,
-		share_mem_ex2 ? TZPT_VALUE_INOUT : TZPT_NONE,
 		cmd == 4 ? TZPT_VALUE_INOUT : TZPT_NONE); // TODO
 	union MTEEC_PARAM param[4];
 
@@ -205,24 +179,20 @@ s32 cmdq_sec_mtee_execute_session(struct cmdq_sec_mtee_context *tee,
 	param[0].value.b = tee->wsm_param.size;
 	param[1].value.a = tee->wsm_ex_handle;
 	param[1].value.b = tee->wsm_ex_param.size;
-	param[2].value.a = tee->wsm_ex2_handle;
-	param[2].value.b = tee->wsm_ex2_param.size;
-	param[3].value.a = tee->mem_handle;
-	param[3].value.b = (u32)(unsigned long)tee->mem_param.buffer;
-	cmdq_log("%s: tee:%p session:%#x cmd:%u timeout:%d",
-		__func__, tee, tee->pHandle, cmd, timeout_ms);
-	cmdq_log("%s: mem_ex:%d mem_ex2:%d types:%#x",
-		__func__, share_mem_ex, share_mem_ex2, types);
-	cmdq_log("wsm:%#x:%#x ex:%#x:%#x ex2:%#x:%#x mem:%#x:%#x",
+	param[2].value.a = tee->mem_handle;
+	param[2].value.b = (u32)(unsigned long)tee->mem_param.buffer;
+	CMDQ_LOG(
+		"%s: tee:%p session:%#x cmd:%u timeout:%d mem_ex:%d types:%#x wsm:%#x:%#x ex:%#x:%#x mem:%#x:%#x\n",
+		__func__,
+		tee, tee->pHandle, cmd, timeout_ms, share_mem_ex, types,
 		param[0].value.a, param[0].value.b,
 		param[1].value.a, param[1].value.b,
-		param[2].value.a, param[2].value.b,
-		param[3].value.a, param[3].value.b);
+		param[2].value.a, param[2].value.b);
 
 	status = KREE_TeeServiceCall(tee->pHandle, cmd, types, param);
 	if (status != TZ_RESULT_SUCCESS)
-		cmdq_err("%s:%d cmd:%u", __func__, status, cmd);
+		CMDQ_ERR("%s:%d cmd:%u\n", __func__, status, cmd);
 	else
-		cmdq_msg("%s:%d cmd:%u", __func__, status, cmd);
+		CMDQ_MSG("%s:%d cmd:%u\n", __func__, status, cmd);
 	return status;
 }

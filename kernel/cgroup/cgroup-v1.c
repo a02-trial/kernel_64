@@ -15,9 +15,6 @@
 #include <linux/cgroupstats.h>
 
 #include <trace/events/cgroup.h>
-#ifdef CONFIG_MTK_TASK_TURBO
-#include <mt-plat/turbo_common.h>
-#endif
 
 /*
  * pidlists linger the following amount before being destroyed.  The goal
@@ -386,6 +383,11 @@ static int pidlist_array_load(struct cgroup *cgrp, enum cgroup_filetype type,
 		if (unlikely(n == length))
 			break;
 
+		/* mtk: don't get pid when proc/task killed */
+		if ((SIGNAL_GROUP_EXIT & tsk->signal->flags) ||
+			(PF_EXITING & tsk->flags))
+			continue;
+
 		/* get tgid or pid for procs or tasks file respectively */
 		if (type == CGROUP_FILE_PROCS)
 			pid = task_tgid_vnr(tsk);
@@ -505,7 +507,6 @@ static void *cgroup_pidlist_next(struct seq_file *s, void *v, loff_t *pos)
 	 */
 	p++;
 	if (p >= end) {
-		(*pos)++;
 		return NULL;
 	} else {
 		*pos = *p;
@@ -554,10 +555,6 @@ static ssize_t __cgroup1_procs_write(struct kernfs_open_file *of,
 		goto out_finish;
 
 	ret = cgroup_attach_task(cgrp, task, threadgroup);
-#ifdef CONFIG_MTK_TASK_TURBO
-	if (!ret)
-		cgroup_set_turbo_task(task);
-#endif
 
 out_finish:
 	cgroup_procs_write_finish(task);
@@ -833,7 +830,7 @@ void cgroup1_release_agent(struct work_struct *work)
 
 	pathbuf = kmalloc(PATH_MAX, GFP_KERNEL);
 	agentbuf = kstrdup(cgrp->root->release_agent_path, GFP_KERNEL);
-	if (!pathbuf || !agentbuf || !strlen(agentbuf))
+	if (!pathbuf || !agentbuf)
 		goto out;
 
 	spin_lock_irq(&css_set_lock);

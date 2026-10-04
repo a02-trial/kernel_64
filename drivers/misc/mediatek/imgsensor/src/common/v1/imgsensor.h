@@ -70,9 +70,6 @@ imgsensor_sensor_control(
 	struct IMGSENSOR_SENSOR *psensor,
 	enum MSDK_SCENARIO_ID_ENUM ScenarioId);
 
-#ifdef CONFIG_CAMERA_OIS_MCU
-struct IMGSENSOR_SENSOR *imgsensor_sensor_get_inst(enum IMGSENSOR_SENSOR_IDX idx);
-struct IMGSENSOR_HW *imgsensor_sensor_get_hw(void);
-#endif
+extern bool imgsensor_is_open[MAX_NUM_OF_SUPPORT_SENSOR];
 #endif
 

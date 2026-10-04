@@ -212,7 +212,7 @@ BOOLEAN secCheckClassError(IN P_ADAPTER_T prAdapter, IN P_SW_RFB_T prSwRfb, IN P
 		return FALSE;
 
 	eNetTypeIndex = prStaRec->ucNetTypeIndex;
-	if (!IS_NET_ACTIVE(prAdapter, eNetTypeIndex) || eNetTypeIndex < 0)
+	if (!IS_NET_ACTIVE(prAdapter, eNetTypeIndex))
 		return FALSE;
 
 	prBssInfo = &prAdapter->rWifiVar.arBssInfo[eNetTypeIndex];

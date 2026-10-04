@@ -28,8 +28,7 @@
 #define TZ_IWLOG_BUF_SIZE		(CONFIG_TZLOG_PG_CNT * PAGE_SIZE - sizeof(struct circ_buf))
 
 #define TZ_IWLOG_LINE_MAX_LEN		256
-#define TZ_IWLOG_PREFIX			"SW> "
-#define TZ_IWLOG_PREFIX_LEN		4
+#define TZ_IWLOG_PREFIX			KERN_DEFAULT "SW> "
 
 enum {
 	TZ_IWLOG_WAIT,
@@ -51,43 +50,11 @@ static atomic_t tz_iwlog_request = ATOMIC_INIT(0);
 
 static struct task_struct *tz_iwlog_kthread;
 
-/* This enum must be synced with numerical values of SW log levels (syslog.h) */
-enum {
-	TZ_LOG_CRIT = '0',
-	TZ_LOG_ERR = '1',
-	TZ_LOG_WARNING = '2',
-	TZ_LOG_NOTICE = '3',
-	TZ_LOG_INFO = '4',
-	TZ_LOG_DEBUG = '5'
-};
-
-static const char *tz_iwlog_convert_log_level(char tz_log_level)
-{
-	switch (tz_log_level) {
-	case TZ_LOG_CRIT:
-		return KERN_CRIT;
-	case TZ_LOG_ERR:
-		return KERN_ERR;
-	case TZ_LOG_WARNING:
-		return KERN_WARNING;
-	case TZ_LOG_NOTICE:
-		return KERN_NOTICE;
-	case TZ_LOG_INFO:
-		return KERN_INFO;
-	case TZ_LOG_DEBUG:
-		return KERN_DEBUG;
-	default:
-		return "";
-	}
-}
-
 static void tz_iwlog_buffer_print(const char *buf, unsigned int count)
 {
 	struct tz_iwlog_print_state *ps;
-	unsigned int avail, bytes_in, bytes_out, wait_dta;
+	unsigned int avail, bytes_in, bytes_out, bytes_printed, tmp, wait_dta;
 	char *p;
-	int bytes_printed;
-	const char *kern_log_level;
 
 	ps = &get_cpu_var(tz_iwlog_print_state);
 
@@ -125,12 +92,13 @@ static void tz_iwlog_buffer_print(const char *buf, unsigned int count)
 
 		ps->line[ps->line_len] = 0;
 
-		kern_log_level = tz_iwlog_convert_log_level(ps->line[0]);
+		bytes_printed = 0;
+		while (bytes_printed < ps->line_len) {
+			tmp = printk(TZ_IWLOG_PREFIX "%s\n", &ps->line[bytes_printed]);
+			if (!tmp)
+				break;
 
-		bytes_printed = printk("%s" TZ_IWLOG_PREFIX	"%s\n", kern_log_level, ps->line + 1);
-		bytes_printed -= TZ_IWLOG_PREFIX_LEN;
-		if (bytes_printed < ps->line_len - 1){
-			printk(KERN_ERR "[Omitted %d bytes in SW message]\n", ps->line_len - bytes_printed);
+			bytes_printed += tmp;
 		}
 
 		ps->line_len = 0;
@@ -299,7 +267,7 @@ post_smc_notifier_fail:
 
 void tz_iwlog_fini(void)
 {
-	if (!atomic_cmpxchg(&tz_iwlog_init_done, 1, 0))
+	if (atomic_cmpxchg(&tz_iwlog_init_done, 1, 0))
 		return;
 
 	kthread_stop(tz_iwlog_kthread);

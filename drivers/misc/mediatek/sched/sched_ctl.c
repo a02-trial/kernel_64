@@ -25,13 +25,6 @@
 //TODO: remove comment after met ready
 //#include <mt-plat/met_drv.h>
 #include <mt-plat/mtk_sched.h>
-#ifdef CONFIG_MTK_TASK_TURBO
-#include <mt-plat/turbo_common.h>
-#endif
-
-#ifdef CONFIG_MACH_MT6873
-#include "mtk_devinfo.h"
-#endif
 
 #define SCHED_HINT_THROTTLE_NSEC 10000000 /* 10ms for throttle */
 
@@ -68,7 +61,10 @@ static DEFINE_SPINLOCK(status_lock);
 static struct kobj_attribute sched_boost_attr;
 static struct kobj_attribute sched_cpu_prefer_attr;
 #endif
+
+#ifdef CONFIG_MTK_TC10_FEATURE
 static int sched_ramup_factor; /*0 means disable (min:1%,max 100%)*/
+#endif
 
 static int sched_hint_status(int util, int cap)
 {
@@ -278,12 +274,14 @@ static struct kobj_attribute sched_walt_info_attr =
 __ATTR(walt_debug, 0600 /* S_IWUSR | S_IRUSR */,
 			show_walt_info, store_walt_info);
 
+
+#ifdef CONFIG_MTK_TC10_FEATURE
 static ssize_t store_sched_forked_ramup_factor(struct kobject *kobj,
 		struct kobj_attribute *attr, const char *buf, size_t count)
 {
 	unsigned int val = 0;
 
-	if (sscanf(buf, "%u", &val) != 0) {
+	if (sscanf(buf, "%iu", &val) != 0) {
 		if (val >= 0 && val <= 100)
 			sched_ramup_factor = val;
 	}
@@ -292,24 +290,25 @@ static ssize_t store_sched_forked_ramup_factor(struct kobject *kobj,
 }
 
 static ssize_t show_sched_forked_ramup_factor(struct kobject *kobj,
-struct kobj_attribute *attr, char *buf)
+		struct kobj_attribute *attr, char *buf)
 {
 	unsigned int len = 0;
 	unsigned int max_len = 4096;
 
 	len += snprintf(buf, max_len, "%d\n", sched_ramup_factor);
-
 	return len;
 }
 
 int sched_forked_ramup_factor(void)
 {
+
 	return sched_ramup_factor;
 }
 
 static struct kobj_attribute sched_forked_ramup_factor_attr =
 __ATTR(sched_forked_ramup_factor, 0644, show_sched_forked_ramup_factor,
 		store_sched_forked_ramup_factor);
+#endif
 
 static struct attribute *sched_attrs[] = {
 	&sched_info_attr.attr,
@@ -323,7 +322,9 @@ static struct attribute *sched_attrs[] = {
 	&sched_iso_attr.attr,
 	&set_sched_iso_attr.attr,
 	&set_sched_deiso_attr.attr,
+#ifdef CONFIG_MTK_TC10_FEATURE
 	&sched_forked_ramup_factor_attr.attr,
+#endif
 	NULL,
 };
 
@@ -374,9 +375,6 @@ static int __init sched_hint_init(void)
 
 	/* enable sched hint */
 	sched_hint_inited = 1;
-
-	/* Init sched_rampup_factor */
-	sched_ramup_factor = 0;
 
 	/*
 	 * create a sched in cpu_subsys:
@@ -431,7 +429,6 @@ int sched_set_cpuprefer(pid_t pid, unsigned int prefer_type)
 		p->cpu_prefer = prefer_type;
 		raw_spin_unlock_irqrestore(&p->pi_lock, flags);
 		trace_sched_set_cpuprefer(p);
-		retval = 0;
 	}
 	rcu_read_unlock();
 
@@ -525,93 +522,6 @@ task_prefer_match_on_cpu(struct task_struct *p, int src_cpu, int target_cpu)
 	return 0;
 }
 
-#ifdef CONFIG_MACH_MT6873
-int calc_cpu_util(const struct sched_group_energy *sge, int cpu,
-		struct task_struct *p, int calc_dvfs_opp)
-{
-	unsigned long wake_util, new_util;
-	unsigned long max_capacity = cluster_max_capacity();
-	unsigned long min_util = uclamp_task_effective_util(p, UCLAMP_MIN);
-	unsigned long max_util = uclamp_task_effective_util(p, UCLAMP_MAX);
-	int opp_idx;
-
-	wake_util = cpu_util_without(cpu, p);
-	new_util = wake_util + task_util_est(p);
-	max_util = min(max_capacity, max_util);
-	new_util = clamp(new_util, min_util, max_util);
-
-	new_util = new_util * capacity_margin >> SCHED_CAPACITY_SHIFT;
-	new_util = min_t(unsigned long, new_util,
-		(unsigned long) sge->cap_states[sge->nr_cap_states-1].cap);
-
-	if (calc_dvfs_opp) {
-		for (opp_idx = 0; opp_idx < sge->nr_cap_states ; opp_idx++) {
-			if (sge->cap_states[opp_idx].cap >= new_util) {
-				new_util = sge->cap_states[opp_idx].cap;
-				break;
-			}
-		}
-	}
-
-	return new_util;
-}
-
-int aware_big_thermal(int cpu, struct task_struct *p)
-{
-	struct hmp_domain *hmp_domain = NULL;
-	struct sched_domain *sd;
-	struct sched_group *sg;
-	const unsigned long *cpus;
-	const struct sched_group_energy *sge;
-	int cpu_idx, last_cpu;
-	int new_cpu = cpu;
-	unsigned long min_new_util, new_util;
-
-	if (hmp_cpu_is_fastest(cpu)) {
-		hmp_domain = hmp_cpu_domain(cpu);
-		cpus = cpumask_bits(&hmp_domain->possible_cpus);
-		last_cpu = find_last_bit(cpus, num_possible_cpus());
-
-		if (cpu == last_cpu)
-			return cpu;
-
-		rcu_read_lock();
-		sd = rcu_dereference_check_sched_domain(cpu_rq(cpu)->sd);
-
-		if (sd) {
-			sg = sd->groups;
-			sge = sg->sge;
-		} else
-			goto out;
-
-		min_new_util = calc_cpu_util(sge, cpu, p, 1);
-		for (cpu_idx = last_cpu; cpu_idx > cpu; --cpu_idx) {
-
-			if (idle_cpu(cpu_idx)) {
-				new_util = calc_cpu_util(sge, cpu_idx, p, 0);
-
-				if (min_new_util >= new_util) {
-					new_cpu = cpu_idx;
-					break;
-				}
-			}
-		}
-out:
-		rcu_read_unlock();
-	}
-
-	return new_cpu;
-}
-#endif
-
-#ifdef CONFIG_MACH_MT6873
-static int efuse_aware_big_thermal;
-void __init init_efuse_info(void)
-{
-	efuse_aware_big_thermal = (get_devinfo_with_index(7) & 0xFF) == 0x30;
-}
-#endif
-
 int select_task_prefer_cpu(struct task_struct *p, int new_cpu)
 {
 	int task_prefer;
@@ -620,15 +530,11 @@ int select_task_prefer_cpu(struct task_struct *p, int new_cpu)
 	int i, iter_domain, domain_cnt = 0;
 	int iter_cpu;
 	struct cpumask *tsk_cpus_allow = &p->cpus_allowed;
-#ifdef CONFIG_MTK_TASK_TURBO
-	unsigned long spare_cap, max_spare_cap = 0;
-	int max_spare_cpu = -1;
-#endif
 
 	task_prefer = cpu_prefer(p);
 
 	if (!hinted_cpu_prefer(task_prefer))
-		goto out;
+		return new_cpu;
 
 	for_each_hmp_domain_L_first(domain) {
 		tmp_domain[domain_cnt] = domain;
@@ -640,14 +546,8 @@ int select_task_prefer_cpu(struct task_struct *p, int new_cpu)
 				domain_cnt-i-1 : i;
 		domain = tmp_domain[iter_domain];
 
-#ifdef CONFIG_MTK_TASK_TURBO
-		/* check fastest domain for turbo task*/
-		if (is_turbo_task(p) && i != 0)
-			break;
-#endif
-
 		if (cpumask_test_cpu(new_cpu, &domain->possible_cpus))
-			goto out;
+			return new_cpu;
 
 		for_each_cpu(iter_cpu, &domain->possible_cpus) {
 
@@ -659,35 +559,11 @@ int select_task_prefer_cpu(struct task_struct *p, int new_cpu)
 			/* favoring tasks that prefer idle cpus
 			 * to improve latency.
 			 */
-			if (idle_cpu(iter_cpu)) {
-				new_cpu = iter_cpu;
-				goto out;
-			}
+			if (idle_cpu(iter_cpu))
+				return iter_cpu;
 
-#ifdef CONFIG_MTK_TASK_TURBO
-			if (is_turbo_task(p)) {
-				spare_cap = capacity_spare_without(iter_cpu, p);
-
-				if (spare_cap > max_spare_cap) {
-					max_spare_cap = spare_cap;
-					max_spare_cpu = iter_cpu;
-				}
-			}
-#endif
 		}
 	}
-
-#ifdef CONFIG_MTK_TASK_TURBO
-	if (is_turbo_task(p) && (max_spare_cpu > 0))
-		new_cpu = max_spare_cpu;
-#endif
-
-out:
-
-#ifdef CONFIG_MACH_MT6873
-	if (efuse_aware_big_thermal)
-		new_cpu = aware_big_thermal(new_cpu, p);
-#endif
 
 	return new_cpu;
 }
@@ -720,30 +596,6 @@ void sched_unset_boost_fg(void)
 	unset_user_space_global_cpuset(6);
 }
 
-void sched_set_boost_ta(void)
-{
-	struct cpumask cpus;
-	int nr;
-
-	/* 1: Root
-	 * 2: foreground
-	 * 3: Foregrond/boost
-	 * 4: background
-	 * 5: system-background
-	 * 6: top-app
-	 */
-
-	nr = arch_get_nr_clusters();
-	arch_get_cluster_cpus(&cpus, nr-1);
-
-	set_user_space_global_cpuset(&cpus, 6);
-}
-
-void sched_unset_boost_ta(void)
-{
-	unset_user_space_global_cpuset(6);
-}
-
 /* A mutex for scheduling boost switcher */
 static DEFINE_MUTEX(sched_boost_mutex);
 
@@ -763,8 +615,6 @@ int set_sched_boost(unsigned int val)
 		sched_scheduler_switch(SCHED_HYBRID_LB);
 	else if (sched_boost_type == SCHED_FG_BOOST)
 		sched_unset_boost_fg();
-	else if (sched_boost_type == SCHED_TA_BOOST)
-		sched_unset_boost_ta();
 
 	sched_boost_type = val;
 
@@ -783,8 +633,6 @@ int set_sched_boost(unsigned int val)
 			sched_scheduler_switch(SCHED_HMP_LB);
 		else if (val == SCHED_FG_BOOST)
 			sched_set_boost_fg();
-		else if (val == SCHED_TA_BOOST)
-			sched_set_boost_ta();
 	}
 	printk_deferred("[name:sched_boost&] sched boost: set %d\n",
 			sched_boost_type);
@@ -842,10 +690,6 @@ static ssize_t show_sched_boost(struct kobject *kobj,
 	case SCHED_FG_BOOST:
 		len += snprintf(buf, max_len,
 			"sched boost= foreground boost\n\n");
-		break;
-	case SCHED_TA_BOOST:
-		len += snprintf(buf, max_len,
-				"sched boost= top-app boost\n\n");
 		break;
 	default:
 		len += snprintf(buf, max_len, "sched boost= no boost\n\n");
@@ -907,6 +751,46 @@ int sched_set_cpuprefer(pid_t pid, unsigned int prefer_type)
 }
 
 #endif
+
+/*
+ * sched_ktime_clock()
+ *  - to get wall time but not to update in suspended.
+ */
+#include <linux/syscore_ops.h>
+
+static ktime_t ktime_last;
+static bool sched_ktime_suspended;
+
+u64 sched_ktime_clock(void)
+{
+	if (unlikely(sched_ktime_suspended))
+		return ktime_to_ns(ktime_last);
+	return ktime_get_ns();
+}
+
+static void sched_resume(void)
+{
+	sched_ktime_suspended = false;
+}
+
+static int sched_suspend(void)
+{
+	ktime_last = ktime_get();
+	sched_ktime_suspended = true;
+	return 0;
+}
+
+static struct syscore_ops sched_syscore_ops = {
+	.resume = sched_resume,
+	.suspend = sched_suspend
+};
+
+static int __init sched_init_ops(void)
+{
+	register_syscore_ops(&sched_syscore_ops);
+	return 0;
+}
+late_initcall(sched_init_ops);
 
 /* schedule loading trackign change
  * 0: default

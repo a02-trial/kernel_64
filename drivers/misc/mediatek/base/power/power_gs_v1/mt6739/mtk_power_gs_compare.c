@@ -15,9 +15,6 @@
 #include "mtk_power_gs_array.h"
 #include "mt-plat/mtk_rtc.h"
 
-extern void dump_pmic(int pmic_num, const char *scenario,
-const unsigned int *pmic_gs, unsigned int pmic_gs_len);
-
 void mt_power_gs_table_init(void)
 {
 	mt_power_gs_base_remap_init("Suspend ", "CG  ",
@@ -45,7 +42,7 @@ void mt_power_gs_suspend_compare(unsigned int dump_flag)
 	if (dump_flag & GS_PMIC) {
 		/* 32k-less */
 		pr_info("Power_gs: %s in 32k-less\n", __func__);
-		dump_pmic(0, "Suspend",
+		mt_power_gs_compare("Suspend ", "6357",
 			MT6357_MT6357_PMIC_Register_Mapping_E1_gs_suspend_32kless,
 			MT6357_MT6357_PMIC_Register_Mapping_E1_gs_suspend_32kless_len);
 	}
@@ -70,7 +67,7 @@ void mt_power_gs_dpidle_compare(unsigned int dump_flag)
 	if (dump_flag & GS_PMIC) {
 		/* 32k-less */
 		pr_info("Power_gs: %s in 32k-less\n", __func__);
-		dump_pmic(0, "DPIdle",
+		mt_power_gs_compare("DPIdle  ", "6357",
 			MT6357_MT6357_PMIC_Register_Mapping_E1_gs_deepidle___lp_mp3_32kless,
 			MT6357_MT6357_PMIC_Register_Mapping_E1_gs_deepidle___lp_mp3_32kless_len);
 	}
@@ -95,7 +92,7 @@ void mt_power_gs_sodi_compare(unsigned int dump_flag)
 	if (dump_flag & GS_PMIC) {
 		/* 32k-less */
 		pr_info("Power_gs: %s in 32k-less\n", __func__);
-		dump_pmic(0, "SODI",
+		mt_power_gs_compare("SODI  ", "6357",
 			MT6357_MT6357_PMIC_Register_Mapping_E1_gs_sodi3p0_32kless,
 			MT6357_MT6357_PMIC_Register_Mapping_E1_gs_sodi3p0_32kless_len);
 	}

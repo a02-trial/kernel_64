@@ -144,7 +144,8 @@ int detect_conn_irq_enable(struct sec_det_conn_info *pinfo, bool enable,
 		for (i = 0; i < pinfo->pdata->gpio_total_cnt; i++) {
 			if (pinfo->irq_enabled[i]) {
 				disable_irq(pinfo->pdata->irq_number[i]);
-				pinfo->irq_enabled[i] = DET_CONN_GPIO_IRQ_DISABLED;
+				free_irq(pinfo->pdata->irq_number[i], pinfo);
+				pinfo->irq_enabled[i] = false;
 			}
 		}
 		return ret;
@@ -153,28 +154,24 @@ int detect_conn_irq_enable(struct sec_det_conn_info *pinfo, bool enable,
 	if (pin >= pinfo->pdata->gpio_total_cnt)
 		return ret;
 
-	if (pinfo->irq_enabled[pin] == DET_CONN_GPIO_IRQ_NOT_INIT) {
-		ret = request_threaded_irq(pinfo->pdata->irq_number[pin], NULL,
-					   sec_detect_conn_interrupt_handler,
-					   pinfo->pdata->irq_type[pin] | IRQF_ONESHOT,
-					   pinfo->pdata->name[pin], pinfo);
+	ret = request_threaded_irq(pinfo->pdata->irq_number[pin], NULL,
+				   sec_detect_conn_interrupt_handler,
+				   pinfo->pdata->irq_type[pin] | IRQF_ONESHOT,
+				   pinfo->pdata->name[pin], pinfo);
 
-		if (ret) {
-			SEC_CONN_PRINT("%s: Failed to request irq %d.\n", __func__,
-				       ret);
-			return ret;
-		}
-
-		SEC_CONN_PRINT("%s: Succeeded to request threaded irq %d:\n",
-			       __func__, ret);
-	} else if (pinfo->irq_enabled[pin] == DET_CONN_GPIO_IRQ_DISABLED) {
-		enable_irq(pinfo->pdata->irq_number[pin]);
+	if (ret) {
+		SEC_CONN_PRINT("%s: Failed to request irq %d.\n", __func__,
+			       ret);
+		return ret;
 	}
+
+	SEC_CONN_PRINT("%s: Succeeded to request threaded irq %d:\n",
+		       __func__, ret);
 	SEC_CONN_PRINT("irq_num[%d], type[%x],name[%s].\n",
 		       pinfo->pdata->irq_number[pin],
 		       pinfo->pdata->irq_type[pin], pinfo->pdata->name[pin]);
 
-	pinfo->irq_enabled[pin] = DET_CONN_GPIO_IRQ_ENABLED;
+	pinfo->irq_enabled[pin] = true;
 	return ret;
 }
 
@@ -263,7 +260,7 @@ static ssize_t enabled_store(struct device *dev, struct device_attribute *attr,
 		 * enable all nodes except already enabled node.
 		 */
 		if (buf_len >= 11) {
-			if (strncmp(buf, "ALL_CONNECT", 11)) {
+			if (strncmp(buf, "ALL_CONNECT", buf_len)) {
 				/* buf sting is not equal to ALL_CONNECT */
 				continue;
 			}
@@ -307,7 +304,7 @@ static ssize_t available_pins_show(struct device *dev,
 	}
 	available_pins_string[strlen(available_pins_string) - 1] = '\0';
 
-	return snprintf(buf, 1024, "%s\n", available_pins_string);
+	return snprintf(buf, 12, "%s\n", available_pins_string);
 }
 static DEVICE_ATTR_RO(available_pins);
 
@@ -320,7 +317,7 @@ static int detect_conn_parse_dt(struct device *dev)
 {
 	struct sec_det_conn_p_data *pdata = dev->platform_data;
 	struct device_node *np = dev->of_node;
-#if IS_ENABLED(CONFIG_QCOM_SEC_DETECT)
+#if defined(CONFIG_ARCH_QCOM)
 	struct pinctrl *conn_pinctrl;
 	struct pinctrl *pm_conn_pinctrl;
 #endif
@@ -337,7 +334,7 @@ static int detect_conn_parse_dt(struct device *dev)
 
 	pdata->gpio_total_cnt = pdata->gpio_cnt;
 
-#if IS_ENABLED(CONFIG_QCOM_SEC_DETECT)
+#if defined(CONFIG_ARCH_QCOM)
 	/* Setting pinctrl state to NO PULL */
 	conn_pinctrl = devm_pinctrl_get_select(dev, "det_ap_connect");
 	if (IS_ERR_OR_NULL(conn_pinctrl))
@@ -372,7 +369,7 @@ static int detect_conn_parse_dt(struct device *dev)
 			       pdata->irq_number[i]);
 	}
 
-#if IS_ENABLED(CONFIG_QCOM_SEC_DETECT)
+#if defined(CONFIG_ARCH_QCOM)
 	/* Setting PM gpio for QC */
 	pdata->gpio_pm_cnt = of_gpio_named_count(np, "sec,det_pm_conn_gpios");
 

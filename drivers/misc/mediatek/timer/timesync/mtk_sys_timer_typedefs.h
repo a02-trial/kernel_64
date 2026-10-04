@@ -71,6 +71,7 @@ struct sys_timer_timesync_context_t {
 	u8 support_sysram;
 };
 
+void sys_timer_timesync_sync_adsp(unsigned int flag);
 
 
 #endif

@@ -749,7 +749,7 @@ void Charger_Detect_Init(void)
 	if ((get_boot_mode() == META_BOOT) ||
 		(get_boot_mode() == ADVMETA_BOOT) ||
 		!mtk_musb) {
-		DBG(0, "%s Skip, musb<%pK>\n",
+		DBG(0, "%s Skip, musb<%p>\n",
 				__func__, mtk_musb);
 		return;
 	}
@@ -772,7 +772,7 @@ void Charger_Detect_Release(void)
 	if ((get_boot_mode() == META_BOOT) ||
 		(get_boot_mode() == ADVMETA_BOOT) ||
 		!mtk_musb) {
-		DBG(0, "%s Skip, musb<%pK>\n",
+		DBG(0, "%s Skip, musb<%p>\n",
 				__func__, mtk_musb);
 		return;
 	}

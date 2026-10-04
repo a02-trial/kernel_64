@@ -27,7 +27,6 @@ enum {
 enum {
 	BW_COMP_NONE = 0,
 	BW_COMP_DEFAULT,
-	BW_COMP_VENC,
 	BW_COMP_END
 };
 

@@ -23,7 +23,6 @@
 
 #ifdef CONFIG_MTK_AUDIODSP_SUPPORT
 #include <adsp_ipi.h>
-#include <adsp_helper.h>
 #endif
 
 #include <adsp_ipi_queue.h>
@@ -177,16 +176,12 @@ bool check_print_msg_info(const struct ipi_msg_t *p_ipi_msg)
 		return false;
 
 #ifdef CONFIG_SND_SOC_MTK_AUDIO_DSP
-	if (p_ipi_msg->msg_id == AUDIO_DSP_TASK_OPEN ||
-	    p_ipi_msg->msg_id == AUDIO_DSP_TASK_CLOSE ||
-	    p_ipi_msg->msg_id == AUDIO_DSP_TASK_HWPARAM ||
+	if (p_ipi_msg->msg_id == AUDIO_DSP_TASK_HWPARAM ||
 	    p_ipi_msg->msg_id == AUDIO_DSP_TASK_PCM_HWPARAM ||
 	    p_ipi_msg->msg_id == AUDIO_DSP_TASK_HWFREE ||
 	    p_ipi_msg->msg_id == AUDIO_DSP_TASK_PCM_HWFREE ||
 	    p_ipi_msg->msg_id == AUDIO_DSP_TASK_PREPARE ||
-	    p_ipi_msg->msg_id == AUDIO_DSP_TASK_PCM_PREPARE ||
-	    p_ipi_msg->msg_id == AUDIO_DSP_TASK_START ||
-	    p_ipi_msg->msg_id == AUDIO_DSP_TASK_STOP)
+	    p_ipi_msg->msg_id == AUDIO_DSP_TASK_PCM_PREPARE)
 		return false;
 
 	if (p_ipi_msg->task_scene == TASK_SCENE_PRIMARY &&
@@ -203,10 +198,6 @@ bool check_print_msg_info(const struct ipi_msg_t *p_ipi_msg)
 
 	if (p_ipi_msg->task_scene == TASK_SCENE_CAPTURE_UL1 &&
 	    p_ipi_msg->msg_id == AUDIO_DSP_TASK_ULCOPY)
-		return false;
-
-	if (p_ipi_msg->task_scene == TASK_SCENE_FAST &&
-	    p_ipi_msg->msg_id == AUDIO_DSP_TASK_DLCOPY)
 		return false;
 #endif
 

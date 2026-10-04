@@ -23,13 +23,16 @@
 #ifndef __LINUX_RCU_H
 #define __LINUX_RCU_H
 
-#include <linux/interrupt.h>
 #include <trace/events/rcu.h>
 #ifdef CONFIG_RCU_TRACE
 #define RCU_TRACE(stmt) stmt
 #else /* #ifdef CONFIG_RCU_TRACE */
 #define RCU_TRACE(stmt)
 #endif /* #else #ifdef CONFIG_RCU_TRACE */
+
+#ifdef CONFIG_MTK_SCHED_MONITOR
+#include "mtk_sched_mon.h"
+#endif
 
 /*
  * Process-level increment to ->dynticks_nesting field.  This allows for
@@ -184,21 +187,22 @@ void kfree(const void *);
 static inline bool __rcu_reclaim(const char *rn, struct rcu_head *head)
 {
 	unsigned long offset = (unsigned long)head->func;
-	unsigned long long ts = 0;
 
 	rcu_lock_acquire(&rcu_callback_map);
 	if (__is_kfree_rcu_offset(offset)) {
 		RCU_TRACE(trace_rcu_invoke_kfree_callback(rn, head, offset);)
-		check_start_time(ts);
 		kfree((void *)head - offset);
-		check_process_time("rcu_reclaim free memory", ts);
 		rcu_lock_release(&rcu_callback_map);
 		return true;
 	} else {
 		RCU_TRACE(trace_rcu_invoke_callback(rn, head);)
-		check_start_time(ts);
+#ifdef CONFIG_MTK_SCHED_MONITOR
+		mt_trace_RCU_SoftIRQ_start(head->func);
+#endif
 		head->func(head);
-		check_process_time("rcu_reclaim %ps", ts, (void *)offset);
+#ifdef CONFIG_MTK_SCHED_MONITOR
+		mt_trace_RCU_SoftIRQ_end();
+#endif
 		rcu_lock_release(&rcu_callback_map);
 		return false;
 	}

@@ -1,6 +1,14 @@
-/* SPDX-License-Identifier: GPL-2.0 */
 /*
- * Copyright (c) 2015 MediaTek Inc.
+ * Copyright (C) 2015 MediaTek Inc.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
  */
 
 #ifndef __CMDQ_SEC_H__
@@ -9,21 +17,15 @@
 #include "cmdq_helper_ext.h"
 
 #if defined(CMDQ_SECURE_PATH_SUPPORT)
-#include "cmdq_sec_iwc_common.h"
-#if defined(CMDQ_SECURE_TEE_SUPPORT) && !defined(CONFIG_MTK_IN_HOUSE_TEE_SUPPORT)
 #include "tee_client_api.h"
-#endif
-#if defined(CONFIG_MTK_TEE_GP_SUPPORT)
+#include "cmdq_sec_iwc_common.h"
+#if defined(CMDQ_GP_SUPPORT)
 #include "cmdq_sec_gp.h"
-#elif defined(CONFIG_TRUSTONIC_TEE_SUPPORT)
+#else
 #include "cmdq_sec_trustonic.h"
 #endif
 #if defined(CMDQ_SECURE_MTEE_SUPPORT)
 #include "cmdq_sec_mtee.h"
-#endif
-
-#if defined(CONFIG_MTK_IN_HOUSE_TEE_SUPPORT)
-#include "cmdq_sec_trustzone.h"
 #endif
 #endif /* CMDQ_SECURE_PATH_SUPPORT */
 
@@ -65,16 +67,14 @@ struct cmdqSecContextStruct {
 	/* iwc information */
 	void *iwcMessage;	/* message buffer */
 	void *iwcMessageEx;	/* message buffer extra */
-	void *iwcMessageEx2;	/* message buffer extra */
 
-#if defined(CMDQ_SECURE_TEE_SUPPORT)
+#if defined(CMDQ_SECURE_PATH_SUPPORT)
 	struct cmdq_sec_tee_context tee;	/* trustzone parameters */
-#endif
 #if defined(CMDQ_SECURE_MTEE_SUPPORT)
 	void *mtee_iwcMessage;
 	void *mtee_iwcMessageEx;
-	void *mtee_iwcMessageEx2;
 	struct cmdq_sec_mtee_context mtee;
+#endif
 #endif
 };
 
@@ -110,8 +110,7 @@ int32_t cmdq_sec_destroy_shared_memory(
  * Return:
  *     >=0 for success;
  */
-typedef int32_t(*CmdqSecFillIwcCB) (
-	int32_t, void *, int32_t, void *, void *, void *);
+typedef int32_t(*CmdqSecFillIwcCB) (int32_t, void *, int32_t, void *, void *);
 
 
 /*
@@ -150,7 +149,7 @@ void cmdqSecDeInitialize(void);
 
 void cmdqSecEnableProfile(const bool enable);
 
-#if defined(CMDQ_SECURE_TEE_SUPPORT)
+#if defined(CMDQ_SECURE_PATH_SUPPORT)
 /*
  * tee vendor interface
  */
@@ -161,8 +160,7 @@ s32 cmdq_sec_init_context(struct cmdq_sec_tee_context *tee);
 s32 cmdq_sec_deinit_context(struct cmdq_sec_tee_context *tee);
 
 s32 cmdq_sec_allocate_wsm(struct cmdq_sec_tee_context *tee, void **wsm_buffer,
-	u32 size, void **wsm_buf_ex, u32 size_ex,
-	void **wsm_buf_ex2, u32 size_ex2);
+	u32 size, void **wsm_buf_ex, u32 size_ex);
 
 s32 cmdq_sec_free_wsm(struct cmdq_sec_tee_context *tee, void **wsm_buffer);
 
@@ -171,23 +169,23 @@ s32 cmdq_sec_open_session(struct cmdq_sec_tee_context *tee, void *wsm_buffer);
 s32 cmdq_sec_close_session(struct cmdq_sec_tee_context *tee);
 
 s32 cmdq_sec_execute_session(struct cmdq_sec_tee_context *tee,
-	u32 cmd, s32 timeout_ms, bool share_mem_ex, bool share_mem_ex2);
-#endif
+	u32 cmd, s32 timeout_ms, bool share_mem_ex);
 
 #if defined(CMDQ_SECURE_MTEE_SUPPORT)
 void cmdq_sec_mtee_setup_context(struct cmdq_sec_mtee_context *tee);
 s32 cmdq_sec_mtee_allocate_shared_memory(struct cmdq_sec_mtee_context *tee,
 	const dma_addr_t MVABase, const u32 size);
 s32 cmdq_sec_mtee_allocate_wsm(struct cmdq_sec_mtee_context *tee,
-	void **wsm_buffer, u32 size, void **wsm_buf_ex, u32 size_ex,
-	void **wsm_buf_ex2, u32 size_ex2);
+	void **wsm_buffer, u32 size, void **wsm_buf_ex, u32 size_ex);
 s32 cmdq_sec_mtee_free_wsm(
 	struct cmdq_sec_mtee_context *tee, void **wsm_buffer);
 s32 cmdq_sec_mtee_open_session(
 	struct cmdq_sec_mtee_context *tee, void *wsm_buffer);
 s32 cmdq_sec_mtee_close_session(struct cmdq_sec_mtee_context *tee);
 s32 cmdq_sec_mtee_execute_session(struct cmdq_sec_mtee_context *tee,
-	u32 cmd, s32 timeout_ms, bool share_mem_ex, bool share_mem_ex2);
+	u32 cmd, s32 timeout_ms, bool share_mem_ex);
 #endif
+
+#endif	/* CMDQ_SECURE_PATH_SUPPORT */
 
 #endif				/* __DDP_CMDQ_SEC_H__ */

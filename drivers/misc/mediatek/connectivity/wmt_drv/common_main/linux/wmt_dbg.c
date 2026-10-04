@@ -31,7 +31,6 @@
 #include "stp_dbg.h"
 #include "connsys_debug_utility.h"
 #include "wmt_step.h"
-#include "wmt_alarm.h"
 #ifdef CONFIG_MTK_ENG_BUILD
 #include "wmt_step_test.h"
 #endif
@@ -130,8 +129,6 @@ static INT32 wmt_dbg_pre_pwr_on_ctrl(INT32 par1, INT32 enable, INT32 par3);
 static INT32 wmt_dbg_step_test(INT32 par1, INT32 address, INT32 value);
 #endif
 
-static INT32 wmt_dbg_alarm_ctrl(INT32 par1, INT32 offset, INT32 size);
-
 static INT32 wmt_dbg_thermal_query(INT32 par1, INT32 count, INT32 interval);
 static INT32 wmt_dbg_thermal_ctrl(INT32 par1, INT32 par2, INT32 par3);
 static INT32 wmt_dbg_step_ctrl(INT32 par1, INT32 par2, INT32 par3);
@@ -198,7 +195,6 @@ static const WMT_DEV_DBG_FUNC wmt_dev_dbg_func[] = {
 	[0x2f] = wmt_dbg_set_bt_link_status,
 	[0x30] = wmt_dbg_show_thread_debug_info,
 	[0x31] = wmt_dbg_gps_suspend,
-	[0x32] = wmt_dbg_alarm_ctrl,
 #ifdef CONFIG_MTK_ENG_BUILD
 	[0xa0] = wmt_dbg_step_test,
 #endif
@@ -377,7 +373,7 @@ INT32 wmt_dbg_cmd_test_api(ENUM_WMTDRV_CMD_T cmd)
 		pOp->op.au4OpData[3] = osal_sizeof(gCoexBuf.buffer);
 		break;
 	}
-	WMT_INFO_FUNC("CMD_TEST, opid(%d), par(%zu, %zu)\n", pOp->op.opId, pOp->op.au4OpData[0],
+	WMT_INFO_FUNC("CMD_TEST, opid(%d), par(%lu, %lu)\n", pOp->op.opId, pOp->op.au4OpData[0],
 		      pOp->op.au4OpData[1]);
 	/*wake up chip first */
 	if (DISABLE_PSM_MONITOR()) {
@@ -400,7 +396,7 @@ INT32 wmt_dbg_cmd_test_api(ENUM_WMTDRV_CMD_T cmd)
 		}
 	}
 	/* wmt_lib_host_awake_put(); */
-	WMT_INFO_FUNC("CMD_TEST, opid (%d), par(%zu, %zu), ret(%d), result(%s)\n",
+	WMT_INFO_FUNC("CMD_TEST, opid (%d), par(%lu, %lu), ret(%d), result(%s)\n",
 		      pOp->op.opId,
 		      pOp->op.au4OpData[0],
 		      pOp->op.au4OpData[1],
@@ -447,17 +443,14 @@ INT32 wmt_dbg_chip_rst(INT32 par1, INT32 par2, INT32 par3)
 
 INT32 wmt_dbg_func_ctrl(INT32 par1, INT32 par2, INT32 par3)
 {
-	MTK_WCN_BOOL ret = MTK_WCN_BOOL_FALSE;
-
 	if (par2 < WMTDRV_TYPE_WMT || par2 == WMTDRV_TYPE_LPBK) {
 		if (par3 == 0) {
 			WMT_INFO_FUNC("function off test, type(%d)\n", par2);
-			ret = mtk_wcn_wmt_func_off(par2);
+			mtk_wcn_wmt_func_off(par2);
 		} else {
 			WMT_INFO_FUNC("function on test, type(%d)\n", par2);
-			ret = mtk_wcn_wmt_func_on(par2);
+			mtk_wcn_wmt_func_on(par2);
 		}
-		WMT_INFO_FUNC("function test return %d\n", ret);
 	} else
 		WMT_INFO_FUNC("function ctrl test, invalid type(%d)\n", par2);
 
@@ -751,15 +744,6 @@ static INT32 wmt_dbg_suspend_debug(INT32 par1, INT32 par2, INT32 par3)
 	return 0;
 }
 
-static INT32 wmt_dbg_alarm_ctrl(INT32 par1, INT32 par2, INT32 par3)
-{
-	if (par2 > 0)
-		wmt_alarm_start(par2);
-	else
-		wmt_alarm_cancel();
-	return 0;
-}
-
 static INT32 wmt_dbg_set_bt_link_status(INT32 par1, INT32 par2, INT32 par3)
 {
 	if (par2 != 0 && par2 != 1)
@@ -915,15 +899,12 @@ static INT32 wmt_dbg_fw_log_ctrl(INT32 par1, INT32 onoff, INT32 level)
 
 INT32 wmt_dbg_pre_pwr_on_ctrl(INT32 par1, INT32 enable, INT32 par3)
 {
-	MTK_WCN_BOOL ret = MTK_WCN_BOOL_FALSE;
 
 	WMT_INFO_FUNC("%s pre power on function\n", enable ? "enable" : "disable");
 
 	if (enable) {
 		/* Turn LPBK off and set always power on flag to 1 */
-		ret = mtk_wcn_wmt_func_off(WMTDRV_TYPE_LPBK);
-		if (!ret)
-			WMT_WARN_FUNC("mtk_wcn_wmt_func_off(WMTDRV_TYPE_LPBK) return %d\n", ret);
+		mtk_wcn_wmt_func_off(WMTDRV_TYPE_LPBK);
 		wmt_dev_apo_ctrl(1);
 	} else {
 		/* Just set always power on flag to 0 */
@@ -1231,7 +1212,7 @@ static INT32 wmt_dbg_jtag_flag_ctrl(INT32 par1, INT32 par2, INT32 par3)
 static INT32 wmt_dbg_lte_to_wmt_test(UINT32 opcode, UINT32 msg_len)
 {
 	conn_md_ipc_ilm_t ilm;
-	struct local_para *p_buf_str = NULL;
+	struct local_para *p_buf_str;
 	INT32 i = 0;
 	INT32 iRet = -1;
 
@@ -1449,8 +1430,7 @@ static VOID delay_work_func(struct work_struct *work)
 		return;
 	}
 
-	if ((dbgWork->x >= 0) && (dbgWork->x < 0x33))
-		(*wmt_dev_dbg_func[dbgWork->x]) (dbgWork->x, dbgWork->y, dbgWork->z);
+	(*wmt_dev_dbg_func[dbgWork->x]) (dbgWork->x, dbgWork->y, dbgWork->z);
 
 	kvfree(dbgWork);
 }
@@ -1548,10 +1528,8 @@ ssize_t wmt_dbg_write(struct file *filp, const char __user *buffer, size_t count
 	 * 0x15: assert control
 	 * 0x2e: enable catch connsys log
 	 * 0x2f: set bt link status
-	 * 0x32: alarm dump control
 	 */
-	if (0 == dbgEnabled && 0x15 != x && 0x2e != x && 0x2f != x &&
-		0x7 != x && x != 0x32) {
+	if (0 == dbgEnabled && 0x15 != x && 0x2e != x && 0x2f != x && 0x7 != x) {
 		WMT_INFO_FUNC("please enable WMT debug first\n\r");
 		return len;
 	}

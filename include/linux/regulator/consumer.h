@@ -284,6 +284,7 @@ void devm_regulator_unregister_notifier(struct regulator *regulator,
 /* driver data - core doesn't touch */
 void *regulator_get_drvdata(struct regulator *regulator);
 void regulator_set_drvdata(struct regulator *regulator, void *data);
+
 #ifdef CONFIG_SEC_PM
 void regulator_debug_print_enabled(void);
 #endif
@@ -511,7 +512,7 @@ static inline int regulator_get_error_flags(struct regulator *regulator,
 
 static inline int regulator_set_load(struct regulator *regulator, int load_uA)
 {
-	return 0;
+	return REGULATOR_MODE_NORMAL;
 }
 
 static inline int regulator_allow_bypass(struct regulator *regulator,

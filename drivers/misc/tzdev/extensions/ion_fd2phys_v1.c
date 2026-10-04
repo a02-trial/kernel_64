@@ -21,10 +21,10 @@
 #include <linux/fs.h>
 #include <linux/init.h>
 
-#if defined(CONFIG_ION_FD2PHYS_USE_ION_FROM_STAGING)
-#include "../../../staging/android/ion/ion.h"
-#else
+#if defined(CONFIG_ARCH_RANCHU)
 #include <linux/ion.h>
+#else
+#include "../../../staging/android/ion/ion.h"
 #endif
 
 #include <linux/kernel.h>
@@ -34,7 +34,6 @@
 
 #include "tzdev_internal.h"
 #include "core/cdev.h"
-#include "core/subsystem.h"
 
 #define TZDEV_MAX_PFNS_COUNT	(SIZE_MAX / sizeof(sk_pfn_t))
 
@@ -207,7 +206,7 @@ static ssize_t ionfd2phys_id_show(struct device *dev, struct device_attribute *a
 
 static DEVICE_ATTR(ionfd2phys_id, S_IRUGO, ionfd2phys_id_show, NULL);
 
-int ionfd2phys_init(void)
+static int __init ionfd2phys_init(void)
 {
 	int ret;
 
@@ -238,13 +237,13 @@ out_unregister:
 	return ret;
 }
 
-void ionfd2phys_exit(void)
+static void __exit ionfd2phys_exit(void)
 {
 	tz_cdev_unregister(&ionfd2phys_cdev);
 }
 
-tzdev_initcall(ionfd2phys_init);
-tzdev_exitcall(ionfd2phys_exit);
+module_init(ionfd2phys_init);
+module_exit(ionfd2phys_exit);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Artem Kuzin <a.kuzin@samsung.com>");

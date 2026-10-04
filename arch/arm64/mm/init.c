@@ -55,15 +55,6 @@
 #include <linux/cma.h>
 #include <mt-plat/mtk_meminfo.h>
 
-#ifdef CONFIG_UH
-#include <linux/uh.h>
-#ifdef CONFIG_UH_RKP
-#include <linux/rkp.h>
-#elif defined(CONFIG_RUSTUH_RKP)
-#include <linux/rustrkp.h>
-#endif
-#endif
-
 /*
  * We need to be able to catch inadvertent references to memstart_addr
  * that occur (potentially in generic code) before arm64_memblock_init()
@@ -492,17 +483,9 @@ void __init arm64_memblock_init(void)
 			"initrd not fully accessible via the linear mapping -- please check your bootloader ...\n")) {
 			initrd_start = 0;
 		} else {
-			u64 start_up, end_dn, size_al;
-
-			start_up = PAGE_ALIGN(initrd_start);
-			end_dn = initrd_end & PAGE_MASK;
-			size_al = end_dn - start_up;
-
 			memblock_remove(base, size); /* clear MEMBLOCK_ flags */
 			memblock_add(base, size);
 			memblock_reserve(base, size);
-			record_memsize_reserved("initrd", start_up, size_al,
-						false, false);
 		}
 	}
 
@@ -535,6 +518,9 @@ void __init arm64_memblock_init(void)
 #ifdef CONFIG_BLK_DEV_INITRD
 	if (initrd_start) {
 		memblock_reserve(initrd_start, initrd_end - initrd_start);
+		record_memsize_reserved("initrd", initrd_start,
+					initrd_end - initrd_start, false,
+					false);
 
 		/* the generic initrd code expects virtual addresses */
 		initrd_start = __phys_to_virt(initrd_start);
@@ -761,10 +747,6 @@ void free_initmem(void)
 	 * is not supported by kallsyms.
 	 */
 	unmap_kernel_range((u64)__init_begin, (u64)(__init_end - __init_begin));
-
-#if defined(CONFIG_UH_RKP)
-	rkp_deferred_init();
-#endif
 }
 
 #ifdef CONFIG_BLK_DEV_INITRD

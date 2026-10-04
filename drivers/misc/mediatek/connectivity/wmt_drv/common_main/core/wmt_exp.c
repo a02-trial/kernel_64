@@ -229,14 +229,10 @@ EXPORT_SYMBOL(mtk_wcn_wmt_func_on);
 */
 VOID mtk_wcn_wmt_func_ctrl_for_plat(UINT32 on, ENUM_WMTDRV_TYPE_T type)
 {
-	MTK_WCN_BOOL ret;
-
 	if (on)
-		ret = mtk_wcn_wmt_func_on(type);
+		mtk_wcn_wmt_func_on(type);
 	else
-		ret = mtk_wcn_wmt_func_off(type);
-
-	WMT_INFO_FUNC("on=%d type=%d ret=%d\n", on, type, ret);
+		mtk_wcn_wmt_func_off(type);
 }
 
 INT8 mtk_wcn_wmt_therm_ctrl(ENUM_WMTTHERM_TYPE_T eType)
@@ -717,11 +713,6 @@ MTK_WCN_BOOL mtk_wcn_wmt_do_reset(ENUM_WMTDRV_TYPE_T type)
 		"DRV_TYPE_ANT"
 	};
 
-	if ((type < WMTDRV_TYPE_BT) || (type > WMTDRV_TYPE_ANT)) {
-		WMT_INFO_FUNC("Wrong driver type: %d, do not trigger reset.\n", type);
-		return MTK_WCN_BOOL_FALSE;
-	}
-
 	WMT_INFO_FUNC("Subsystem trigger whole chip reset, reset source: %s\n", drv_name[type]);
 	if (mtk_wcn_stp_get_wmt_trg_assert() == 0)
 		iRet = wmt_lib_trigger_reset();
@@ -733,23 +724,6 @@ MTK_WCN_BOOL mtk_wcn_wmt_do_reset(ENUM_WMTDRV_TYPE_T type)
 	return iRet == 0 ? MTK_WCN_BOOL_TRUE : MTK_WCN_BOOL_FALSE;
 }
 EXPORT_SYMBOL(mtk_wcn_wmt_do_reset);
-
-MTK_WCN_BOOL mtk_wcn_wmt_do_reset_only(ENUM_WMTDRV_TYPE_T type)
-{
-	INT32 iRet = -1;
-
-	WMT_INFO_FUNC("Whole chip reset without trigger assert\n");
-	if (mtk_wcn_stp_get_wmt_trg_assert() == 0) {
-		chip_reset_only = 1;
-		iRet = wmt_lib_trigger_reset();
-	} else {
-		WMT_INFO_FUNC("assert has been triggered already\n");
-		iRet = 0;
-	}
-
-	return iRet == 0 ? MTK_WCN_BOOL_TRUE : MTK_WCN_BOOL_FALSE;
-}
-EXPORT_SYMBOL(mtk_wcn_wmt_do_reset_only);
 
 VOID mtk_wcn_wmt_set_wifi_ver(UINT32 Value)
 {
@@ -841,18 +815,6 @@ MTK_WCN_BOOL mtk_wmt_gps_suspend_ctrl(MTK_WCN_BOOL suspend)
 }
 EXPORT_SYMBOL(mtk_wmt_gps_suspend_ctrl);
 
-INT32 mtk_wcn_wmt_mpu_lock_aquire(VOID)
-{
-	return wmt_lib_mpu_lock_aquire();
-}
-EXPORT_SYMBOL(mtk_wcn_wmt_mpu_lock_aquire);
-
-VOID mtk_wcn_wmt_mpu_lock_release(VOID)
-{
-	wmt_lib_mpu_lock_release();
-}
-EXPORT_SYMBOL(mtk_wcn_wmt_mpu_lock_release);
-
 INT32 mtk_wcn_get_reset_info(PUINT8 pBuff, INT32 buffLen)
 {
 	INT32 len = 0;
@@ -879,3 +841,4 @@ INT32 mtk_wcn_get_host_assert_info(PUINT32 type, PUINT32 reason, PUINT32 en)
 	return wmt_lib_get_host_assert_info(type, reason, en);
 }
 EXPORT_SYMBOL(mtk_wcn_get_host_assert_info);
+

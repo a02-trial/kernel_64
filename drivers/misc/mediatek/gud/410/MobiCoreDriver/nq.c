@@ -102,11 +102,6 @@ static struct {
 	phys_addr_t		log_buffer;
 	u32			log_buffer_size;
 	bool			log_buffer_busy;
-
-#if defined(BIG_CORE_SWITCH_AFFINITY_MASK)
-#define MIN_NICE -20
-    atomic_t        big_core_demand_cnt;
-#endif
 } l_ctx;
 
 static inline bool is_iwp_id(u32 id)
@@ -1012,8 +1007,7 @@ int nq_start(void)
 		return ret;
 	}
 #if defined(BIG_CORE_SWITCH_AFFINITY_MASK)
-    set_user_nice(l_ctx.tee_scheduler_thread, MIN_NICE);
-    set_tee_worker_threads_on_big_core(false);
+	set_tee_worker_threads_on_big_core(false);
 #endif
 
 	wake_up_process(l_ctx.tee_scheduler_thread);
@@ -1043,37 +1037,26 @@ void nq_stop(void)
 #if defined(BIG_CORE_SWITCH_AFFINITY_MASK)
 void set_tee_worker_threads_on_big_core(bool big_core)
 {
-    struct cpumask new_mask;
-    unsigned int i;
+	struct cpumask new_mask;
+	unsigned int i;
 
-    mc_dev_info("%s ", big_core ?
-            "big_affinity" : "default_affinity");
+	mc_dev_devel("%s ", big_core ?
+			"big_affinity" : "default_affinity");
 
-    mc_dev_info("nr_cpu_ids %d", nr_cpu_ids);
-    cpumask_clear(&new_mask);
+	mc_dev_devel("nr_cpu_ids %d", nr_cpu_ids);
+	cpumask_clear(&new_mask);
 
-    if (big_core) {
-        for (i = 0; i < nr_cpu_ids; i++) {
-            if ((BIG_CORE_SWITCH_AFFINITY_MASK >> i) & 0x1) {
-                mc_dev_info("set cpu %u", i);
-                cpumask_set_cpu(i, &new_mask);
-            }
-        }
-        atomic_inc(&l_ctx.big_core_demand_cnt);
-    } else {
-        mc_dev_info("big_core_demand_cnt : %d", l_ctx.big_core_demand_cnt);
-        /* decrease state in case of several overlappint requests */
-        if (atomic_dec_if_positive(&l_ctx.big_core_demand_cnt) <= 0) {
-            for (i = 0; i < nr_cpu_ids; i++) {
-                if ((PLAT_DEFAULT_TEE_AFFINITY_MASK >> i)
-                    & 0x1) {
-                    mc_dev_info("set cpu %u", i);
-                    cpumask_set_cpu(i, &new_mask);
-                }
-            }
-        }
-    }
-    set_cpus_allowed_ptr(l_ctx.tee_scheduler_thread, &new_mask);
+	if (big_core) {
+		for (i = 0; i < nr_cpu_ids; i++) {
+			if ((BIG_CORE_SWITCH_AFFINITY_MASK >> i) & 0x1) {
+				mc_dev_devel("set cpu %u", i);
+				cpumask_set_cpu(i, &new_mask);
+			}
+		}
+	} else {
+		cpumask_setall(&new_mask);
+	}
+	set_cpus_allowed_ptr(l_ctx.tee_scheduler_thread, &new_mask);
 }
 #endif
 
@@ -1139,10 +1122,6 @@ int nq_init(void)
 	mci += MAX_IW_SESSION * sizeof(struct interworld_session);
 
 	l_ctx.time = (void *)ALIGN(mci, 8);
-
-#if defined(BIG_CORE_SWITCH_AFFINITY_MASK)
-    atomic_set(&l_ctx.big_core_demand_cnt, 0);
-#endif
 
 	/* Scheduler */
 	init_completion(&l_ctx.boot_complete);

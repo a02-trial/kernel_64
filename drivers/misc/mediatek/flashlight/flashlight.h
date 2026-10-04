@@ -44,25 +44,6 @@
 #define FLASHLIGHT_SW_DISABLE_ON	1
 #define FLASHLIGHT_SW_DISABLE_OFF	0
 
-#if defined(CONFIG_MTK_SM5714_FLASHLIGHT)
-/* max duty number */
-#define FLASHLIGHT_MAX_DUTY_NUM 60
-
-/* flashlight arguments */
-#define FLASHLIGHT_TYPE_MAX 1
-#define FLASHLIGHT_CT_MAX 1
-#define FLASHLIGHT_PART_MAX 1
-
-#elif defined(CONFIG_MTK_FLASHLIGHT_MT6360)
-/* max duty number */
-#define FLASHLIGHT_MAX_DUTY_NUM 40
-
-/* flashlight arguments */
-#define FLASHLIGHT_TYPE_MAX 2
-#define FLASHLIGHT_CT_MAX 3
-#define FLASHLIGHT_PART_MAX 2
-
-#elif defined(CONFIG_MTK_S2MU005_FLASHLIGHT)
 /* max duty number */
 #define FLASHLIGHT_MAX_DUTY_NUM 32
 
@@ -70,17 +51,6 @@
 #define FLASHLIGHT_TYPE_MAX 1
 #define FLASHLIGHT_CT_MAX 1
 #define FLASHLIGHT_PART_MAX 1
-
-#else
-/* max duty number */
-#define FLASHLIGHT_MAX_DUTY_NUM 32
-
-/* flashlight arguments */
-#define FLASHLIGHT_TYPE_MAX 1
-#define FLASHLIGHT_CT_MAX 1
-#define FLASHLIGHT_PART_MAX 1
-#endif
-
 struct flashlight_user_arg {
 	int type_id;
 	int ct_id;

@@ -28,7 +28,6 @@
 #include "core/iwsock.h"
 #include "core/log.h"
 #include "core/notifier.h"
-#include "core/subsystem.h"
 #include "debug/pmf.h"
 
 static atomic_t tz_pmf_init_done = ATOMIC_INIT(0);
@@ -275,7 +274,7 @@ static struct notifier_block tz_pmf_fini_notifier = {
 	.notifier_call = tz_pmf_fini_call,
 };
 
-int tz_pmf_init(void)
+static int __init tz_pmf_init(void)
 {
 	int rc;
 
@@ -295,4 +294,4 @@ int tz_pmf_init(void)
 	return 0;
 }
 
-tzdev_early_initcall(tz_pmf_init);
+early_initcall(tz_pmf_init);

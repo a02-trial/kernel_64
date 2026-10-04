@@ -1048,7 +1048,7 @@ static int sec_chg_get_property(struct power_supply *psy,
 		if ((!charger->is_charging) || (charger->cable_type == SEC_BATTERY_CABLE_NONE))
 			val->intval = POWER_SUPPLY_CHARGE_TYPE_NONE;
 #if EN_IVR_IRQ
-		else if (charger->slow_charging) {
+		else if (s2mu005_check_slow_charging(charger, charger->input_current)) {
 			val->intval = POWER_SUPPLY_CHARGE_TYPE_SLOW;
 			pr_info("%s: slow-charging mode\n", __func__);
 		}
@@ -1294,6 +1294,15 @@ static int sec_chg_set_property(struct power_supply *psy,
 			break;
 		}
 #endif
+	case POWER_SUPPLY_PROP_RESISTANCE:
+		if (val->intval) {
+			s2mu005_update_reg(charger->client, S2MU005_REG_SELFDIS_CFG2,
+			FC_SELF_DISCHG_MASK, FC_SELF_DISCHG_MASK);
+		} else {
+			s2mu005_update_reg(charger->client, S2MU005_REG_SELFDIS_CFG2,
+			0, FC_SELF_DISCHG_MASK);
+		}
+		break;
 	case POWER_SUPPLY_PROP_SCOPE:
 		charger->fg_mode = val->intval;
 		break;

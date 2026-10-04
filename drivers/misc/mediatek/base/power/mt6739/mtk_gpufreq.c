@@ -2193,15 +2193,6 @@ unsigned int mt_gpufreq_get_leakage_mw(void)
 #endif
 }
 
-/*
- * API : get current segment max opp index
- */
-unsigned int mt_gpufreq_get_seg_max_opp_index(void)
-{
-	return g_gpufreq_max_id;
-}
-
-
 /************************************************
  * return current GPU thermal limit index
  *************************************************/
@@ -2568,37 +2559,16 @@ static int mt_gpufreq_pdrv_probe(struct platform_device *pdev)
 /***************************************
  * this function should never be called
  ****************************************/
-// Memory Leaks Fix
 static int mt_gpufreq_pdrv_remove(struct platform_device *pdev)
 {
 #ifdef MT_GPUFREQ_INPUT_BOOST
 	input_unregister_handler(&mt_gpufreq_input_handler);
-    if (mt_gpufreq_up_task) {
-        kthread_stop(mt_gpufreq_up_task);
-        put_task_struct(mt_gpufreq_up_task);
-    }
+
+	kthread_stop(mt_gpufreq_up_task);
+	put_task_struct(mt_gpufreq_up_task);
 #endif
 
-    if (mt_gpufreq_pmic && !IS_ERR(mt_gpufreq_pmic->reg_vcore)) {
-        regulator_put(mt_gpufreq_pmic->reg_vcore);
-    }
-	
-    if (g_apmixed_base) {
-        iounmap(g_apmixed_base);
-        g_apmixed_base = NULL;
-    }
-	
-    kfree(mt_gpufreqs_power);
-    kfree(mt_gpufreqs);
-    kfree(mt_gpufreqs_default);
-    kfree(mt_gpufreq_clk);
-    kfree(mt_gpufreq_pmic);
-    mt_gpufreqs_power = NULL;
-    mt_gpufreqs = NULL;
-    mt_gpufreqs_default = NULL;
-    mt_gpufreq_clk = NULL;
-    mt_gpufreq_pmic = NULL;
-    return 0;
+	return 0;
 }
 
 static const struct dev_pm_ops mt_gpufreq_pm_ops = {
@@ -2652,7 +2622,7 @@ static ssize_t mt_gpufreq_debug_proc_write(struct file *file, const char __user 
 					   size_t count, loff_t *data)
 {
 	char desc[32];
-	unsigned int len = 0;
+	int len = 0;
 
 	int debug = 0;
 
@@ -2693,7 +2663,7 @@ static ssize_t mt_gpufreq_limited_oc_ignore_proc_write(struct file *file,
 							   loff_t *data)
 {
 	char desc[32];
-	unsigned int len = 0;
+	int len = 0;
 	unsigned int ignore = 0;
 
 	len = (count < (sizeof(desc) - 1)) ? count : (sizeof(desc) - 1);
@@ -2736,7 +2706,7 @@ static ssize_t mt_gpufreq_limited_low_batt_volume_ignore_proc_write(struct file 
 									size_t count, loff_t *data)
 {
 	char desc[32];
-	unsigned int len = 0;
+	int len = 0;
 
 	unsigned int ignore = 0;
 
@@ -2781,7 +2751,7 @@ static ssize_t mt_gpufreq_limited_low_batt_volt_ignore_proc_write(struct file *f
 								  size_t count, loff_t *data)
 {
 	char desc[32];
-	unsigned int len = 0;
+	int len = 0;
 
 	unsigned int ignore = 0;
 
@@ -2825,7 +2795,7 @@ static ssize_t mt_gpufreq_limited_thermal_ignore_proc_write(struct file *file,
 								size_t count, loff_t *data)
 {
 	char desc[32];
-	unsigned int len = 0;
+	int len = 0;
 
 	unsigned int ignore = 0;
 
@@ -2869,7 +2839,7 @@ static ssize_t mt_gpufreq_limited_pbm_ignore_proc_write(struct file *file,
 							loff_t *data)
 {
 	char desc[32];
-	unsigned int len = 0;
+	int len = 0;
 
 	unsigned int ignore = 0;
 
@@ -2911,7 +2881,7 @@ static ssize_t mt_gpufreq_limited_power_proc_write(struct file *file,
 						   size_t count, loff_t *data)
 {
 	char desc[32];
-	unsigned int len = 0;
+	int len = 0;
 
 	unsigned int power = 0;
 
@@ -2947,7 +2917,7 @@ static ssize_t mt_gpufreq_limited_by_pbm_proc_write(struct file *file, const cha
 							size_t count, loff_t *data)
 {
 	char desc[32];
-	unsigned int len = 0;
+	int len = 0;
 
 	unsigned int power = 0;
 
@@ -2985,7 +2955,7 @@ static ssize_t mt_gpufreq_state_proc_write(struct file *file,
 					   const char __user *buffer, size_t count, loff_t *data)
 {
 	char desc[32];
-	unsigned int len = 0;
+	int len = 0;
 
 	int enabled = 0;
 
@@ -3071,7 +3041,7 @@ static ssize_t mt_gpufreq_opp_freq_proc_write(struct file *file, const char __us
 						  size_t count, loff_t *data)
 {
 	char desc[32];
-	unsigned int len = 0;
+	int len = 0;
 
 	int fixed_freq = 0;
 	int i = 0;
@@ -3133,7 +3103,7 @@ static ssize_t mt_gpufreq_opp_max_freq_proc_write(struct file *file, const char 
 						  size_t count, loff_t *data)
 {
 	char desc[32];
-	unsigned int len = 0;
+	int len = 0;
 
 	int max_freq = 0;
 	int i = 0;
@@ -3221,7 +3191,7 @@ static ssize_t mt_gpufreq_volt_enable_proc_write(struct file *file, const char _
 						 size_t count, loff_t *data)
 {
 	char desc[32];
-	unsigned int len = 0;
+	int len = 0;
 
 	int enable = 0;
 
@@ -3337,7 +3307,7 @@ static ssize_t mt_gpufreq_fixed_freq_volt_proc_write(struct file *file, const ch
 							 size_t count, loff_t *data)
 {
 	char desc[32];
-	unsigned int len = 0;
+	int len = 0;
 
 	int fixed_freq = 0;
 	int fixed_volt = 0;
@@ -3431,7 +3401,7 @@ static ssize_t mt_gpufreq_lpt_enable_proc_write(struct file *file, const char __
 	gpufreq_pr_warn("not implemented\n");
 #if 0
 	char desc[32];
-	unsigned int len = 0;
+	int len = 0;
 
 	int enable = 0;
 
@@ -3619,12 +3589,9 @@ out:
 #endif
 static void __exit mt_gpufreq_exit(void)
 {
-#ifdef CONFIG_PROC_FS
-    remove_proc_subtree("gpufreq", NULL); 
-#endif
-    platform_driver_unregister(&mt_gpufreq_pdrv);
+	platform_driver_unregister(&mt_gpufreq_pdrv);
 #if !defined(CONFIG_OF)
-    platform_device_unregister(&mt_gpufreq_pdev);
+	platform_device_unregister(&mt_gpufreq_pdev);
 #endif
 }
 

@@ -15,7 +15,6 @@
 #
 
 #GUD_ROOT_FOLDER := drivers/gud/
-GUD_ROOT_FOLDER := drivers/misc/mediatek/gud/410
 
 # add our modules to kernel.
 obj-$(CONFIG_TRUSTONIC_TRUSTED_UI) += TlcTui.o

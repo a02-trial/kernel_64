@@ -80,7 +80,7 @@ void ppm_profile_update_client_exec_time(enum ppm_client client,
 	if (!ppm_profile_data.is_profiling)
 		goto end;
 
-	if ((client >= NR_PPM_CLIENTS) || (client < 0))
+	if (client >= NR_PPM_CLIENTS)
 		goto end;
 
 	if (time > ppm_profile_data.max_client_exec_time_us[client])

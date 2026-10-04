@@ -21,7 +21,7 @@
 
 #include <linux/of.h>
 #include <linux/rpmb.h>
-#include <linux/pm_qos.h>
+#include <linux/hie.h>
 #include "ufshcd.h"
 
 #define UPIU_COMMAND_CRYPTO_EN_OFFSET	23
@@ -70,8 +70,6 @@ enum ufs_trace_event {
 	UFS_TRACE_DI_FAIL,
 	UFS_TRACE_DEVICE_RESET,
 	UFS_TRACE_PERF_MODE,
-	UFS_TRACE_DEBUG_PROC,
-	UFS_TRACE_GENERIC,
 };
 
 enum {
@@ -92,12 +90,6 @@ enum {
 	UFS_H8_SUSPEND              = 0x1,
 };
 #define H8_POLL_TOUT_MS             100
-
-enum perf_mode {
-	PERF_FORCE_DISABLE   = 0,
-	PERF_FORCE_ENABLE    = 1,
-	PERF_AUTO            = 2,
-};
 
 struct ufs_cmd_str_struct {
 	char str[32];
@@ -185,29 +177,12 @@ struct ufs_mtk_host {
 	struct ufs_hba *hba;
 
 	/* performance mode */
-	enum perf_mode perf_mode;
-	bool perf_en;
-	bool spm_sw_mode;
-	bool unipro_lpm;
-	bool vreg_lpm_supported;
+	bool perf_mode;
 	int crypto_vcore_opp;
 	struct clk *crypto_clk_mux;
 	struct clk *crypto_parent_clk_normal;
 	struct clk *crypto_parent_clk_perf;
-
-	bool pm_qos_init;
 	struct pm_qos_request *req_vcore;
-	struct pm_qos_request req_cpu_dma_latency;
-
-	/* passthrough keyhint if number of key slots is enough */
-	bool passthrough_keyhint;
-};
-
-enum {
-	PMQOS_UNREQ = 0,
-	PMQOS_REQ = 1,
-	PMQOS_UNREQING = 2,
-	PMQOS_REQING = 3
 };
 
 extern bool ufs_mtk_auto_hibern8_enabled;
@@ -224,8 +199,6 @@ void ufs_mtk_dbg_dump_scsi_cmd(struct ufs_hba *hba,
 	struct scsi_cmnd *cmd, u32 flag);
 int ufs_mtk_deepidle_hibern8_check(void);
 void ufs_mtk_deepidle_leave(void);
-int ufs_mtk_generic_read_dme_no_check(u32 uic_cmd, u16 mib_attribute,
-	u16 gen_select_index, u32 *value, unsigned long retry_ms);
 int ufs_mtk_generic_read_dme(u32 uic_cmd, u16 mib_attribute,
 	u16 gen_select_index, u32 *value, unsigned long retry_ms);
 void ufs_mtk_hwfde_cfg_cmd(struct ufs_hba *hba,
@@ -234,10 +207,9 @@ int ufs_mtk_wait_link_state(struct ufs_hba *hba, u32 *state,
 			    unsigned long retry_ms);
 int ufs_mtk_linkup_fail_handler(struct ufs_hba *hba, int left_retry);
 void ufs_mtk_parse_auto_hibern8_timer(struct ufs_hba *hba);
-void ufs_mtk_parse_dt(struct ufs_hba *hba);
+void ufs_mtk_parse_pm_levels(struct ufs_hba *hba);
 bool ufs_mtk_perf_is_supported(struct ufs_mtk_host *host);
 int ufs_mtk_perf_setup_crypto_clk(struct ufs_mtk_host *host, bool perf);
-int ufs_mtk_perf_setup(struct ufs_mtk_host *host, bool perf);
 int ufs_mtk_ioctl_ffu(struct scsi_device *dev, void __user *buf_user);
 int ufs_mtk_ioctl_get_fw_ver(struct scsi_device *dev, void __user *buf_user);
 int ufs_mtk_ioctl_query(struct ufs_hba *hba, u8 lun, void __user *buf_user);
@@ -251,12 +223,28 @@ void ufs_mtk_device_resume(struct ufs_hba *hba);
 
 #ifdef CONFIG_MTK_UFS_LBA_CRC16_CHECK
 void ufs_mtk_di_init(struct ufs_hba *hba);
+int ufs_mtk_di_clr(struct scsi_cmnd *cmd);
+int ufs_mtk_di_cmp(struct ufs_hba *hba, struct scsi_cmnd *cmd);
 int ufs_mtk_di_inspect(struct ufs_hba *hba, struct scsi_cmnd *cmd);
 #endif
 
-#if defined(CONFIG_MTK_GIC_EXT)
-/* Use in ufshcd_intr() to dump gic status */
-extern void mt_irq_dump_status(int irq);
+#ifdef CONFIG_HIE
+struct hie_dev *ufs_mtk_hie_get_dev(void);
+int ufs_mtk_hie_req_done(struct ufs_hba *hba,
+	struct ufshcd_lrb *lrbp);
+#else
+static inline
+struct hie_dev *ufs_mtk_hie_get_dev(void)
+{
+	return NULL;
+}
+
+static inline int ufs_mtk_hie_req_done(
+	struct ufs_hba *hba, struct ufshcd_lrb *lrbp)
+{
+	return 0;
+}
 #endif
+
 #endif /* !_UFS_MTK_H */
 

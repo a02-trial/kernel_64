@@ -221,11 +221,12 @@ void s2mu005_print_reg_dump(struct s2mu005_muic_data *muic_data)
 }
 #endif
 
-static int s2mu005_i2c_read_byte(struct i2c_client *client, u8 command, u8 *val)
+static int s2mu005_i2c_read_byte(struct i2c_client *client, u8 command)
 {
-	int ret =0, retry = 0;
+	u8 ret;
+	int retry = 0;
 
-	ret = s2mu005_read_reg(client, command, val);
+	s2mu005_read_reg(client, command, &ret);
 
 	while (ret < 0) {
 		pr_info("failed to read reg(0x%x) retry(%d)\n", command, retry);
@@ -234,12 +235,12 @@ static int s2mu005_i2c_read_byte(struct i2c_client *client, u8 command, u8 *val)
 			break;
 		}
 		msleep(100);
-		ret = s2mu005_read_reg(client, command, val);
+		s2mu005_read_reg(client, command, &ret);
 		retry++;
 	}
 
 #if IS_ENABLED(DEBUG_MUIC)
-	s2mu005_reg_log(command, val, retry << 1 | READ);
+	s2mu005_reg_log(command, ret, retry << 1 | READ);
 #endif
 	return ret;
 }
@@ -247,10 +248,12 @@ static int s2mu005_i2c_read_byte(struct i2c_client *client, u8 command, u8 *val)
 static int s2mu005_i2c_write_byte(struct i2c_client *client,
 			u8 command, u8 value)
 {
-	int ret = 0, retry = 0;
+	int ret;
+	int retry = 0;
 	u8 written = 0;
 
 	ret = s2mu005_write_reg(client, command, value);
+
 	while (ret < 0) {
 		pr_info("failed to write(0x%x) retry(%d)\n", command, retry);
 		if (retry > 5) {
@@ -258,8 +261,8 @@ static int s2mu005_i2c_write_byte(struct i2c_client *client,
 			break;
 		}
 		msleep(100);
-		ret = s2mu005_read_reg(client, command, &written);
-		if (ret < 0)
+		s2mu005_read_reg(client, command, &written);
+		if (written < 0)
 			pr_info("failed to read reg(0x%x)\n", command);
 		ret = s2mu005_write_reg(client, command, value);
 		retry++;
@@ -277,7 +280,7 @@ static int s2mu005_i2c_update_bit(struct i2c_client *i2c,
 	int ret;
 	u8 val = 0;
 
-	ret = s2mu005_i2c_read_byte(i2c, reg, &val);
+	val = s2mu005_i2c_read_byte(i2c, reg);
 	val &= ~mask;
 	val |= value << shift;
 	ret = s2mu005_i2c_write_byte(i2c, reg, val);
@@ -320,31 +323,31 @@ static int s2mu005_set_gpio_doc_switch(int val)
 static int set_otg_reg(struct s2mu005_muic_data *muic_data, bool on)
 {
 	struct i2c_client *i2c = muic_data->i2c;
-	u8 val = 0, reg_val = 0;
+	u8 val;
 	int ret = 0;
 
 	/* 0x1e : hidden register */
-	ret = s2mu005_i2c_read_byte(i2c, 0x1e, &val);
+	ret = s2mu005_i2c_read_byte(i2c, 0x1e);
 	if (ret < 0)
 		pr_err("%s failed to read 0x1e reg(%d)\n", __func__, ret);
 
 	/* Set 0x1e[5:4] bit to 0x11 or 0x01 */
 	if (on)
-		reg_val = val | (0x1 << 5);
+		val = ret | (0x1 << 5);
 	else
-		reg_val = val & ~(0x1 << 5);
+		val = ret & ~(0x1 << 5);
 
-	if (val ^ reg_val) {
-		pr_info("%s 0x%x != 0x%x, update\n", __func__, reg_val, val);
-		ret = s2mu005_i2c_write_byte(i2c, 0x1e, reg_val);
+	if (val ^ ret) {
+		pr_info("%s 0x%x != 0x%x, update\n", __func__, val, ret);
+		ret = s2mu005_i2c_write_byte(i2c, 0x1e, val);
 		if (ret < 0)
 			pr_err("%s failed to write(%d)\n", __func__, ret);
 	} else {
-		pr_info("%s 0x%x == 0x%x, just return\n", __func__, reg_val, val);
+		pr_info("%s 0x%x == 0x%x, just return\n", __func__, val, ret);
 		return 0;
 	}
 
-	ret = s2mu005_i2c_read_byte(i2c, 0x1e, &val);
+	ret = s2mu005_i2c_read_byte(i2c, 0x1e);
 	if (ret < 0)
 		pr_err("%s failed to read reg 0x1e(%d)\n", __func__, ret);
 
@@ -354,25 +357,25 @@ static int set_otg_reg(struct s2mu005_muic_data *muic_data, bool on)
 static int init_otg_reg(struct s2mu005_muic_data *muic_data)
 {
 	struct i2c_client *i2c = muic_data->i2c;
-	u8 reg_val = 0, val = 0;
+	u8 reg_val;
 	int ret = 0;
 
 	/* 0x73 : check EVT0 or EVT1 */
-	ret = s2mu005_i2c_read_byte(i2c, 0x73, &val);
+	ret = s2mu005_i2c_read_byte(i2c, 0x73);
 	if (ret < 0)
 		pr_err("%s failed to read reg 0x73(%d)\n", __func__, ret);
 
-	if ((val & 0xF) > 0)
+	if ((ret&0xF) > 0)
 		return 0;
 
 	/* 0x89 : hidden register */
-	ret = s2mu005_i2c_read_byte(i2c, 0x89, &val);
+	ret = s2mu005_i2c_read_byte(i2c, 0x89);
 	if (ret < 0)
 		pr_err("%s failed to read reg 0x89(%d)\n", __func__, ret);
 
 	/* Set 0x89[1] bit : T_DET_VAL */
-	reg_val = val | (0x1 << 1);
-	if (reg_val ^ val) {
+	reg_val = ret | (0x1 << 1);
+	if (reg_val ^ ret) {
 		pr_info("%s 0x%x != 0x%x, update\n", __func__, reg_val, ret);
 
 		ret = s2mu005_i2c_write_byte(i2c, 0x89, reg_val);
@@ -380,18 +383,18 @@ static int init_otg_reg(struct s2mu005_muic_data *muic_data)
 			pr_err("%s failed to write(%d)\n", __func__, ret);
 	}
 
-	ret = s2mu005_i2c_read_byte(i2c, 0x89, &val);
+	ret = s2mu005_i2c_read_byte(i2c, 0x89);
 	if (ret < 0)
 		pr_err("%s failed to read reg 0x89(%d)\n", __func__, ret);
 
 	/* 0x92 : hidden register */
-	ret = s2mu005_i2c_read_byte(i2c, 0x92, &val);
+	ret = s2mu005_i2c_read_byte(i2c, 0x92);
 	if (ret < 0)
 		pr_err("%s failed to read reg 0x92(%d)\n", __func__, ret);
 
 	/* Set 0x92[7] bit : EN_JIG_AP */
-	reg_val = val | (0x1 << 7);
-	if (reg_val ^ val) {
+	reg_val = ret | (0x1 << 7);
+	if (reg_val ^ ret) {
 		pr_info("%s  0x%x != 0x%x, update\n", __func__, reg_val, ret);
 
 		ret = s2mu005_i2c_write_byte(i2c, 0x92, reg_val);
@@ -399,7 +402,7 @@ static int init_otg_reg(struct s2mu005_muic_data *muic_data)
 			pr_err("%s failed to write(%d)\n", __func__, ret);
 	}
 
-	ret = s2mu005_i2c_read_byte(i2c, 0x92, &val);
+	ret = s2mu005_i2c_read_byte(i2c, 0x92);
 	if (ret < 0)
 		pr_err("%s failed to read reg 0x92(%d)\n", __func__, ret);
 
@@ -411,26 +414,25 @@ static int set_jig_sw(struct s2mu005_muic_data *muic_data, bool en)
 {
 	struct i2c_client *i2c = muic_data->i2c;
 	bool cur = false;
-	int ret = 0;
-	u8 reg_val = 0, val = 0;
+	int reg_val = 0, ret = 0;
 
-	ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_SW_CTRL, &val);
-	if (ret < 0)
-		pr_err("%s failed to read 0x%x\n", __func__, ret);
+	reg_val = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_SW_CTRL);
+	if (reg_val < 0)
+		pr_err("%s failed to read 0x%x\n", __func__, reg_val);
 
-	cur = !!(val & MANUAL_SW_JIG_EN);
+	cur = !!(reg_val & MANUAL_SW_JIG_EN);
 
 	if (!muic_data->jigonb_enable)
 		en = false;
 
 	if (en != cur) {
-		if (en)
-			reg_val = val | (MANUAL_SW_JIG_EN);
-		else
-			reg_val = val & ~(MANUAL_SW_JIG_EN);
+		pr_info("%s  0x%x != 0x%x, update\n", __func__,
+			reg_val, reg_val);
 
-		pr_info("%s  0x%x != 0x%x, update\n",
-			__func__, reg_val, val);
+		if (en)
+			reg_val |= (MANUAL_SW_JIG_EN);
+		else
+			reg_val &= ~(MANUAL_SW_JIG_EN);
 
 		ret = s2mu005_i2c_write_byte(i2c, S2MU005_REG_MUIC_SW_CTRL, reg_val);
 		if (ret < 0)
@@ -538,17 +540,16 @@ static ssize_t adc_show(struct device *dev,
 {
 	struct s2mu005_muic_data *muic_data = dev_get_drvdata(dev);
 	int ret;
-	u8 val = 0;
 
 	mutex_lock(&muic_data->muic_mutex);
-	ret = s2mu005_i2c_read_byte(muic_data->i2c, S2MU005_REG_MUIC_ADC, &val);
+	ret = s2mu005_i2c_read_byte(muic_data->i2c, S2MU005_REG_MUIC_ADC);
 	mutex_unlock(&muic_data->muic_mutex);
 	if (ret < 0) {
 		pr_err("%s failed to read adc reg(%d)\n", __func__, ret);
 		return sprintf(buf, "UNKNOWN\n");
 	}
 
-	return sprintf(buf, "%x\n", (val & ADC_MASK));
+	return sprintf(buf, "%x\n", (ret & ADC_MASK));
 }
 
 static ssize_t usb_state_show(struct device *dev,
@@ -580,32 +581,30 @@ static ssize_t mansw_show(struct device *dev,
 {
 	struct s2mu005_muic_data *muic_data = dev_get_drvdata(dev);
 	int ret;
-	u8 val = 0;
 
 	mutex_lock(&muic_data->muic_mutex);
-	ret = s2mu005_i2c_read_byte(muic_data->i2c, S2MU005_REG_MUIC_SW_CTRL, &val);
+	ret = s2mu005_i2c_read_byte(muic_data->i2c, S2MU005_REG_MUIC_SW_CTRL);
 	mutex_unlock(&muic_data->muic_mutex);
 	if (ret < 0) {
 		pr_err("%s fail to read muic reg\n", __func__);
 		return sprintf(buf, "UNKNOWN\n");
 	}
-	pr_info("%s %d\n", __func__, val);
-	return sprintf(buf, "0x%x\n", val);
+	pr_info("%s %d\n", __func__, ret);
+	return sprintf(buf, "0x%x\n", ret);
 }
 static ssize_t interrupt_status_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
 	struct s2mu005_muic_data *muic_data = dev_get_drvdata(dev);
-	u8 st1 =0, st2 = 0;
-	int ret = 0, ret2 = 0;
+	int st1, st2;
 
 	mutex_lock(&muic_data->muic_mutex);
-	ret = s2mu005_i2c_read_byte(muic_data->i2c, S2MU005_REG_MUIC_INT1, &st1);
-	ret2 = s2mu005_i2c_read_byte(muic_data->i2c, S2MU005_REG_MUIC_INT2, &st2);
+	st1 = s2mu005_i2c_read_byte(muic_data->i2c, S2MU005_REG_MUIC_INT1);
+	st2 = s2mu005_i2c_read_byte(muic_data->i2c, S2MU005_REG_MUIC_INT2);
 	mutex_unlock(&muic_data->muic_mutex);
 
 	pr_info("%s st1:0x%x st2:0x%x buf%s\n", __func__, st1, st2, buf);
-	if (ret < 0 || ret2 < 0) {
+	if (st1 < 0 || st2 < 0) {
 		pr_err("%s fail to read muic reg\n", __func__);
 		return sprintf(buf, "UNKNOWN\n");
 	}
@@ -636,7 +635,7 @@ static ssize_t otg_test_show(struct device *dev,
 
 	mutex_lock(&muic_data->muic_mutex);
 	ret = s2mu005_i2c_read_byte(muic_data->i2c,
-		S2MU005_REG_MUIC_INT2_MASK, &val);
+		S2MU005_REG_MUIC_INT2_MASK);
 	mutex_unlock(&muic_data->muic_mutex);
 
 	if (ret < 0) {
@@ -937,35 +936,35 @@ static const struct attribute_group s2mu005_muic_group = {
 static int set_ctrl_reg(struct s2mu005_muic_data *muic_data, int shift, bool on)
 {
 	struct i2c_client *i2c = muic_data->i2c;
-	u8 reg_val = 0, val = 0;
+	u8 reg_val;
 	int ret = 0;
 
-	ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_CTRL1, &val);
+	ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_CTRL1);
 	if (ret < 0)
 		pr_err("%s failed to read CTRL(%d)\n", __func__, ret);
 
 	if (on)
-		reg_val = val | (0x1 << shift);
+		reg_val = ret | (0x1 << shift);
 	else
-		reg_val = val & ~(0x1 << shift);
+		reg_val = ret & ~(0x1 << shift);
 
-	if (reg_val ^ val) {
-		pr_info("%s 0x%x != 0x%x, update\n", __func__, reg_val, val);
+	if (reg_val ^ ret) {
+		pr_info("%s 0x%x != 0x%x, update\n", __func__, reg_val, ret);
 
 		ret = s2mu005_i2c_write_byte(i2c, S2MU005_REG_MUIC_CTRL1, reg_val);
 		if (ret < 0)
 			pr_err("%s failed to write(%d)\n", __func__, ret);
 	} else {
 		pr_info("%s 0x%x == 0x%x, just return\n",
-			__func__, reg_val, val);
+			__func__, reg_val, ret);
 		return 0;
 	}
 
-	ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_CTRL1, &val);
+	ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_CTRL1);
 	if (ret < 0)
 		pr_err("%s failed to read CTRL(%d)\n", __func__, ret);
 	else
-		pr_info("%s after change(0x%x)\n", __func__, val);
+		pr_info("%s after change(0x%x)\n", __func__, ret);
 
 	return ret;
 }
@@ -976,19 +975,18 @@ static int set_com_sw(struct s2mu005_muic_data *muic_data,
 	struct i2c_client *i2c = muic_data->i2c;
 	int ret = 0;
 	int temp = 0;
-	u8 val = 0;
 
 	/*  --- MANSW [7:5][4:2][1][0] : DM DP RSVD JIG  --- */
-	temp = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_SW_CTRL, &val);
+	temp = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_SW_CTRL);
 	if (temp < 0)
 		pr_err("%s failed to read 0x%x\n", __func__, temp);
 
 	if (muic_data->jigonb_enable && !muic_data->jig_disable)
 		reg_val |= (MANUAL_SW_JIG_EN);
 
-	if (reg_val != val) {
+	if (reg_val != temp) {
 		pr_info("%s  0x%x != 0x%x, update\n", __func__,
-			reg_val, val);
+			reg_val, temp);
 
 		ret = s2mu005_i2c_write_byte(i2c, S2MU005_REG_MUIC_SW_CTRL, reg_val);
 		if (ret < 0)
@@ -1069,31 +1067,30 @@ static void s2mu005_muic_cable_rescan(struct s2mu005_muic_data *muic_data)
 {
 	struct i2c_client *i2c = muic_data->i2c;
 	u8 devt = 0, dp = 0, bcd = 0, int_mask = 0;
-	int ret = 0;
 
-	ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_DEVICE_TYPE1, &devt);
+	devt = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_DEVICE_TYPE1);
 	if ((devt & DEV_TYPE1_DEDICATED_CHG) && (devt > DEV_TYPE1_DEDICATED_CHG)) {
 		pr_info("%s cable type duplicated(%x#x)\n", __func__, devt);
 
-		ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_TEST3, &dp);
+		dp = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_TEST3);
 		if (dp == 0xA0)
 			s2mu005_i2c_write_byte(i2c, S2MU005_REG_MUIC_TEST3, 0x0);
 
 		s2mu005_i2c_write_byte(i2c, 0xB5, 0x0);
 		msleep(50);
 
-		ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_INT1_MASK, &int_mask);
+		int_mask = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_INT1_MASK);
 		int_mask |= 0x1;
 		s2mu005_i2c_write_byte(i2c, S2MU005_REG_MUIC_INT1_MASK, int_mask);
 
-		ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_BCD_RESCAN, &bcd);
+		bcd = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_BCD_RESCAN);
 		bcd |= 0x1;
 		s2mu005_i2c_write_byte(i2c, S2MU005_REG_MUIC_BCD_RESCAN, bcd);
 		msleep(200);
 
 		s2mu005_muic_detect_dev(muic_data);
 
-		ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_INT1_MASK, &int_mask);
+		int_mask = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_INT1_MASK);
 		int_mask &= (~0x1);
 		s2mu005_i2c_write_byte(i2c, S2MU005_REG_MUIC_INT1_MASK, int_mask);
 	}
@@ -1109,20 +1106,17 @@ static void s2mu005_muic_debug(struct work_struct *work)
 	u8 vbus = 0, adc = 0;
 	u8 vbus_ldo = 0, dp = 0;
 	u8 hid = 0, hid2 = 0;
-	int ret = 0;
 
-	ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_ADC, &adc);
-	ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_DEVICE_TYPE1, &devt1);
-	ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_DEVICE_TYPE2, &devt2);
-	ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_DEVICE_TYPE3, &devt3);
-	ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_DEVICE_APPLE, &devt_app);
-	ret = s2mu005_i2c_read_byte(i2c, 0x7E, &vbus_ldo);
-	ret = s2mu005_i2c_read_byte(i2c, 0x55, &dp);
-	ret  = s2mu005_i2c_read_byte(i2c, 0x76, &hid);
-	ret = s2mu005_i2c_read_byte(i2c, 0x2a, &hid2);
-
-	adc &= ADC_MASK;
+	adc = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_ADC) & ADC_MASK;
+	devt1 = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_DEVICE_TYPE1);
+	devt2 = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_DEVICE_TYPE2);
+	devt3 = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_DEVICE_TYPE3);
+	devt_app = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_DEVICE_APPLE);
 	vbus = !!(devt_app & DEV_TYPE_APPLE_VBUS_WAKEUP);
+	vbus_ldo = s2mu005_i2c_read_byte(i2c, 0x7E);
+	dp = s2mu005_i2c_read_byte(i2c, 0x55);
+	hid  = s2mu005_i2c_read_byte(i2c, 0x76);
+	hid2 = s2mu005_i2c_read_byte(i2c, 0x2a);
 
 	pr_info("dev[0x%x, 0x%x, 0x%x], adc: 0x%X\n", devt1, devt2, devt3, adc);
 	pr_info("vbus(0x%x), vbus_ldo(0x%x), dp(0x%x)\n", vbus, vbus_ldo, dp);
@@ -1140,15 +1134,15 @@ static void s2mu005_muic_debug(struct work_struct *work)
 static int s2mu005_muic_dp_0_6V(struct s2mu005_muic_data *muic_data, bool en)
 {
 	struct i2c_client *i2c = muic_data->i2c;
-	int ret = 0;
+	int val, ret;
 	int devt1 = 0, devt2 = 0, devt3 = 0, devt_app = 0;
 	int vbvolt = 0;
-	u8 vbus_ldo = 0, dp = 0, val = 0;
+	u8 vbus_ldo = 0, dp = 0;
 
 	cancel_delayed_work(&muic_data->dp_0p6v);
 
 	pr_info("%s en : %d\n", __func__, (int)en);
-	ret = s2mu005_i2c_read_byte(i2c, 0x55, val);
+	val = s2mu005_i2c_read_byte(i2c, 0x55);
 
 	if (en) {
 		val = 0xA0;
@@ -1156,17 +1150,17 @@ static int s2mu005_muic_dp_0_6V(struct s2mu005_muic_data *muic_data, bool en)
 	} else
 		val = 0x00;
 
-	ret = s2mu005_i2c_write_byte(i2c, 0x55, val);
+	ret = s2mu005_i2c_write_byte(i2c, 0x55, (u8)val);
 
 	msleep(50);
 
-	ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_DEVICE_TYPE1, &devt1);
-	ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_DEVICE_TYPE2, &devt2);
-	ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_DEVICE_TYPE3, &devt3);
-	ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_DEVICE_APPLE, &devt_app);
+	devt1 = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_DEVICE_TYPE1);
+	devt2 = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_DEVICE_TYPE2);
+	devt3 = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_DEVICE_TYPE3);
+	devt_app = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_DEVICE_APPLE);
 	vbvolt = !!(devt_app & DEV_TYPE_APPLE_VBUS_WAKEUP);
-	ret = s2mu005_i2c_read_byte(i2c, 0x7E, &vbus_ldo);
-	ret = s2mu005_i2c_read_byte(i2c, 0x55, &dp);
+	vbus_ldo = s2mu005_i2c_read_byte(i2c, 0x7E);
+	dp = s2mu005_i2c_read_byte(i2c, 0x55);
 
 	pr_info("dev[0x%x, 0x%x, 0x%x]\n", devt1, devt2, devt3);
 	pr_info("vbvlot(0x%x), vbus_ldo(0x%x), dp(0x%x)\n", vbvolt, vbus_ldo, dp);
@@ -1196,7 +1190,7 @@ static void s2mu005_muic_bcd_rescan(struct s2mu005_muic_data *muic_data)
 
 	msleep(50);
 
-	ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_BCD_RESCAN, &reg_val);
+	reg_val = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_BCD_RESCAN);
 	reg_val |= 0x1;
 	s2mu005_i2c_write_byte(i2c, S2MU005_REG_MUIC_BCD_RESCAN, reg_val);
 }
@@ -1207,13 +1201,12 @@ static void s2mu005_muic_cable_recheck(struct work_struct *work)
 		container_of(work, struct s2mu005_muic_data, cable_recheck.work);
 	struct i2c_client *i2c = muic_data->i2c;
 	u8 dp = 0;
-	int ret = 0;
 
 	mutex_lock(&muic_data->recheck_mutex);
 
 	pr_info("%s\n", __func__);
 
-	ret = s2mu005_i2c_read_byte(i2c, 0x55, &dp);
+	dp = s2mu005_i2c_read_byte(i2c, 0x55);
 	if (dp)
 		s2mu005_muic_dp_0_6V(muic_data, false);
 
@@ -1228,14 +1221,13 @@ static void s2mu005_muic_cable_recheck(struct work_struct *work)
 static void s2mu005_muic_handle_vbus_off(struct s2mu005_muic_data *muic_data)
 {
 	struct i2c_client *i2c = muic_data->i2c;
-	u8 devt1 = 0, devt2 = 0, devt3 = 0, devt_app = 0;
+	int devt1 = 0, devt2 = 0, devt3 = 0, devt_app = 0;
 	int vbvolt = 0;
-	int ret = 0;
 
-	ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_DEVICE_TYPE1, &devt1);
-	ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_DEVICE_TYPE2, &devt2);
-	ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_DEVICE_TYPE3, &devt3);
-	ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_DEVICE_APPLE, &devt_app);
+	devt1 = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_DEVICE_TYPE1);
+	devt2 = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_DEVICE_TYPE2);
+	devt3 = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_DEVICE_TYPE3);
+	devt_app = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_DEVICE_APPLE);
 	vbvolt = !!(devt_app & DEV_TYPE_APPLE_VBUS_WAKEUP);
 
 #if 0
@@ -1460,19 +1452,19 @@ static void s2mu005_muic_detect_dev(struct s2mu005_muic_data *muic_data)
 {
 	struct i2c_client *i2c = muic_data->i2c;
 	muic_attached_dev_t new_dev = ATTACHED_DEV_UNKNOWN_MUIC;
-	int vbvolt = 0, vmid = 0, ret = 0;
-	u8 devt1, devt2, devt3, devt_app, chgt, sc, adc;
+	int vbvolt = 0, vmid = 0;
+	int devt1, devt2, devt3, devt_app, chgt, sc, adc;
 	u8 vbus_ldo = 0, dp = 0;
 
-	ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_ADC, &adc);
-	ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_DEVICE_TYPE1, &devt1);
-	ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_DEVICE_TYPE2, &devt2);
-	ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_DEVICE_TYPE3, &devt3);
-	ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_DEVICE_APPLE, &devt_app);
-	ret = s2mu005_i2c_read_byte(i2c, 0x7E, &vbus_ldo);
-	ret = s2mu005_i2c_read_byte(i2c, 0x55, &dp);
-	ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_CHG_TYPE, &chgt);
-	ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_SC_STATUS2, &sc);
+	devt1 = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_DEVICE_TYPE1);
+	devt2 = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_DEVICE_TYPE2);
+	devt3 = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_DEVICE_TYPE3);
+	adc = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_ADC);
+	devt_app = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_DEVICE_APPLE);
+	chgt = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_CHG_TYPE);
+	sc = s2mu005_i2c_read_byte(i2c, S2MU005_REG_SC_STATUS2);
+	vbus_ldo = s2mu005_i2c_read_byte(i2c, 0x7E);
+	dp = s2mu005_i2c_read_byte(i2c, 0x55);
 
 	vbvolt = !!(devt_app & DEV_TYPE_APPLE_VBUS_WAKEUP);
 	vmid = (sc & 0x7);
@@ -1569,7 +1561,7 @@ static void s2mu005_muic_detect_dev(struct s2mu005_muic_data *muic_data)
 	case DEV_TYPE2_JIG_UART_OFF:
 		if (muic_data->is_otg_test) {
 			msleep(1000);
-			ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_SC_STATUS2, &sc);
+			sc = s2mu005_i2c_read_byte(i2c, S2MU005_REG_SC_STATUS2);
 			vmid = sc & 0x7;
 			pr_info("%s  vmid : 0x%x\n", __func__, vmid);
 			if (vmid == 0x4) {
@@ -1700,7 +1692,7 @@ static void s2mu005_muic_detect_dev(struct s2mu005_muic_data *muic_data)
 		case ADC_JIG_UART_OFF:
 			if (muic_data->is_otg_test) {
 				msleep(1000);
-				ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_SC_STATUS2, &sc);
+				sc = s2mu005_i2c_read_byte(i2c, S2MU005_REG_SC_STATUS2);
 				vmid = sc & 0x7;
 				pr_info("%s: vmid : 0x%x\n", __func__, vmid);
 				if (vmid == 0x4) {
@@ -1781,17 +1773,17 @@ static int s2mu005_muic_reg_init(struct s2mu005_muic_data *muic_data)
 {
 	struct i2c_client *i2c = muic_data->i2c;
 	int ret;
-	u8 devt1, devt2, devt3, val, adc, ctrl1;
+	int devt1, devt2, devt3, val, adc, ctrl1;
 #if IS_ENABLED(CONFIG_S2MU005_SUPPORT_BC1P2_CERTI)
 	u8 reg_val = 0, tmp_val = 0, vldo_set = 0;
 #endif
 
-	ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_ADC, &adc);
-	ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_DEVICE_TYPE1, &devt1);
-	ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_DEVICE_TYPE2, &devt2);
-	ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_DEVICE_TYPE3, &devt3);
-	ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_SW_CTRL, &val);
+	devt1 = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_DEVICE_TYPE1);
+	devt2 = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_DEVICE_TYPE2);
+	devt3 = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_DEVICE_TYPE3);
+	val = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_SW_CTRL);
 	val &= 0x03;
+	adc = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_ADC);
 	pr_info("%s dev[1:0x%x, 2:0x%x, 3:0x%x], adc:0x%x\n",
 		__func__, devt1, devt2, devt3, adc);
 
@@ -1810,17 +1802,16 @@ static int s2mu005_muic_reg_init(struct s2mu005_muic_data *muic_data)
 			S2MU005_REG_MUIC_CTRL1, CTRL_MASK);
 	if (ret < 0)
 		pr_err("%s failed to write ctrl(%d)\n", __func__, ret);
-	ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_CTRL1, &ctrl1);
+	ctrl1 = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_CTRL1);
 	pr_info("%s CTRL1:0x%02x\n", __func__, ctrl1);
 
 #if IS_ENABLED(CONFIG_S2MU005_SUPPORT_BC1P2_CERTI)
-	ret = s2mu005_i2c_read_byte(i2c, 0x54, &vldo_set);
+	vldo_set = s2mu005_i2c_read_byte(i2c, 0x54);
 	if (!(vldo_set & 0x80)) {
 		vldo_set |= 0x80;
 		s2mu005_i2c_write_byte(i2c, 0x54, vldo_set);
 
-		ret = s2mu005_i2c_read_byte(i2c, 0x7E, &reg_val);
-		muic_data->vbus_ldo = reg_val;
+		muic_data->vbus_ldo = reg_val = s2mu005_i2c_read_byte(i2c, 0x7E);
 		if ((reg_val >> 4) > 3)
 			tmp_val = ((reg_val >> 4) - 3);
 		else
@@ -1846,11 +1837,9 @@ static irqreturn_t s2mu005_muic_irq_thread(int irq, void *data)
 	struct i2c_client *i2c = muic_data->i2c;
 	enum s2mu005_reg_manual_sw_value val;
 	struct irq_desc *desc = irq_to_desc(irq);
-	u8 reg_val = 0, ctrl = 0;
-	int ret = 0;
+	int ctrl, ret = 0;
 #ifndef CONFIG_SEC_FACTORY
-	int vbvolt = 0;
-	u8 adc = 0;
+	int vbvolt = 0, adc = 0;
 #endif
 
 	pr_info("%s %s\n", __func__,
@@ -1872,10 +1861,9 @@ static irqreturn_t s2mu005_muic_irq_thread(int irq, void *data)
 	mutex_lock(&muic_data->muic_mutex);
 	__pm_stay_awake(muic_data->ws);
 #ifndef CONFIG_SEC_FACTORY
-	ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_DEVICE_APPLE, &reg_val);
-	vbvolt = !!(reg_val & DEV_TYPE_APPLE_VBUS_WAKEUP);
-	ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_ADC, &adc);
-	adc &= ADC_MASK;
+	vbvolt = !!(s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_DEVICE_APPLE)
+				& DEV_TYPE_APPLE_VBUS_WAKEUP);
+	adc = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_ADC) & ADC_MASK;
 	pr_info("vbvolt : %d, adc: 0x%X, irq : %d\n", vbvolt, adc, irq);
 	if (!vbvolt) {
 		if (IS_AUDIO_ADC(adc) && !muic_data->is_water_wa) {
@@ -1899,7 +1887,7 @@ static irqreturn_t s2mu005_muic_irq_thread(int irq, void *data)
 		s2mu005_muic_handle_vbus_off(muic_data);
 #endif
 	/* check for muic reset and re-initialize registers */
-	ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_CTRL1, &ctrl);
+	ctrl = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_CTRL1);
 
 	/* CONTROL register is reset to DF */
 	if (ctrl == 0xDF) {
@@ -1911,21 +1899,21 @@ static irqreturn_t s2mu005_muic_irq_thread(int irq, void *data)
 		s2mu005_muic_reg_init(muic_data);
 		if (muic_data->is_rustproof) {
 			pr_info("%s rustproof is enabled\n", __func__);
-			reg_val = MANSW_OPEN;
+			val = MANSW_OPEN;
 			ret = s2mu005_i2c_write_byte(i2c,
-				S2MU005_REG_MUIC_SW_CTRL, reg_val);
+				S2MU005_REG_MUIC_SW_CTRL, val);
 			if (ret < 0)
 				pr_err("%s failed to write MANSW\n", __func__);
-			ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_SW_CTRL, &reg_val);
-			pr_info("%s MUIC_SW_CTRL=0x%x\n ", __func__, reg_val);
+			ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_SW_CTRL);
+			pr_info("%s MUIC_SW_CTRL=0x%x\n ", __func__, ret);
 		} else {
-			reg_val = MANSW_AP_UART;
+			val = MANSW_AP_UART;
 			ret = s2mu005_i2c_write_byte(i2c,
-				S2MU005_REG_MUIC_SW_CTRL, reg_val);
+				S2MU005_REG_MUIC_SW_CTRL, val);
 			if (ret < 0)
 				pr_err("%s failed to write MANSW\n", __func__);
-			ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_SW_CTRL, &reg_val);
-			pr_info("%s MUIC_SW_CTRL=0x%x\n ", __func__, reg_val);
+			ret = s2mu005_i2c_read_byte(i2c, S2MU005_REG_MUIC_SW_CTRL);
+			pr_info("%s MUIC_SW_CTRL=0x%x\n ", __func__, ret);
 		}
 #if IS_ENABLED(DEBUG_MUIC)
 		s2mu005_print_reg_dump(muic_data);
@@ -1951,7 +1939,7 @@ static int s2mu005_init_rev_info(struct s2mu005_muic_data *muic_data)
 	u8 dev_id;
 	int ret = 0;
 
-	ret = s2mu005_i2c_read_byte(muic_data->i2c, S2MU005_REG_REV_ID, &dev_id);
+	dev_id = s2mu005_i2c_read_byte(muic_data->i2c, S2MU005_REG_REV_ID);
 	if (dev_id < 0) {
 		pr_err("dev_id(%d)\n", dev_id);
 		ret = -ENODEV;
@@ -2221,7 +2209,6 @@ static void s2mu005_muic_shutdown(struct platform_device *pdev)
 	struct i2c_client *i2c = muic_data->i2c;
 	u8 reg_val, vldo_set = 0;
 #endif
-	int ret = 0;
 
 	pr_info("%s\n", __func__);
 
@@ -2235,12 +2222,12 @@ static void s2mu005_muic_shutdown(struct platform_device *pdev)
 	}
 	muic_data->usb_type_rechecked = false;
 
-	ret = s2mu005_i2c_read_byte(i2c, 0x54, &vldo_set);
+	vldo_set = s2mu005_i2c_read_byte(i2c, 0x54);
 	if (vldo_set & 0x80) {
 		vldo_set &= ~0x80;
 		s2mu005_i2c_write_byte(i2c, 0x54, vldo_set);
 
-		ret = s2mu005_i2c_read_byte(muic_data->i2c, 0x7E, &reg_val);
+		reg_val = s2mu005_i2c_read_byte(muic_data->i2c, 0x7E);
 		s2mu005_i2c_write_byte(muic_data->i2c, 0x7E, muic_data->vbus_ldo);
 		pr_info("%s vbus_ldo(%#x->%#x)\n", __func__, reg_val, muic_data->vbus_ldo);
 	}

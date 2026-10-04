@@ -15,12 +15,7 @@ obj-$(CONFIG_CPU_FREQ_TIMES)		+= cpufreq_times.o
 ifdef CONFIG_CPU_FREQ_LIMIT
 ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/mt-plat/
 ccflags-y += -I$(srctree)/drivers/misc/mediatek/base/power/include/
-ccflags-y += -I$(srctree)/drivers/misc/mediatek/sched/
-ifdef CONFIG_MACH_MT6739
-obj-y		+= cpufreq_limit_mt6739.o
-else
 obj-y		+= cpufreq_limit.o
-endif
 endif
 
 # CPUfreq governors
@@ -35,8 +30,6 @@ obj-$(CONFIG_CPU_FREQ_GOV_ATTR_SET)	+= cpufreq_governor_attr_set.o
 
 obj-$(CONFIG_CPUFREQ_DT)		+= cpufreq-dt.o
 obj-$(CONFIG_CPUFREQ_DT_PLATDEV)	+= cpufreq-dt-platdev.o
-
-obj-$(CONFIG_CPUFREQ_DUMMY)		+= dummy-cpufreq.o
 
 ##################################################################################
 # x86 drivers.

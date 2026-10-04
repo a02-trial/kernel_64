@@ -447,6 +447,23 @@ config MFD_INTEL_QUARK_I2C_GPIO
 	  their respective IO driver.
 	  The GPIO exports a total amount of 8 interrupt-capable GPIOs.
 
+config MFD_S2MU106
+	bool "SAMSUNG Electronics IF PMIC Series Support"
+	depends on I2C=y
+	select MFD_CORE
+	help
+	  Support for the Samsung Electronics MFD series.
+	  This driver provides common support for accessing the device,
+	  additional drivers must be enabled in order to use the functionality
+	  of the device
+	  
+config LEDS_S2MU005_FLASH
+	 tristate "SLSI S2MU005 flash LED driver"
+	 depends on LEDS_S2MU005
+	 help
+	  A driver for Siliconmitus S2MU005 flash LED
+	  This option enables support for the LEDs on the S2MU005.
+
 config LPC_ICH
 	tristate "Intel ICH LPC"
 	depends on PCI
@@ -770,18 +787,6 @@ config MFD_MT6358
 	  a Power Management IC. This driver provides common support for
 	  accessing the device; additional drivers must be enabled in order
 	  to use the functionality of the device.
-
-config MFD_MT6362
-	tristate "MT6362 SPMI PMIC"
-	depends on OF
-	depends on SPMI
-	select REGMAP_SPMI
-	select REGMAP_IRQ
-	help
-	  This enables support for the Mediatek SPMI PMICs.
-	  These PMICs are currently used with the Mediatek series of
-	  SoCs.  Note, that this will only be useful paired with descriptions
-	  of the independent functions as children nodes in the device tree.
 
 config MT6358_MISC
 	tristate "MediaTek MT6358 MISC FUNCTIONS Support"
@@ -1173,16 +1178,6 @@ config AB8500_GPADC
 	default y
 	help
 	  AB8500 GPADC driver used to convert Acc and battery/ac/usb voltage
-
-config MFD_S2MU005
-	bool "SAMSUNG Electronics IF PMIC S2MU005 Series Support"
-	depends on I2C=y
-	select MFD_CORE
-	  help
-	  Support for the Samsung Electronics MFD series.
-	  This driver provides common support for accessing the device,
-	  additional drivers must be enabled in order to use the functionality
-	  of the device
 
 config MFD_DB8500_PRCMU
 	bool "ST-Ericsson DB8500 Power Reset Control Management Unit"

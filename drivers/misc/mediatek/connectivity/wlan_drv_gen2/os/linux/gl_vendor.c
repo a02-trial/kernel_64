@@ -323,56 +323,10 @@ int mtk_cfg80211_vendor_set_country_code(struct wiphy *wiphy, struct wireless_de
 int mtk_cfg80211_vendor_set_scan_mac_oui(struct wiphy *wiphy,
 	struct wireless_dev *wdev, const void *data, int data_len)
 {
-	P_GLUE_INFO_T prGlueInfo = NULL;
-	uint32_t rStatus = WLAN_STATUS_SUCCESS;
-	struct nlattr *attr;
-	uint32_t i = 0;
-	uint8_t ucMacOui[MAC_OUI_LEN];
-
-	uint32_t u4BufLen = 0;
-
 	ASSERT(wiphy);
 	ASSERT(wdev);
 
-	if (data == NULL || data_len <= 0) {
-		DBGLOG(REQ, ERROR, "data error(len=%d)\n", data_len);
-		return -EINVAL;
-	}
-
-	prGlueInfo = (P_GLUE_INFO_T) wiphy_priv(wiphy);
-
-	if (!prGlueInfo) {
-		DBGLOG(REQ, ERROR, "Invalid glue info\n");
-		return -EFAULT;
-	}
-
-	attr = (struct nlattr *)data;
-	kalMemZero(ucMacOui, MAC_OUI_LEN);
-	if (nla_type(attr) != WIFI_ATTRIBUTE_PNO_RANDOM_MAC_OUI) {
-		DBGLOG(REQ, ERROR, "Set MAC oui type error(%u)\n",
-			nla_type(attr));
-		return -EINVAL;
-	}
-
-	if (nla_len(attr) != MAC_OUI_LEN) {
-		DBGLOG(REQ, ERROR, "Set MAC oui length error(%u), %u needed\n",
-			nla_len(attr), MAC_OUI_LEN);
-		return -EINVAL;
-	}
-
-	for (i = 0; i < MAC_OUI_LEN; i++)
-		ucMacOui[i] = *((uint8_t *)nla_data(attr) + i);
-
-	DBGLOG(REQ, INFO, "Set MAC oui: %02x-%02x-%02x\n",
-		ucMacOui[0], ucMacOui[1], ucMacOui[2]);
-
-	rStatus = kalIoctl(prGlueInfo, wlanoidSetScanMacOui,
-		ucMacOui, MAC_OUI_LEN,
-		FALSE, FALSE, FALSE, FALSE, &u4BufLen);
-	if (rStatus != WLAN_STATUS_SUCCESS) {
-		DBGLOG(REQ, ERROR, "Set MAC oui error: 0x%X\n", rStatus);
-		return -EFAULT;
-	}
+	DBGLOG(REQ, INFO, "scan mac oui not supported\n");
 
 	return 0;
 }
@@ -1543,7 +1497,7 @@ int mtk_cfg80211_vendor_get_version(struct wiphy *wiphy, struct wireless_dev *wd
 		prGlueInfo = (P_GLUE_INFO_T) wiphy_priv(wiphy);
 		ASSERT(prGlueInfo);
 		prVerInfo = &(prGlueInfo->prAdapter->rVerInfo);
-		kalSprintf(verInfoBuf, "%x.%x.%x", (prVerInfo->u2FwOwnVersion >> 8),
+		sprintf(verInfoBuf, "%x.%x.%x", (prVerInfo->u2FwOwnVersion >> 8),
 			(prVerInfo->u2FwOwnVersion & 0xff), (prVerInfo->u2FwOwnVersionExtend));
 		u4CopySize = strlen(verInfoBuf);
 	}
@@ -1643,7 +1597,7 @@ int mtk_cfg80211_vendor_event_full_scan_results(struct wiphy *wiphy, struct wire
 	ASSERT(wdev);
 	ASSERT(pdata);
 	DBGLOG(REQ, TRACE, "ssid=%s, bssid="MACSTR", rssi=%d, %d, capa=0x%x, ie_length=%d\n",
-				HIDE(pdata->fixed.ssid),
+				pdata->fixed.ssid,
 				MAC2STR(pdata->fixed.bssid),
 				pdata->fixed.rssi,
 				pdata->fixed.channel,
@@ -2049,7 +2003,7 @@ int mtk_cfg80211_vendor_acs(struct wiphy *wiphy,
 		struct wireless_dev *wdev, const void *data, int data_len)
 {
 	P_GLUE_INFO_T prGlueInfo;
-	struct nlattr *tb[WIFI_VENDOR_ATTR_ACS_MAX + 1] = { 0 };
+	struct nlattr *tb[WIFI_VENDOR_ATTR_ACS_MAX + 1];
 	uint32_t rStatus = WLAN_STATUS_SUCCESS;
 	bool ht_enabled, ht40_enabled, vht_enabled;
 	uint8_t ch_width = 0;

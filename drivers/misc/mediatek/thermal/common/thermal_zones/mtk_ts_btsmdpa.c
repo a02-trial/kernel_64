@@ -33,9 +33,7 @@
 #include <tmp_bts.h>
 #include <linux/slab.h>
 #if defined(CONFIG_MEDIATEK_MT6577_AUXADC)
-#include <linux/of.h>
 #include <linux/iio/consumer.h>
-#include <linux/iio/iio.h>
 #endif
 #ifdef MTK_SW_WORKAROUND
 #ifdef CONFIG_OF
@@ -63,10 +61,6 @@ IMM_GetOneChannelValue(int dwChannel, int data[4], int *rawdata)
 #endif
 /*=============================================================
  */
-/* Add HW version check to avoid reading AP AUXADC for bringup phone */
-#ifdef MTK_SW_WORKAROUND
-static unsigned int hw_version;
-#endif
 static kuid_t uid = KUIDT_INIT(0);
 static kgid_t gid = KGIDT_INIT(1000);
 static DEFINE_SEMAPHORE(sem_mutex);
@@ -114,12 +108,11 @@ do {                                    \
 } while (0)
 
 #define mtkts_btsmdpa_printk(fmt, args...) \
-pr_notice("[Thermal/TZ/BTSMDPA]" fmt, ##args)
+pr_debug("[Thermal/TZ/BTSMDPA]" fmt, ##args)
 
 
 #if defined(CONFIG_MEDIATEK_MT6577_AUXADC)
 struct iio_channel *thermistor_ch1;
-static int g_ADC_channel;
 #endif
 
 /* #define INPUT_PARAM_FROM_USER_AP */
@@ -148,6 +141,7 @@ struct BTSMDPA_TEMPERATURE {
 	__s32 TemperatureR;
 };
 
+/* Add HW version check to avoid reading AP AUXADC for bringup phone */
 #ifdef MTK_SW_WORKAROUND
 static unsigned int hw_version;
 #endif
@@ -634,10 +628,6 @@ static int get_hw_btsmdpa_temp(void)
 #ifdef MTK_SW_WORKAROUND
 	if (hw_version == 0)
 		return 40;
-#else
-#if defined(CONFIG_MTK_THERMAL_FIX_VALUE)
-	return 40;
-#endif
 #endif
 
 #if defined(CONFIG_MEDIATEK_MT6577_AUXADC)
@@ -722,6 +712,7 @@ static int get_hw_btsmdpa_temp(void)
 	mtkts_btsmdpa_dprintk("APtery output mV = %d\n", ret);
 	output = mtk_ts_btsmdpa_volt_to_temp(ret);
 	mtkts_btsmdpa_dprintk("BTSMDPA output temperature = %d\n", output);
+
 	return output;
 }
 
@@ -764,10 +755,8 @@ int mtkts_btsmdpa_get_hw_temp(void)
 
 	mutex_unlock(&BTSMDPA_lock);
 
-#ifndef CONFIG_SEC_PM
 	if (t_ret > 40000)	/* abnormal high temp */
 		mtkts_btsmdpa_printk("T_btsmdpa=%d\n", t_ret);
-#endif
 
 	mtkts_btsmdpa_dprintk("[%s] T_btsmdpa, %d\n", __func__,
 									t_ret);
@@ -1216,11 +1205,8 @@ static int mtkts_btsmdpa_param_read(struct seq_file *m, void *v)
 	seq_printf(m, "%d\n", g_RAP_pull_up_voltage);
 	seq_printf(m, "%d\n", g_TAP_over_critical_low);
 	seq_printf(m, "%d\n", g_RAP_ntc_table);
-#if defined(CONFIG_MEDIATEK_MT6577_AUXADC)
-	seq_printf(m, "%d\n", g_ADC_channel);
-#else
 	seq_printf(m, "%d\n", g_RAP_ADC_channel);
-#endif
+
 	return 0;
 }
 
@@ -1461,11 +1447,6 @@ static int mtkts_btsmdpa_probe(struct platform_device *pdev)
 			__func__, ret);
 		return ret;
 	}
-
-	g_ADC_channel = thermistor_ch1->channel->channel;
-	mtkts_btsmdpa_printk("[%s]get auxadc iio ch: %d\n", __func__,
-		thermistor_ch1->channel->channel);
-
 
 	return err;
 }

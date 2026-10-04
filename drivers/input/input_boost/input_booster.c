@@ -13,7 +13,6 @@
 spinlock_t write_ib_lock;
 spinlock_t write_qos_lock;
 struct mutex trigger_ib_lock;
-struct mutex mem_lock;
 struct mutex rel_ib_lock;
 struct workqueue_struct *ib_handle_highwq;
 
@@ -66,6 +65,10 @@ void trigger_input_booster(struct work_struct *work)
 		return;
 	}
 
+	pr_info(ITAG" IB Trigger :: %s(%d) %s || key_id : %d",
+	ib_device_trees[p_IbTrigger->dev_type].label, p_IbTrigger->dev_type,
+	(p_IbTrigger->event_type) ? "PRESS" : "RELEASE", p_IbTrigger->key_id);
+
 	mutex_lock(&trigger_ib_lock);
 
 	// Input booster On/Off handling
@@ -87,10 +90,7 @@ void trigger_input_booster(struct work_struct *work)
 		} while (!is_validate_uniqid(uniq_id));
 
 		// Make ib instance with all needed factor.
-		mutex_lock(&mem_lock);
 		ib = create_ib_instance(p_IbTrigger, uniq_id);
-		mutex_unlock(&mem_lock);
-
 		pr_info(ITAG" IB Trigger Press :: IB Uniq Id(%d)", uniq_id);
 
 		if (ib == NULL) {
@@ -151,10 +151,7 @@ void trigger_input_booster(struct work_struct *work)
 					&(ib->ib_timeout_work[IB_TAIL]),
 					msecs_to_jiffies(ib->ib_dt->tail_time));
 			} else {
-				cancel_delayed_work(&(ib->ib_timeout_work[IB_TAIL]));
-				queue_delayed_work(ib_handle_highwq,
-					&(ib->ib_timeout_work[IB_TAIL]),
-					msecs_to_jiffies(ib->ib_dt->tail_time));
+				pr_err(ITAG" IB Trigger Release :: tail timeout start");
 			}
 		}
 		mutex_unlock(&ib->lock);
@@ -292,9 +289,6 @@ void press_timeout_func(struct work_struct* work)
 
 	struct t_ib_info* target_ib = container_of(work, struct t_ib_info, ib_timeout_work[IB_HEAD].work);
 
-	if (target_ib == NULL)
-		return;
-
 	pr_info(ITAG" Press Timeout Func :::: Unique_Id(%d) Tail_Time(%d)",
 		target_ib->uniq_id, target_ib->ib_dt->tail_time);
 
@@ -363,9 +357,6 @@ void release_state_func(struct work_struct* work)
 
 	struct t_ib_info* target_ib = container_of(work, struct t_ib_info, ib_state_work[IB_TAIL]);
 
-	if (target_ib == NULL)
-		return;
-
 	mutex_lock(&target_ib->lock);
 
 	target_ib->isHeadFinished = 1;
@@ -402,10 +393,6 @@ void release_state_func(struct work_struct* work)
 		} else {
 			pr_err(ITAG" Release State Func :: tail timeout start");
 		}
-	} else {
-		queue_delayed_work(ib_handle_highwq,
-			&(target_ib->ib_timeout_work[IB_TAIL]),
-			msecs_to_jiffies(60000));
 	}
 
 	mutex_unlock(&target_ib->lock);
@@ -525,9 +512,7 @@ void remove_ib_instance(struct t_ib_info* target_ib)
 		spin_unlock(&write_ib_lock);
 		synchronize_rcu();
 		pr_info(ITAG" Del Ib Instance's Id : %d", target_ib->uniq_id);
-		mutex_lock(&mem_lock);
 		kfree(target_ib);
-		mutex_unlock(&mem_lock);
 	}
 }
 
@@ -672,7 +657,6 @@ void input_booster_init(void)
 	debug_flag = 0;
 	enable_event_booster = INIT_ZERO;
 	max_resource_count = 0;
-	allowed_res_count = 0;
 	device_count = 0;
 	evdev_mt_slot = 0;
 	trigger_cnt = 0;
@@ -682,7 +666,6 @@ void input_booster_init(void)
 	spin_lock_init(&write_qos_lock);
 	mutex_init(&trigger_ib_lock);
 	mutex_init(&rel_ib_lock);
-	mutex_init(&mem_lock);
 
 //Input Booster Trigger Strcut Init
 	ib_trigger = kcalloc(ABS_CNT, sizeof(struct t_ib_trigger) * MAX_IB_COUNT, GFP_KERNEL);

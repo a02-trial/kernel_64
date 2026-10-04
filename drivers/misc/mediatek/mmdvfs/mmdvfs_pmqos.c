@@ -26,13 +26,10 @@
 #include <linux/sched/clock.h>
 
 #ifdef PLL_HOPPING_READY
-#include <mtk_freqhopping_drv.h>
+#include <mt_freqhopping_drv.h>
 #endif
 
-#if defined(USE_MEDIATEK_EMI)
-#include <memory/mediatek/emi.h>
-#include <memory/mediatek/dramc.h>
-#elif defined(USE_MTK_DRAMC)
+#ifdef USE_MTK_DRAMC
 #include <mtk_dramc.h>
 #endif
 
@@ -107,7 +104,6 @@ enum mmdvfs_log_level {
 	log_bw,
 	log_limit,
 	log_smi_freq,
-	log_qos_validation,
 };
 
 #define STEP_UNREQUEST -1
@@ -183,7 +179,7 @@ static struct pm_qos_request mm_bw_request;
 static struct pm_qos_request smi_freq_request[MAX_COMM_NUM];
 static DEFINE_MUTEX(step_mutex);
 static DEFINE_MUTEX(bw_mutex);
-static s32 total_hrt_bw = UNINITIALIZED_VALUE;
+static s32 total_hrt_bw;
 static BLOCKING_NOTIFIER_HEAD(hrt_bw_throttle_notifier);
 static BLOCKING_NOTIFIER_HEAD(cam_max_bw_notifier);
 
@@ -467,10 +463,11 @@ static void mm_apply_clk_for_all(u32 pm_qos_class, s32 src_mux_id,
 		mmdvfs_mmp_events.ext_freq_change,
 		MMPROFILE_FLAG_PULSE, *((u32 *)&freq[0]), *((u32 *)&freq[4]));
 #endif
-	pr_notice(
-		"freq change:%u class:%u step:%u f0:%x f1:%x\n",
-		real_freq, pm_qos_class, step,
-		*((u32 *)&freq[0]), *((u32 *)&freq[4]));
+	if (log_level & 1 << log_freq)
+		pr_notice(
+			"freq change:%u class:%u step:%u f0:%x f1:%x\n",
+			real_freq, pm_qos_class, step,
+			*((u32 *)&freq[0]), *((u32 *)&freq[4]));
 }
 
 /* id is from SMI_LARB_L1ARB */
@@ -708,12 +705,13 @@ static struct mm_larb_request larb_req[MAX_LARB_COUNT] = {};
 #define LARB_NODE_NAME "larb_groups"
 
 #define MAX_CH_COUNT 2
-static s32 channel_srt_bw[MAX_COMM_NUM][MAX_CH_COUNT] = {};
+static s32 channel_bw[MAX_COMM_NUM][MAX_CH_COUNT] = {};
 static s32 channel_hrt_bw[MAX_COMM_NUM][MAX_CH_COUNT] = {};
 static s32 channel_disp_hrt_cnt[MAX_COMM_NUM][MAX_CH_COUNT] = {};
 
 #define MULTIPLY_BW_THRESH_HIGH(value) ((value)*1/2)
 #define MULTIPLY_BW_THRESHOLD_LOW(value) ((value)*2/5)
+#define MULTIPLY_W_DRAM_WEIGHT(value) ((value)*6/5)	/* Write DRAM Weight*/
 static s32 current_hrt_bw;
 static u32 camera_max_bw;
 static s32 get_cam_hrt_bw(void)
@@ -745,7 +743,7 @@ static bool is_camera_larb(u32 master_id)
 static s32 get_total_used_hrt_bw(void)
 {
 	/* HRT Write BW should multiply a weight */
-	s32 cam_hrt_bw = dram_write_weight(get_cam_hrt_bw());
+	s32 cam_hrt_bw = MULTIPLY_W_DRAM_WEIGHT(get_cam_hrt_bw());
 	s32 disp_hrt_bw =
 		larb_req[SMI_PMQOS_LARB_DEC(PORT_VIRTUAL_DISP)].total_hrt_data;
 	s32 md_hrt_bw =
@@ -753,21 +751,7 @@ static s32 get_total_used_hrt_bw(void)
 	return (cam_hrt_bw + disp_hrt_bw + md_hrt_bw);
 }
 
-#if defined(USE_MEDIATEK_EMI)
-static s32 get_io_width(void)
-{
-	s32 io_width;
-	s32 ddr_type = mtk_dramc_get_ddr_type();
-
-	if (ddr_type == TYPE_LPDDR4 || ddr_type == TYPE_LPDDR4X
-	    || ddr_type == TYPE_LPDDR4P)
-		io_width = 2;
-	else
-		io_width = 4;
-
-	return io_width;
-}
-#elif defined(USE_MTK_DRAMC)
+#ifdef USE_MTK_DRAMC
 static s32 get_io_width(void)
 {
 	s32 io_width;
@@ -930,34 +914,6 @@ static void blocking_camera(void)
 }
 #endif
 
-static void trace_qos_validation(void)
-{
-	struct mm_qos_request *req = NULL;
-	u16 port_index_list[MAX_PORT_COUNT];
-	u32 i, j, port_id;
-	s32 bw;
-
-	for (i = 0; i < ARRAY_SIZE(larb_req); i++) {
-		if (!larb_req[i].port_count)
-			continue;
-		for (j = 0; j < MAX_PORT_COUNT; j++)
-			port_index_list[j] = 0;
-		list_for_each_entry(req, &larb_req[i].larb_list, larb_node) {
-			/* Make one trace for each request instead of for each
-			 * port because it's hard to calculate data size when
-			 * one port with many requests (BW and fps are mixed)
-			 */
-			port_id = SMI_PMQOS_PORT_MASK(req->master_id);
-			port_index_list[port_id]++;
-			bw = get_comp_value(req->bw_value,
-						req->comp_type, true);
-			if (req->updated || bw > 0)
-				trace_mmqos__update_qosbw(i, port_id,
-					port_index_list[port_id], bw);
-		}
-	}
-}
-
 static inline void init_larb_list(u32 larb_id)
 {
 	if (!larb_req[larb_id].larb_list_init) {
@@ -1032,17 +988,11 @@ s32 mm_qos_set_request(struct mm_qos_request *req, u32 bw_value,
 
 	larb = SMI_PMQOS_LARB_DEC(req->master_id);
 	port = SMI_PMQOS_PORT_MASK(req->master_id);
-	if (!req->init || larb >= MAX_LARB_COUNT ||
-		port >= MAX_PORT_COUNT || comp_type >= BW_COMP_END) {
-		pr_notice("mm_set(0x%08x) init=%d larb=%d port=%d comp=%d\n",
-			req->master_id, req->init, larb, port, comp_type);
-		dump_stack();
-		return -EINVAL;
-	}
-	if (!larb_req[larb].port_count || !larb_req[larb].ratio[port]) {
-		pr_notice("mm_set(0x%08x) invalid port_cnt=%d ratio=%d\n",
-			req->master_id, larb_req[larb].port_count,
-			larb_req[larb].ratio[port]);
+	if (!req->init ||
+		larb >= MAX_LARB_COUNT || !larb_req[larb].port_count ||
+		port >= MAX_PORT_COUNT || !larb_req[larb].ratio[port] ||
+		comp_type >= BW_COMP_END) {
+		pr_notice("mm_set(0x%08x) invalid req\n", req->master_id);
 		return -EINVAL;
 	}
 
@@ -1112,8 +1062,9 @@ s32 mm_qos_set_request(struct mm_qos_request *req, u32 bw_value,
 		larb_req[larb].total_mix_limit += new_comp_limit;
 
 	if (larb < MAX_LARB_COUNT && larb_req[larb].channel < MAX_CH_COUNT) {
-		channel_srt_bw[comm][larb_req[larb].channel] -= old_comp_bw;
-		channel_srt_bw[comm][larb_req[larb].channel] += new_comp_bw;
+		channel_bw[comm][larb_req[larb].channel] -= old_larb_mix_value;
+		channel_bw[comm][larb_req[larb].channel] +=
+			larb_req[larb].total_mix_limit;
 	}
 
 	if (larb < MAX_LARB_COUNT &&
@@ -1142,7 +1093,7 @@ s32 mm_qos_set_request(struct mm_qos_request *req, u32 bw_value,
 	hrt_port = hrt_value;
 	list_for_each_entry(enum_req, &(req->port_node), port_node) {
 		if (enum_req->hrt_value) {
-			bw += enum_req->hrt_value;
+			bw += SHIFT_ROUND(enum_req->hrt_value * 3, 1);
 			hrt_port = true;
 		} else
 			bw += get_comp_value(enum_req->bw_value,
@@ -1150,11 +1101,8 @@ s32 mm_qos_set_request(struct mm_qos_request *req, u32 bw_value,
 	}
 
 	req->ostd = bw ? SHIFT_ROUND(bw, larb_req[larb].ratio[port]) : 1;
-	if (hrt_port) {
-		req->ostd = SHIFT_ROUND(req->ostd * 3, 1);
-		if (larb_req[larb].is_max_ostd)
-			req->ostd = max_ostd;
-	}
+	if (hrt_port && larb_req[larb].is_max_ostd)
+		req->ostd = max_ostd;
 
 	list_for_each_entry(enum_req, &(req->port_node), port_node)
 		enum_req->ostd = req->ostd;
@@ -1199,10 +1147,6 @@ void mm_qos_update_all_request(struct plist_head *owner_list)
 	s32 smi_srt_clk = 0, smi_hrt_clk = 0;
 	s32 max_ch_srt_bw = 0, max_ch_hrt_bw = 0;
 	s32 final_chn_hrt_bw[MAX_COMM_NUM][MAX_CH_COUNT];
-#ifdef CHECK_OSTD_UPDATE
-	bool update_ostd;
-	struct mm_qos_request *enum_req = NULL;
-#endif
 
 	if (!owner_list || plist_head_empty(owner_list)) {
 		pr_notice("%s: owner_list is invalid\n", __func__);
@@ -1212,7 +1156,7 @@ void mm_qos_update_all_request(struct plist_head *owner_list)
 	req = plist_first_entry(owner_list, struct mm_qos_request, owner_node);
 
 	if (is_camera_larb(req->master_id)) {
-		cam_bw = dram_write_weight(get_cam_hrt_bw());
+		cam_bw = MULTIPLY_W_DRAM_WEIGHT(get_cam_hrt_bw());
 		if (cam_bw > camera_max_bw) {
 			pr_notice("cam_bw(%d) > camera_max_bw(%d)\n",
 				cam_bw, camera_max_bw);
@@ -1255,9 +1199,6 @@ void mm_qos_update_all_request(struct plist_head *owner_list)
 	}
 	mutex_unlock(&bw_mutex);
 
-	if (log_level & 1 << log_qos_validation)
-		trace_qos_validation();
-
 	plist_for_each_entry(req, owner_list, owner_node) {
 		if (!req->updated)
 			continue;
@@ -1286,22 +1227,6 @@ void mm_qos_update_all_request(struct plist_head *owner_list)
 			larb_port_id |= port_id << (8 * larb_count);
 			larb_count++;
 		}
-#ifdef CHECK_OSTD_UPDATE
-		mutex_lock(&bw_mutex);
-		if (!req->bw_value && !req->hrt_value) {
-			update_ostd = false;
-			list_for_each_entry(enum_req,
-					&(req->port_node), port_node) {
-				if (enum_req->bw_value ||
-					enum_req->hrt_value) {
-					update_ostd = true;
-					break;
-				}
-			}
-			req->updated = update_ostd;
-		}
-		mutex_unlock(&bw_mutex);
-#endif
 	}
 #ifdef MMDVFS_MMP
 	if (larb_count)
@@ -1321,12 +1246,7 @@ void mm_qos_update_all_request(struct plist_head *owner_list)
 	for (comm = 0; comm < MAX_COMM_NUM; comm++) {
 		if (comm_freq_class[comm] == 0)
 			continue;
-		max_ch_srt_bw = 0;
-		max_ch_hrt_bw = 0;
 		for (i = 0; i < MAX_CH_COUNT; i++) {
-			/* channel_hrt_bw[] doesn't contain disp HRT BW, so
-			 * add one HRT BW to it if disp HRT count > 0
-			 */
 			final_chn_hrt_bw[comm][i] =
 				channel_disp_hrt_cnt[comm][i] > 0 ?
 				channel_hrt_bw[comm][i] +
@@ -1334,40 +1254,41 @@ void mm_qos_update_all_request(struct plist_head *owner_list)
 					PORT_VIRTUAL_DISP)].total_hrt_data :
 				channel_hrt_bw[comm][i];
 			max_ch_srt_bw = max_t(s32,
-				channel_srt_bw[comm][i], max_ch_srt_bw);
+				channel_bw[comm][i], max_ch_srt_bw);
 			max_ch_hrt_bw = max_t(s32,
 				final_chn_hrt_bw[comm][i], max_ch_hrt_bw);
 			if (log_level & 1 << log_smi_freq)
 				pr_notice("comm:%d chn:%d s_bw:%d h_bw:%d\n",
-					comm, i, channel_srt_bw[comm][i],
+					comm, i, channel_bw[comm][i],
 					final_chn_hrt_bw[comm][i]);
 #ifdef MMDVFS_MMP
 			mmprofile_log_ex(
 				mmdvfs_mmp_events.smi_freq,
 				MMPROFILE_FLAG_PULSE,
 				((comm+1) << 28) | (i << 24) | min_t(s32,
-					channel_srt_bw[comm][i], 0xffff),
+					channel_bw[comm][i], 0xffff),
 				((comm+1) << 28) | (i << 24) | min_t(s32,
 					final_chn_hrt_bw[comm][i], 0xffff));
 #endif
 		}
-		smi_srt_clk = max_ch_srt_bw ?
-			SHIFT_ROUND(max_ch_srt_bw, 4) : 0;
-		smi_hrt_clk = max_ch_hrt_bw ?
-			SHIFT_ROUND(max_ch_hrt_bw, 4) : 0;
+		if (max_ch_srt_bw)
+			smi_srt_clk = SHIFT_ROUND(max_ch_srt_bw, 4);
+		if (max_ch_hrt_bw)
+			smi_hrt_clk = SHIFT_ROUND(max_ch_hrt_bw, 4);
 		pm_qos_update_request(&smi_freq_request[comm],
 			max_t(s32, smi_srt_clk, smi_hrt_clk));
-		if (log_level & 1 << log_smi_freq)
-			pr_notice("comm:%d smi_srt_clk:%d smi_hrt_clk:%d\n",
-				comm, smi_srt_clk, smi_hrt_clk);
-#ifdef MMDVFS_MMP
-		mmprofile_log_ex(
-			mmdvfs_mmp_events.smi_freq,
-			MMPROFILE_FLAG_PULSE,
-			comm, (min_t(s32, smi_srt_clk, 0xffff) << 16) |
-			min_t(s32, smi_hrt_clk, 0xffff));
-#endif
 	}
+
+	if (log_level & 1 << log_smi_freq)
+		pr_notice("smi_srt_clk:%d smi_hrt_clk:%d\n",
+			smi_srt_clk, smi_hrt_clk);
+#ifdef MMDVFS_MMP
+	mmprofile_log_ex(
+		mmdvfs_mmp_events.smi_freq,
+		MMPROFILE_FLAG_PULSE,
+		smi_srt_clk, smi_hrt_clk);
+#endif
+
 
 	mutex_lock(&bw_mutex);
 	/* update larb-level BW */
@@ -1409,7 +1330,6 @@ void mm_qos_remove_all_request(struct plist_head *owner_list)
 		pr_notice("mm_del(0x%08x)\n", req->master_id);
 		plist_del(&(req->owner_node), owner_list);
 		list_del(&(req->larb_node));
-		list_del(&(req->port_node));
 		req->init = false;
 	}
 	mutex_unlock(&bw_mutex);
@@ -1429,7 +1349,7 @@ s32 mm_hrt_get_available_hrt_bw(u32 master_id)
 		return UNINITIALIZED_VALUE;
 
 	if (is_camera_larb(master_id))
-		src_hrt_bw = dram_write_weight(get_cam_hrt_bw());
+		src_hrt_bw = MULTIPLY_W_DRAM_WEIGHT(get_cam_hrt_bw());
 
 	result = total_hrt_bw - total_used_hrt_bw + src_hrt_bw;
 
@@ -1437,7 +1357,7 @@ s32 mm_hrt_get_available_hrt_bw(u32 master_id)
 			SMI_PMQOS_LARB_DEC(PORT_VIRTUAL_DISP)) {
 		/* Consider worst camera bw if camera is on */
 		if (camera_max_bw > 0) {
-			cam_bw = dram_write_weight(get_cam_hrt_bw());
+			cam_bw = MULTIPLY_W_DRAM_WEIGHT(get_cam_hrt_bw());
 			result = result + cam_bw - camera_max_bw;
 		}
 
@@ -1599,7 +1519,7 @@ void mmdvfs_set_max_camera_hrt_bw(u32 bw)
 
 	cancel_delayed_work_sync(&g_delay_work);
 
-	mw_hrt_bw = dram_write_weight(bw);
+	mw_hrt_bw = MULTIPLY_W_DRAM_WEIGHT(bw);
 	if (mw_hrt_bw < camera_max_bw) {
 		camera_overlap_bw = mw_hrt_bw;
 		schedule_delayed_work(&g_delay_work, 2 * HZ);
@@ -1616,16 +1536,10 @@ EXPORT_SYMBOL_GPL(mmdvfs_set_max_camera_hrt_bw);
 static s32 get_total_hrt_bw(void)
 {
 	s32 result = 0;
-#if defined(USE_MEDIATEK_EMI)
-	s32 max_freq = get_opp_ddr_freq(0)/1000;
-	s32 ch_num = mtk_emicen_get_ch_cnt();
-	s32 io_width = get_io_width();
-
-	result = MULTIPLY_BW_THRESH_HIGH(max_freq * ch_num * io_width);
-#elif defined(USE_MTK_DRAMC)
+#ifdef USE_MTK_DRAMC
 	s32 max_freq = dram_steps_freq(0);
 	s32 ch_num = get_emi_ch_num();
-	s32 io_width = get_io_width();
+	s32 io_width = get_io_width(); /* Todo: Use API from DRAM owner */
 
 	result = MULTIPLY_BW_THRESH_HIGH(max_freq * ch_num * io_width);
 #else
@@ -1996,6 +1910,7 @@ static int mmdvfs_probe(struct platform_device *pdev)
 	for (i = 0; i < value && i < MAX_FREQ_STEP; i++)
 		pr_notice(" - step[%d]: %llu\n", i, freq_steps[i]);
 
+	total_hrt_bw = get_total_hrt_bw();
 #ifdef BLOCKING_MECHANISM
 	init_waitqueue_head(&hrt_wait);
 #endif
@@ -2117,7 +2032,6 @@ static int __init mmdvfs_pmqos_late_init(void)
 	mmdvfs_qos_force_step(-1);
 	pr_notice("force flip step0 when late_init\n");
 #endif
-	total_hrt_bw = get_total_hrt_bw();
 	return 0;
 }
 
@@ -2211,26 +2125,25 @@ static int print_freq(char *buf, int length,
 	return length;
 }
 
-#define MAX_DUMP (PAGE_SIZE - 1)
 int dump_setting(char *buf, const struct kernel_param *kp)
 {
 	u32 i, l;
 	int length = 0;
 	struct mm_freq_config *mm_freq;
 
-	length += snprintf(buf + length, MAX_DUMP  - length,
+	length += snprintf(buf + length, PAGE_SIZE - length,
 		"force_step: %d\n", force_step);
 	for (i = 0; i < ARRAY_SIZE(all_freqs); i++) {
 		mm_freq = all_freqs[i];
-		length += snprintf(buf + length, MAX_DUMP  - length,
+		length += snprintf(buf + length, PAGE_SIZE - length,
 			"[%s] step_size: %u current_step:%d (%lluMhz)\n",
 			mm_freq->prop_name, step_size, mm_freq->current_step,
-			mmdvfs_qos_get_freq(PM_QOS_DISP_FREQ + i));
+			mmdvfs_qos_get_freq(mm_freq->pm_qos_class));
 		length = print_freq(buf, length,
 			mm_freq->step_config, mm_freq->current_step);
 		l = mm_freq->limit_config.limit_level;
 		if (l) {
-			length += snprintf(buf + length, MAX_DUMP  - length,
+			length += snprintf(buf + length, PAGE_SIZE - length,
 				"-[limit] level=%u value=0x%x\n",
 				mm_freq->limit_config.limit_level,
 				mm_freq->limit_config.limit_value);
@@ -2238,11 +2151,10 @@ int dump_setting(char *buf, const struct kernel_param *kp)
 				mm_freq->limit_config.limit_steps[l-1],
 				mm_freq->current_step);
 		}
-		if (length >= MAX_DUMP)
+		if (length >= PAGE_SIZE)
 			break;
 	}
-	if (length >= MAX_DUMP)
-		length = MAX_DUMP - 1;
+	buf[length] = '\0';
 
 	return length;
 }
@@ -2287,7 +2199,7 @@ void mmdvfs_autok_qos_enable(bool enable)
 {
 	pr_notice("%s: step_size=%d current_max_step=%d\n",
 		__func__, step_size, current_max_step);
-	if (!enable && step_size > 0 && current_max_step == STEP_UNREQUEST)
+	if (!enable && step_size > 0)
 		mmdvfs_qos_force_step(step_size - 1);
 
 	mmdvfs_autok_enable = enable;
@@ -2390,9 +2302,9 @@ int get_larbs_info(char *buf)
 			if (!req->bw_value && !req->hrt_value)
 				continue;
 			length += snprintf(buf + length, MAX_DUMP - length,
-				"  [port-%u]: bw=%u ostd=%u hrt=%u comp=%d\n",
-				req->master_id & 0x1F, req->bw_value, req->ostd,
-				req->hrt_value, req->comp_type);
+				"  [port-%u]: bw=%u setting=%u hrt=%u\n",
+				req->master_id & 0xFFFF,
+				req->bw_value, req->ostd, req->hrt_value);
 			if (length >= MAX_DUMP)
 				break;
 		}

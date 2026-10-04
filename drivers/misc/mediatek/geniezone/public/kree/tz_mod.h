@@ -11,7 +11,6 @@
  * GNU General Public License for more details.
  */
 
-
 #ifndef TZ_MOD_H
 #define TZ_MOD_H
 
@@ -47,8 +46,11 @@
 	_IO(MTEE_IOC_MAGIC, 16)
 #define MTEE_CMD_FOD_TEE_SHM_OFF                                               \
 	_IO(MTEE_IOC_MAGIC, 17)
-#define MTEE_CMD_ADJUST_WQ_ATTR                                                \
-	_IOW(MTEE_IOC_MAGIC, 21, char *)
+#define MTEE_CMD_DEEP_IDLE_MASK                                                \
+	_IO(MTEE_IOC_MAGIC, 19)
+#define MTEE_CMD_DEEP_IDLE_UNMASK                                              \
+	_IO(MTEE_IOC_MAGIC, 20)
+
 
 
 #define DEV_IOC_MAXNR (10)

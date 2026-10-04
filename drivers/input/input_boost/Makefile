@@ -7,9 +7,3 @@ input_booster_lkm-$(CONFIG_SEC_INPUT_BOOSTER_MTK)	+= input_booster_mtk.o
 ifdef CONFIG_MACH_MT6739
 ccflags-y += -I$(srctree)/drivers/misc/mediatek/base/power/include/
 endif
-ifdef CONFIG_MACH_MT6853
-ccflags-y += -I$(srctree)/drivers/misc/mediatek/sched/
-endif
-ifdef CONFIG_MACH_MT6768
-ccflags-y += -I$(srctree)/drivers/misc/mediatek/sched/
-endif

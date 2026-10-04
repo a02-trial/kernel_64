@@ -22,14 +22,12 @@
 #define MTK_PIN_CONFIG_RDSEL	(PIN_CONFIG_END + 2)
 #define MTK_PIN_CONFIG_PU_ADV	(PIN_CONFIG_END + 3)
 #define MTK_PIN_CONFIG_PD_ADV	(PIN_CONFIG_END + 4)
-#define MTK_PIN_CONFIG_DRV_ADV	(PIN_CONFIG_END + 5)
 
 static const struct pinconf_generic_params mtk_custom_bindings[] = {
 	{"mediatek,tdsel",	MTK_PIN_CONFIG_TDSEL,		0},
 	{"mediatek,rdsel",	MTK_PIN_CONFIG_RDSEL,		0},
 	{"mediatek,pull-up-adv", MTK_PIN_CONFIG_PU_ADV,		1},
 	{"mediatek,pull-down-adv", MTK_PIN_CONFIG_PD_ADV,	1},
-	{"mediatek,drive-strength-adv", MTK_PIN_CONFIG_DRV_ADV,	2},
 };
 
 #ifdef CONFIG_DEBUG_FS
@@ -38,7 +36,6 @@ static const struct pin_config_item mtk_conf_items[] = {
 	PCONFDUMP(MTK_PIN_CONFIG_RDSEL, "rdsel", NULL, true),
 	PCONFDUMP(MTK_PIN_CONFIG_PU_ADV, "pu-adv", NULL, true),
 	PCONFDUMP(MTK_PIN_CONFIG_PD_ADV, "pd-adv", NULL, true),
-	PCONFDUMP(MTK_PIN_CONFIG_DRV_ADV, "drive-strength-adv", NULL, true),
 };
 #endif
 
@@ -53,21 +50,13 @@ static int mtk_pinmux_gpio_request_enable(struct pinctrl_dev *pctldev,
 					  struct pinctrl_gpio_range *range,
 					  unsigned int pin)
 {
-	int err;
 	struct mtk_pinctrl *hw = pinctrl_dev_get_drvdata(pctldev);
 	const struct mtk_pin_desc *desc;
 
 	desc = (const struct mtk_pin_desc *)&hw->soc->pins[pin];
 
-	err = mtk_hw_set_value(hw, desc, PINCTRL_PIN_REG_MODE,
+	return mtk_hw_set_value(hw, desc, PINCTRL_PIN_REG_MODE,
 				hw->soc->gpio_m);
-	if (err)
-		return err;
-
-	if (hw->soc->eh_pin_pinmux)
-		mtk_eh_ctrl(hw, desc, hw->soc->gpio_m);
-
-	return 0;
 }
 
 static int mtk_pinmux_gpio_set_direction(struct pinctrl_dev *pctldev,
@@ -179,15 +168,6 @@ static int mtk_pinconf_get(struct pinctrl_dev *pctldev,
 			err = -ENOTSUPP;
 		}
 		break;
-	case MTK_PIN_CONFIG_DRV_ADV:
-		if (hw->soc->adv_drive_get) {
-			err = hw->soc->adv_drive_get(hw, desc, &ret);
-			if (err)
-				return err;
-		} else {
-			return -ENOTSUPP;
-		}
-		break;
 	default:
 		err = -ENOTSUPP;
 	}
@@ -291,15 +271,6 @@ static int mtk_pinconf_set(struct pinctrl_dev *pctldev, unsigned int pin,
 						    arg);
 		} else {
 			err = -ENOTSUPP;
-		}
-		break;
-	case MTK_PIN_CONFIG_DRV_ADV:
-		if (hw->soc->adv_drive_set) {
-			err = hw->soc->adv_drive_set(hw, desc, arg);
-			if (err)
-				return err;
-		} else {
-			return -ENOTSUPP;
 		}
 		break;
 	default:
@@ -687,14 +658,8 @@ static int mtk_pmx_set_mux(struct pinctrl_dev *pctldev,
 		return -EINVAL;
 
 	desc = (const struct mtk_pin_desc *)&hw->soc->pins[grp->pin];
-	ret = mtk_hw_set_value(hw, desc, PINCTRL_PIN_REG_MODE,
+	return mtk_hw_set_value(hw, desc, PINCTRL_PIN_REG_MODE,
 		desc_func->muxval);
-	if (ret)
-		return ret;
-
-	if (hw->soc->eh_pin_pinmux)
-		mtk_eh_ctrl(hw, desc, desc_func->muxval);
-	return 0;
 }
 
 static const struct pinmux_ops mtk_pmxops = {
@@ -922,9 +887,8 @@ int mtk_paris_pinctrl_probe(struct platform_device *pdev,
 	struct device_node *np = pdev->dev.of_node, *node;
 	struct pinctrl_pin_desc *pins;
 	struct mtk_pinctrl *hw;
-	struct property *prop;
 	struct resource *res;
-	int err, i;
+	int err, i, get_base_pass;
 
 	hw = devm_kzalloc(&pdev->dev, sizeof(*hw), GFP_KERNEL);
 	if (!hw)
@@ -955,25 +919,26 @@ int mtk_paris_pinctrl_probe(struct platform_device *pdev,
 
 		hw->nbase = hw->soc->nbase_names;
 	} else {
-		prop = of_find_property(np, "reg_bases", NULL);
-		if (!prop)
-			return -ENXIO;
-		i = prop->length / sizeof(phandle);
-		if (i < 1)
-			return -EINVAL;
-		hw->nbase = i;
-		hw->base = devm_kmalloc_array(&pdev->dev, i, sizeof(*hw->base),
-				GFP_KERNEL | __GFP_ZERO);
-		if (IS_ERR(hw->base))
-			return PTR_ERR(hw->base);
-		for (i = 0; i < hw->nbase; i++) {
-			node = of_parse_phandle(np, "reg_bases", i);
-			if (!node)
+		for (get_base_pass = 0; get_base_pass < 2; get_base_pass++) {
+			for (i = 0;; i++) {
+				node = of_parse_phandle(np, "reg_bases", i);
+				if (!node)
+					break;
+				if (get_base_pass == 1)
+					hw->base[i] = of_iomap(node, 0);
+				of_node_put(node);
+			}
+
+			if (i == 0)
 				return -EINVAL;
-			hw->base[i] = of_iomap(node, 0);
-			if (IS_ERR(hw->base[i]))
-				return PTR_ERR(hw->base[i]);
-			of_node_put(node);
+			if (get_base_pass == 0) {
+				hw->nbase = i;
+				hw->base = devm_kmalloc_array(&pdev->dev, i,
+					sizeof(*hw->base),
+					GFP_KERNEL | __GFP_ZERO);
+				if (IS_ERR(hw->base))
+					return PTR_ERR(hw->base);
+			}
 		}
 	}
 

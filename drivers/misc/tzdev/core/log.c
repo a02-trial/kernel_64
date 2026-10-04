@@ -57,6 +57,3 @@ TZDEV_DEBUG_PARAM_DECLARE(tzdev_nwfs, 0);
 #if defined(CONFIG_TZ_PMF)
 TZDEV_DEBUG_PARAM_DECLARE(tzdev_pmf, 0);
 #endif
-#if defined(CONFIG_TZDEV_CPUFREQ_TRANSITION)
-TZDEV_DEBUG_PARAM_DECLARE(tzdev_cpufreq, 0);
-#endif

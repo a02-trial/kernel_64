@@ -631,13 +631,8 @@ unsigned int _cfg80211_classify8021d(struct sk_buff *skb)
 
 static const UINT_16 au16Wlan1dToQueueIdx[8] = { 1, 0, 0, 1, 2, 2, 3, 3 };
 
-#if KERNEL_VERSION(4, 19, 0) <= CFG80211_VERSION_CODE
-static UINT_16 wlanSelectQueue(struct net_device *dev, struct sk_buff *skb,
-				struct net_device *sb_dev, select_queue_fallback_t fallback)
-#else
 static UINT_16 wlanSelectQueue(struct net_device *dev, struct sk_buff *skb,
 				void *accel_priv, select_queue_fallback_t fallback)
-#endif
 {
 	skb->priority = _cfg80211_classify8021d(skb);
 
@@ -1224,13 +1219,6 @@ static void createWirelessDevice(void)
 #if CFG_SUPPORT_WPA3
 	prWiphy->features |= NL80211_FEATURE_SAE;
 #endif
-
-#if (CFG_SUPPORT_SCAN_RANDOM_MAC && \
-	(KERNEL_VERSION(3, 19, 0) <= CFG80211_VERSION_CODE))
-	prWiphy->features |= NL80211_FEATURE_SCAN_RANDOM_MAC_ADDR;
-	prWiphy->features |= NL80211_FEATURE_SCHED_SCAN_RANDOM_MAC_ADDR;
-#endif
-
 	prWiphy->vendor_commands = mtk_wlan_vendor_ops;
 	prWiphy->n_vendor_commands = sizeof(mtk_wlan_vendor_ops) / sizeof(struct wiphy_vendor_command);
 	prWiphy->vendor_events = mtk_wlan_vendor_events;
@@ -1403,7 +1391,7 @@ static void wlanSetMulticastListWorkQueue(struct work_struct *work)
 		netif_addr_lock_bh(prDev);
 
 		netdev_for_each_mc_addr(ha, prDev) {
-			if (i < MAX_NUM_GROUP_ADDR) {
+			if ((i < MAX_NUM_GROUP_ADDR) && (ha != NULL)) {
 				memcpy((prMCAddrList + i * ETH_ALEN), ha->addr, ETH_ALEN);
 				i++;
 			}
@@ -2153,7 +2141,7 @@ static struct wireless_dev *wlanNetCreate(PVOID pvData)
 		DBGLOG(INIT, ERROR, "Allocating memory to adapter failed\n");
 		return NULL;
 	}
-	KAL_WAKE_LOCK_INIT(prAdapter, prGlueInfo->rAhbIsrWakeLock, "WLAN AHB ISR");
+	KAL_WAKE_LOCK_INIT(prAdapter, &prGlueInfo->rAhbIsrWakeLock, "WLAN AHB ISR");
 
 #if CFG_SUPPORT_MULTITHREAD
 	/*Check wake_lock is available, maybe wake_lock was un-released before using it.*/
@@ -2161,7 +2149,7 @@ static struct wireless_dev *wlanNetCreate(PVOID pvData)
 		DBGLOG(INIT, ERROR, "rTimeoutWakeLock = %d is invalid.\n"
 		, KAL_WAKE_LOCK_ACTIVE(prAdapter, &prGlueInfo->rTimeoutWakeLock));
 
-	KAL_WAKE_LOCK_INIT(prAdapter, prGlueInfo->rTimeoutWakeLock, "Wlan Timeout");
+	KAL_WAKE_LOCK_INIT(prAdapter, &prGlueInfo->rTimeoutWakeLock, "Wlan Timeout");
 	DBGLOG(INIT, INFO, "rTimeoutWakeLock init addr=%p\n", &prGlueInfo->rTimeoutWakeLock);
 #endif
 #if CFG_SUPPORT_PERSIST_NETDEV
@@ -3136,7 +3124,7 @@ bailout:
 #endif
 #if CFG_SPM_WORKAROUND_FOR_HOTSPOT
 		if (glIsChipNeedWakelock(prGlueInfo))
-			KAL_WAKE_LOCK_INIT(prGlueInfo->prAdapter, prGlueInfo->prAdapter->rApWakeLock, "WLAN AP");
+			KAL_WAKE_LOCK_INIT(prGlueInfo->prAdapter, &prGlueInfo->prAdapter->rApWakeLock, "WLAN AP");
 #endif
 		kalMemZero(&prGlueInfo->rFtIeForTx, sizeof(prGlueInfo->rFtIeForTx));
 	} while (FALSE);
@@ -3151,12 +3139,12 @@ bailout:
 			wake_up_interruptible(&prGlueInfo->waitq);
 			/* wait main thread stops */
 			wait_for_completion_interruptible(&prGlueInfo->rHaltComp);
-			KAL_WAKE_LOCK_DESTROY(prAdapter, prAdapter->rTxThreadWakeLock);
+			KAL_WAKE_LOCK_DESTROY(prAdapter, &prAdapter->rTxThreadWakeLock);
 			wlanAdapterStop(prAdapter);
 			glBusFreeIrq(prWdev->netdev, *((P_GLUE_INFO_T *) netdev_priv(prWdev->netdev)));
-			KAL_WAKE_LOCK_DESTROY(prAdapter, prGlueInfo->rAhbIsrWakeLock);
+			KAL_WAKE_LOCK_DESTROY(prAdapter, &prGlueInfo->rAhbIsrWakeLock);
 #if CFG_SUPPORT_MULTITHREAD
-			KAL_WAKE_LOCK_DESTROY(prAdapter, prGlueInfo->rTimeoutWakeLock);
+			KAL_WAKE_LOCK_DESTROY(prAdapter, &prGlueInfo->rTimeoutWakeLock);
 #endif
 			wlanNetDestroy(prWdev);
 			/* prGlueInfo->prAdapter is released in wlanNetDestroy */
@@ -3169,12 +3157,12 @@ bailout:
 			wake_up_interruptible(&prGlueInfo->waitq);
 			/* wait main thread stops */
 			wait_for_completion_interruptible(&prGlueInfo->rHaltComp);
-			KAL_WAKE_LOCK_DESTROY(prAdapter, prAdapter->rTxThreadWakeLock);
+			KAL_WAKE_LOCK_DESTROY(prAdapter, &prAdapter->rTxThreadWakeLock);
 			wlanAdapterStop(prAdapter);
 			glBusFreeIrq(prWdev->netdev, *((P_GLUE_INFO_T *) netdev_priv(prWdev->netdev)));
-			KAL_WAKE_LOCK_DESTROY(prAdapter, prGlueInfo->rAhbIsrWakeLock);
+			KAL_WAKE_LOCK_DESTROY(prAdapter, &prGlueInfo->rAhbIsrWakeLock);
 #if CFG_SUPPORT_MULTITHREAD
-			KAL_WAKE_LOCK_DESTROY(prAdapter, prGlueInfo->rTimeoutWakeLock);
+			KAL_WAKE_LOCK_DESTROY(prAdapter, &prGlueInfo->rTimeoutWakeLock);
 #endif
 			wlanNetDestroy(prWdev);
 			/* prGlueInfo->prAdapter is released in wlanNetDestroy */
@@ -3183,9 +3171,9 @@ bailout:
 			break;
 		case ADAPTER_START_FAIL:
 			glBusFreeIrq(prWdev->netdev, *((P_GLUE_INFO_T *) netdev_priv(prWdev->netdev)));
-			KAL_WAKE_LOCK_DESTROY(prAdapter, prGlueInfo->rAhbIsrWakeLock);
+			KAL_WAKE_LOCK_DESTROY(prAdapter, &prGlueInfo->rAhbIsrWakeLock);
 #if CFG_SUPPORT_MULTITHREAD
-			KAL_WAKE_LOCK_DESTROY(prAdapter, prGlueInfo->rTimeoutWakeLock);
+			KAL_WAKE_LOCK_DESTROY(prAdapter, &prGlueInfo->rTimeoutWakeLock);
 #endif
 			wlanNetDestroy(prWdev);
 			/* prGlueInfo->prAdapter is released in wlanNetDestroy */
@@ -3193,9 +3181,9 @@ bailout:
 			prAdapter = NULL;
 			break;
 		case BUS_SET_IRQ_FAIL:
-			KAL_WAKE_LOCK_DESTROY(prAdapter, prGlueInfo->rAhbIsrWakeLock);
+			KAL_WAKE_LOCK_DESTROY(prAdapter, &prGlueInfo->rAhbIsrWakeLock);
 #if CFG_SUPPORT_MULTITHREAD
-			KAL_WAKE_LOCK_DESTROY(prAdapter, prGlueInfo->rTimeoutWakeLock);
+			KAL_WAKE_LOCK_DESTROY(prAdapter, &prGlueInfo->rTimeoutWakeLock);
 #endif
 			wlanNetDestroy(prWdev);
 			/* prGlueInfo->prAdapter is released in wlanNetDestroy */
@@ -3391,7 +3379,7 @@ static VOID wlanRemove(VOID)
 	kalHaltLock(KAL_WLAN_REMOVE_TIMEOUT_MSEC);
 #if CFG_SPM_WORKAROUND_FOR_HOTSPOT
 	if (glIsChipNeedWakelock(prGlueInfo))
-		KAL_WAKE_LOCK_DESTROY(prGlueInfo->prAdapter, prGlueInfo->prAdapter->rApWakeLock);
+		KAL_WAKE_LOCK_DESTROY(prGlueInfo->prAdapter, &prGlueInfo->prAdapter->rApWakeLock);
 #endif
 
 /* flush_delayed_work_sync(&workq); */
@@ -3418,10 +3406,10 @@ static VOID wlanRemove(VOID)
 
 	DBGLOG(INIT, TRACE, "wlan thread(s) stopped\n");
 
-	KAL_WAKE_LOCK_DESTROY(prGlueInfo->prAdapter, prGlueInfo->prAdapter->rTxThreadWakeLock);
-	KAL_WAKE_LOCK_DESTROY(prGlueInfo->prAdapter, prGlueInfo->rAhbIsrWakeLock);
+	KAL_WAKE_LOCK_DESTROY(prGlueInfo->prAdapter, &prGlueInfo->prAdapter->rTxThreadWakeLock);
+	KAL_WAKE_LOCK_DESTROY(prGlueInfo->prAdapter, &prGlueInfo->rAhbIsrWakeLock);
 #if CFG_SUPPORT_MULTITHREAD
-	KAL_WAKE_LOCK_DESTROY(prGlueInfo->prAdapter, prGlueInfo->rTimeoutWakeLock);
+	KAL_WAKE_LOCK_DESTROY(prGlueInfo->prAdapter, &prGlueInfo->rTimeoutWakeLock);
 	DBGLOG(INIT, INFO, "remove rTimeoutWakeLock = %p\n", &prGlueInfo->rTimeoutWakeLock);
 
 #endif

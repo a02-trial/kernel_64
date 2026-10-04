@@ -17,6 +17,9 @@
 #ifndef __RS_PFM_H__
 #define __RS_PFM_H__
 
+/* CPU */
+int rs_cpumips_isdiff(void);
+
 /* VPU */
 int rs_get_vpu_core_num(void);
 int rs_get_vpu_opp_max(int core);
@@ -25,7 +28,7 @@ int rs_get_vpu_curr_opp(int core);
 int rs_get_vpu_ceiling_opp(int core);
 int rs_vpu_opp_to_freq(int core, int step);
 
-/* MDLA */
+/* VPU */
 int rs_get_mdla_core_num(void);
 int rs_get_mdla_opp_max(int core);
 int rs_mdla_support_idletime(void);

@@ -67,16 +67,6 @@
 #include <uapi/linux/module.h>
 #include "module-internal.h"
 
-#ifdef CONFIG_UH
-#include <linux/uh.h>
-#ifdef CONFIG_UH_RKP
-#include <linux/rkp.h>
-#endif
-#endif
-#ifdef CONFIG_RUSTUH_RKP
-#include <linux/rustrkp.h>
-#endif
-
 #define CREATE_TRACE_POINTS
 #include <trace/events/module.h>
 
@@ -1030,8 +1020,6 @@ SYSCALL_DEFINE2(delete_module, const char __user *, name_user,
 	strlcpy(last_unloaded_module, mod->name, sizeof(last_unloaded_module));
 
 	free_module(mod);
-	/* someone could wait for the module in add_unformed_module() */
-	wake_up_all(&module_wq);
 	return 0;
 out:
 	mutex_unlock(&module_mutex);
@@ -1707,8 +1695,6 @@ static int add_usage_links(struct module *mod)
 	return ret;
 }
 
-static void module_remove_modinfo_attrs(struct module *mod, int end);
-
 static int module_add_modinfo_attrs(struct module *mod)
 {
 	struct module_attribute *attr;
@@ -1723,36 +1709,24 @@ static int module_add_modinfo_attrs(struct module *mod)
 		return -ENOMEM;
 
 	temp_attr = mod->modinfo_attrs;
-	for (i = 0; (attr = modinfo_attrs[i]); i++) {
+	for (i = 0; (attr = modinfo_attrs[i]) && !error; i++) {
 		if (!attr->test || attr->test(mod)) {
 			memcpy(temp_attr, attr, sizeof(*temp_attr));
 			sysfs_attr_init(&temp_attr->attr);
 			error = sysfs_create_file(&mod->mkobj.kobj,
 					&temp_attr->attr);
-			if (error)
-				goto error_out;
 			++temp_attr;
 		}
 	}
-
-	return 0;
-
-error_out:
-	if (i > 0)
-		module_remove_modinfo_attrs(mod, --i);
-	else
-		kfree(mod->modinfo_attrs);
 	return error;
 }
 
-static void module_remove_modinfo_attrs(struct module *mod, int end)
+static void module_remove_modinfo_attrs(struct module *mod)
 {
 	struct module_attribute *attr;
 	int i;
 
 	for (i = 0; (attr = &mod->modinfo_attrs[i]); i++) {
-		if (end >= 0 && i > end)
-			break;
 		/* pick a field to test for end of list */
 		if (!attr->attr.name)
 			break;
@@ -1840,7 +1814,7 @@ static int mod_sysfs_setup(struct module *mod,
 	return 0;
 
 out_unreg_modinfo_attrs:
-	module_remove_modinfo_attrs(mod, -1);
+	module_remove_modinfo_attrs(mod);
 out_unreg_param:
 	module_param_sysfs_remove(mod);
 out_unreg_holders:
@@ -1876,7 +1850,7 @@ static void mod_sysfs_fini(struct module *mod)
 {
 }
 
-static void module_remove_modinfo_attrs(struct module *mod, int end)
+static void module_remove_modinfo_attrs(struct module *mod)
 {
 }
 
@@ -1892,7 +1866,7 @@ static void init_param_lock(struct module *mod)
 static void mod_sysfs_teardown(struct module *mod)
 {
 	del_usage_links(mod);
-	module_remove_modinfo_attrs(mod, -1);
+	module_remove_modinfo_attrs(mod);
 	module_param_sysfs_remove(mod);
 	kobject_put(mod->mkobj.drivers_dir);
 	kobject_put(mod->holders_dir);
@@ -3468,9 +3442,6 @@ static noinline int do_init_module(struct module *mod)
 {
 	int ret = 0;
 	struct mod_initfree *freeinit;
-#if defined(CONFIG_UH_RKP) || defined(CONFIG_RUSTUH_RKP)
-	struct module_info rkp_mod_info;
-#endif
 
 	freeinit = kmalloc(sizeof(*freeinit), GFP_KERNEL);
 	if (!freeinit) {
@@ -3537,16 +3508,6 @@ static noinline int do_init_module(struct module *mod)
 	mod_tree_remove_init(mod);
 	disable_ro_nx(&mod->init_layout);
 	module_arch_freeing_init(mod);
-#if defined(CONFIG_UH_RKP) || defined(CONFIG_RUSTUH_RKP)
-	rkp_mod_info.base_va = 0;
-	rkp_mod_info.vm_size = 0;
-	rkp_mod_info.core_base_va = (u64)mod->core_layout.base;
-	rkp_mod_info.core_text_size = (u64)mod->core_layout.text_size;
-	rkp_mod_info.core_ro_size = (u64)mod->core_layout.ro_size;
-	rkp_mod_info.init_base_va = (u64)mod->init_layout.base;
-	rkp_mod_info.init_text_size = (u64)mod->init_layout.text_size;
-	uh_call(UH_APP_RKP, RKP_MODULE_LOAD, RKP_MODULE_PXN_SET, (u64)&rkp_mod_info, 0, 0);
-#endif
 	mod->init_layout.base = NULL;
 	mod->init_layout.size = 0;
 	mod->init_layout.ro_size = 0;
@@ -3635,9 +3596,6 @@ out_unlocked:
 static int complete_formation(struct module *mod, struct load_info *info)
 {
 	int err;
-#if defined(CONFIG_UH_RKP) || defined(CONFIG_RUSTUH_RKP)
-	struct module_info rkp_mod_info;
-#endif
 
 	mutex_lock(&module_mutex);
 
@@ -3656,16 +3614,6 @@ static int complete_formation(struct module *mod, struct load_info *info)
 	 * but kallsyms etc. can see us. */
 	mod->state = MODULE_STATE_COMING;
 	mutex_unlock(&module_mutex);
-#if defined(CONFIG_UH_RKP) || defined(CONFIG_RUSTUH_RKP)
-	rkp_mod_info.base_va = 0;
-	rkp_mod_info.vm_size = 0;
-	rkp_mod_info.core_base_va = (u64)mod->core_layout.base;
-	rkp_mod_info.core_text_size = (u64)mod->core_layout.text_size;
-	rkp_mod_info.core_ro_size = (u64)mod->core_layout.ro_size;
-	rkp_mod_info.init_base_va = (u64)mod->init_layout.base;
-	rkp_mod_info.init_text_size = (u64)mod->init_layout.text_size;
-	uh_call(UH_APP_RKP, RKP_MODULE_LOAD, RKP_MODULE_PXN_CLEAR, (u64)&rkp_mod_info, 0, 0);
-#endif
 
 	return 0;
 
@@ -4211,10 +4159,8 @@ int module_kallsyms_on_each_symbol(int (*fn)(void *, const char *,
 static void cfi_init(struct module *mod)
 {
 #ifdef CONFIG_CFI_CLANG
-	preempt_disable();
 	mod->cfi_check =
 		(cfi_check_fn)mod_find_symname(mod, CFI_CHECK_FN_NAME);
-	preempt_enable();
 	cfi_module_add(mod, module_addr_min, module_addr_max);
 #endif
 }
@@ -4476,9 +4422,6 @@ int save_modules(char *mbuf, int mbufsize)
 	char buf[MODULE_FLAGS_BUF_SIZE];
 	/*int off = 0;*/
 	int sz = 0;
-	unsigned long text_addr = 0;
-	unsigned long init_addr = 0;
-	int i, search_nm;
 
 	if (mbuf == NULL || mbufsize <= 0) {
 		pr_cont("mrdump: module info buffer wrong(sz:%d)\n", mbufsize);
@@ -4495,25 +4438,10 @@ int save_modules(char *mbuf, int mbufsize)
 				mbufsize);
 			break;
 		}
-		text_addr = (unsigned long)mod->core_layout.base;
-		init_addr = (unsigned long)mod->init_layout.base;
-		search_nm = 2;
-		for (i = 0; i < mod->sect_attrs->nsections; i++) {
-			if (!strcmp(mod->sect_attrs->attrs[i].name, ".text")) {
-				text_addr = mod->sect_attrs->attrs[i].address;
-				search_nm--;
-			} else if (!strcmp(mod->sect_attrs->attrs[i].name,
-					   ".init.text")) {
-				init_addr = mod->sect_attrs->attrs[i].address;
-				search_nm--;
-			}
-			if (!search_nm)
-				break;
-		}
 		sz += snprintf(mbuf + sz, mbufsize - sz, " %s %px %px %d %d %s",
 				mod->name,
-				text_addr,
-				init_addr,
+				mod->core_layout.base,
+				mod->init_layout.base,
 				mod->core_layout.size,
 				mod->init_layout.size,
 				module_flags(mod, buf));

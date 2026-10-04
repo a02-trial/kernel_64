@@ -1248,18 +1248,6 @@ config TOUCHSCREEN_ROHM_BU21023
 	  To compile this driver as a module, choose M here: the
 	  module will be called bu21023_ts.
 
-config TOUCHSCREEN_NT36XXX
-	tristate "Novatek NT36XXX In-Cell I2C touchscreen controller"
-	depends on I2C
-	help
-	  Say Y here if you have a Novatek NT36xxx series In-Cell
-	  touchscreen connected to your system over I2C.
-
-	  If unsure, say N.
-
-	  To compile this driver as a module, choose M here: the
-	  module will be called nt36xxx.
-
 config TOUCHSCREEN_MTK_TOUCH
        string "Touch IC name for Mediatek package"
        help
@@ -1267,10 +1255,10 @@ config TOUCHSCREEN_MTK_TOUCH
 
          To compile this dirver for used touch IC.
 
-source "drivers/input/touchscreen/melfas_mip4/Kconfig"
+source "drivers/input/touchscreen/melfas_mss100_a/Kconfig"
+source "drivers/input/touchscreen/zinitix/zt75xx/Kconfig"
+source "drivers/input/touchscreen/imagis/ist4050/Kconfig"
 source "drivers/input/touchscreen/synaptics/td4150/Kconfig"
 source "drivers/input/touchscreen/ili9881x/Kconfig"
 source "drivers/input/touchscreen/novatek/nt36525/Kconfig"
-source "drivers/input/touchscreen/imagis/ist4050/Kconfig"
-source "drivers/input/touchscreen/zinitix/zt75xx/Kconfig"
 endif

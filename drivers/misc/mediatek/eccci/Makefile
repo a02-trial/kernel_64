@@ -11,13 +11,6 @@
 # See http://www.gnu.org/licenses/gpl-2.0.html for more details.
 #
 
-# mt6893&mt6885 co-platform config
-ifeq (y, $(filter y, $(CONFIG_MACH_MT6893)))
-MTK_PLATFORM := mt6885
-else
-MTK_PLATFORM := $(CONFIG_MTK_PLATFORM)
-endif
-
 ifeq ($(CONFIG_MTK_ECCCI_DRIVER), y)
 
 obj-$(CONFIG_MTK_ECCCI_DRIVER) := ccci.o
@@ -50,7 +43,7 @@ endif
 ccci-$(CONFIG_MTK_SRIL_SUPPORT) += modem_io_device.o
 
 # platform code
-obj-y += $(subst ",,$(MTK_PLATFORM))/
+obj-y += $(subst ",,$(CONFIG_MTK_PLATFORM))/
 
 else
 obj-  := dummy.o # avoid build error

@@ -81,26 +81,6 @@ int adapter_dev_get_status(struct adapter_device *adapter_dev,
 }
 EXPORT_SYMBOL(adapter_dev_get_status);
 
-bool adapter_dev_is_src_usb_communication_capable(struct adapter_device *adapter_dev)
-{
-	if (adapter_dev != NULL && adapter_dev->ops != NULL &&
-	    adapter_dev->ops->is_src_usb_communication_capable)
-		return adapter_dev->ops->is_src_usb_communication_capable(adapter_dev);
-
-	return -ENOTSUPP;
-}
-EXPORT_SYMBOL(adapter_dev_is_src_usb_communication_capable);
-
-bool adapter_dev_is_src_usb_suspend_support(struct adapter_device *adapter_dev)
-{
-	if (adapter_dev != NULL && adapter_dev->ops != NULL &&
-	    adapter_dev->ops->is_src_usb_suspend_support)
-		return adapter_dev->ops->is_src_usb_suspend_support(adapter_dev);
-
-	return -ENOTSUPP;
-}
-EXPORT_SYMBOL(adapter_dev_is_src_usb_suspend_support);
-
 int adapter_dev_get_output(struct adapter_device *adapter_dev, int *mV, int *mA)
 {
 	if (adapter_dev != NULL && adapter_dev->ops != NULL &&
@@ -187,29 +167,26 @@ struct adapter_device *adapter_device_register(const char *name,
 		const struct adapter_ops *ops,
 		const struct adapter_properties *props)
 {
-	struct adapter_device *adapter_dev = NULL;
+	struct adapter_device *adapter_dev;
 	static struct lock_class_key key;
-	struct srcu_notifier_head *head = NULL;
+	struct srcu_notifier_head *head;
 	int rc;
-	char *adapter_name = NULL;
 
 	pr_notice("%s: name=%s\n", __func__, name);
 	adapter_dev = kzalloc(sizeof(*adapter_dev), GFP_KERNEL);
 	if (!adapter_dev)
 		return ERR_PTR(-ENOMEM);
 
-	head = &adapter_dev->evt_nh;
-	srcu_init_notifier_head(head);
-	/* Rename srcu's lock to avoid LockProve warning */
-	lockdep_init_map(&(&head->srcu)->dep_map, name, &key, 0);
 	mutex_init(&adapter_dev->ops_lock);
 	adapter_dev->dev.class = adapter_class;
 	adapter_dev->dev.parent = parent;
 	adapter_dev->dev.release = adapter_device_release;
-	adapter_name = kasprintf(GFP_KERNEL, "%s", name);
-	dev_set_name(&adapter_dev->dev, adapter_name);
+	dev_set_name(&adapter_dev->dev, name);
 	dev_set_drvdata(&adapter_dev->dev, devdata);
-	kfree(adapter_name);
+	head = &adapter_dev->evt_nh;
+	srcu_init_notifier_head(head);
+	/* Rename srcu's lock to avoid LockProve warning */
+	lockdep_init_map(&(&head->srcu)->dep_map, name, &key, 0);
 
 	/* Copy properties */
 	if (props) {
@@ -257,7 +234,7 @@ static int adapter_match_device_by_name(struct device *dev,
 
 struct adapter_device *get_adapter_by_name(const char *name)
 {
-	struct device *dev = NULL;
+	struct device *dev;
 
 	if (!name)
 		return (struct adapter_device *)NULL;

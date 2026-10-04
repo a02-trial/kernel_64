@@ -47,9 +47,8 @@
 #endif
 #include "pmic_auxadc.h"
 #endif /* end of #if PMIC_ACCDET_KERNEL */
-
 #ifdef CONFIG_SND_SOC_SAMSUNG_AUDIO
-#include "../../../../../sound/soc/samsung/jack_accdet_sysfs_cb.h"
+#include "sec_accdet_sysfs_cb.h"
 #endif
 
 /********************grobal variable definitions******************/
@@ -80,7 +79,7 @@
 #define NO_USE_COMPARATOR	1
 #else
 #define ACCDET_SW_MOISTURE_V1	0
-#define NO_USE_COMPARATOR	1
+#define NO_USE_COMPARATOR	0
 #endif
 
 #if ACCDET_SW_MOISTURE_V1
@@ -203,13 +202,13 @@ static DEFINE_MUTEX(accdet_moist_sync_mutex);
 static struct head_dts_data accdet_dts;
 struct pwm_deb_settings *cust_pwm_deb;
 
-#define ACCDET_OPEN_CABLE_TIMER   (1 * HZ)
-static struct timer_list  accdet_open_cable_timer;
-static void check_open_cable_timerhandler(struct timer_list *t);
 #ifdef CONFIG_ACCDET_EINT
 #define ACCDET_MOIST_TIMER   (1 * HZ)
 static struct timer_list  accdet_moist_timer;
 static void check_moist_timerhandler(struct timer_list *t);
+#define ACCDET_OPEN_CABLE_TIMER   (1 * HZ)
+static struct timer_list  accdet_open_cable_timer;
+static void check_open_cable_timerhandler(struct timer_list *t);
 static struct pinctrl *accdet_pinctrl;
 static struct pinctrl_state *pins_eint;
 static struct pinctrl_state *pins_moisteint;
@@ -222,9 +221,7 @@ static u32 moist_irq;
 static u32 pre_eint_state = EINT_PIN_PLUG_OUT;
 static u32 accdet_moist_eint_type = IRQ_TYPE_LEVEL_LOW;
 #endif
-#if ACCDET_SW_MOISTURE_V1
 static int hw_rev = 0xff;
-#endif
 static int moisture_ver = 0xff;
 
 /* accdet FSM State & lock*/
@@ -268,17 +265,14 @@ static int moisture_ext_r = 470000;
 static bool debug_thread_en;
 static bool dump_reg;
 static struct task_struct *thread;
-
 #ifdef CONFIG_SND_SOC_SAMSUNG_AUDIO
-static struct accdet_data accdet_pdata;
+static struct jack_pdata accdet_pdata;
 #endif
 
 static void accdet_init_once(void);
 static inline void accdet_init(void);
 static void send_accdet_status_event(u32 cable_type, u32 status);
-#if defined CONFIG_ACCDET_EINT_IRQ || defined CONFIG_ACCDET_EINT
 static u32 moisture_detect(void);
-#endif
 #if ACCDET_SW_MOISTURE_V1
 static void eint_work_callback(void);
 #endif
@@ -461,91 +455,68 @@ static void dump_register(void)
 #if PMIC_ACCDET_KERNEL
 static void cat_register(char *buf)
 {
-	int i = 0, ret = 0;
+	int i = 0;
 
 #ifdef CONFIG_ACCDET_EINT_IRQ
 #ifdef CONFIG_ACCDET_SUPPORT_EINT0
-	ret = sprintf(accdet_log_buf, "[Accdet EINT0 support][MODE_%d]regs:\n",
+	sprintf(accdet_log_buf, "[Accdet EINT0 support][MODE_%d]regs:\n",
 		accdet_dts.mic_mode);
-	if (ret < 0)
-		pr_notice("sprintf failed\n");
 	strncat(buf, accdet_log_buf, strlen(accdet_log_buf));
 #elif defined CONFIG_ACCDET_SUPPORT_EINT1
-	ret = sprintf(accdet_log_buf, "[Accdet EINT1 support][MODE_%d]regs:\n",
+	sprintf(accdet_log_buf, "[ccdet EINT1 support][MODE_%d]regs:\n",
 		accdet_dts.mic_mode);
-	if (ret < 0)
-		pr_notice("sprintf failed\n");
 	strncat(buf, accdet_log_buf, strlen(accdet_log_buf));
 #elif defined CONFIG_ACCDET_SUPPORT_BI_EINT
-	ret = sprintf(accdet_log_buf, "[Accdet EINT support][MODE_%d] regs:\n",
+	sprintf(accdet_log_buf, "[Accdet BIEINT support][MODE_%d] regs:\n",
 		accdet_dts.mic_mode);
-	if (ret < 0)
-		pr_notice("sprintf failed\n");
 	strncat(buf, accdet_log_buf, strlen(accdet_log_buf));
 #else
 	strncat(buf, "ACCDET_EINT_IRQ:NO EINT configed.Error!!\n", 64);
 #endif
 #elif defined CONFIG_ACCDET_EINT
-	ret = sprintf(accdet_log_buf, "[Accdet AP EINT][MODE_%d] regs:\n",
+	sprintf(accdet_log_buf, "[Accdet AP EINT][MODE_%d] regs:\n",
 		accdet_dts.mic_mode);
-	if (ret < 0)
-		pr_notice("sprintf failed\n");
 	strncat(buf, accdet_log_buf, strlen(accdet_log_buf));
 #else
 	strncat(buf, "ACCDET EINT:No configed.Error!!\n", 64);
 #endif
 
 	for (i = ACCDET_RSV; i <= ACCDET_EINT1_CUR_DEB; i += 2) {
-		ret = sprintf(accdet_log_buf, "ADDR[0x%x]=0x%x\n",
-				i, pmic_read(i));
-		if (ret < 0)
-			pr_notice("sprintf failed\n");
+		sprintf(accdet_log_buf, "ADDR[0x%x]=0x%x\n", i, pmic_read(i));
 		strncat(buf, accdet_log_buf, strlen(accdet_log_buf));
 	}
 
-	ret = sprintf(accdet_log_buf, "[0x%x]=0x%x\n",
+	sprintf(accdet_log_buf, "[0x%x]=0x%x\n",
 		TOP_CKPDN_CON0, pmic_read(TOP_CKPDN_CON0));
-	if (ret < 0)
-		pr_notice("sprintf failed\n");
 	strncat(buf, accdet_log_buf, strlen(accdet_log_buf));
 
-	ret = sprintf(accdet_log_buf, "[0x%x]=0x%x\n",
+	sprintf(accdet_log_buf, "[0x%x]=0x%x\n",
 		AUD_TOP_RST_CON0, pmic_read(AUD_TOP_RST_CON0));
-	if (ret < 0)
-		pr_notice("sprintf failed\n");
 	strncat(buf, accdet_log_buf, strlen(accdet_log_buf));
 
-	ret = sprintf(accdet_log_buf, "[0x%x]=0x%x, [0x%x]=0x%x, [0x%x]=0x%x\n",
+	sprintf(accdet_log_buf, "[0x%x]=0x%x, [0x%x]=0x%x, [0x%x]=0x%x\n",
 		AUD_TOP_INT_CON0, pmic_read(AUD_TOP_INT_CON0),
 		AUD_TOP_INT_MASK_CON0, pmic_read(AUD_TOP_INT_MASK_CON0),
 		AUD_TOP_INT_STATUS0, pmic_read(AUD_TOP_INT_STATUS0));
-	if (ret < 0)
-		pr_notice("sprintf failed\n");
 	strncat(buf, accdet_log_buf, strlen(accdet_log_buf));
 
-	ret = sprintf(accdet_log_buf,
+	sprintf(accdet_log_buf,
 		"[0x%x]=0x%x,[0x%x]=0x%x,[0x%x]=0x%x,[0x%x]=0x%x\n",
 		AUDENC_ANA_CON6, pmic_read(AUDENC_ANA_CON6),
 		AUDENC_ANA_CON9, pmic_read(AUDENC_ANA_CON9),
 		AUDENC_ANA_CON10, pmic_read(AUDENC_ANA_CON10),
 		AUDENC_ANA_CON11, pmic_read(AUDENC_ANA_CON11));
-	if (ret < 0)
-		pr_notice("sprintf failed\n");
 	strncat(buf, accdet_log_buf, strlen(accdet_log_buf));
 
-	ret = sprintf(accdet_log_buf, "[0x%x]=0x%x, [0x%x]=0x%x\n",
+	sprintf(accdet_log_buf, "[0x%x]=0x%x, [0x%x]=0x%x\n",
 		AUXADC_RQST0, pmic_read(AUXADC_RQST0),
 		AUXADC_ACCDET, pmic_read(AUXADC_ACCDET));
-	if (ret < 0)
-		pr_notice("sprintf failed\n");
 	strncat(buf, accdet_log_buf, strlen(accdet_log_buf));
 
-	ret = sprintf(accdet_log_buf,
+	sprintf(accdet_log_buf,
 		"dtsInfo:deb0=0x%x,deb1=0x%x,deb3=0x%x,deb4=0x%x\n",
 		 cust_pwm_deb->debounce0, cust_pwm_deb->debounce1,
 		 cust_pwm_deb->debounce3, cust_pwm_deb->debounce4);
-	if (ret < 0)
-		pr_notice("sprintf failed\n");
 	strncat(buf, accdet_log_buf, strlen(accdet_log_buf));
 }
 
@@ -696,15 +667,12 @@ static ssize_t set_headset_mode_store(struct device_driver *ddri,
 static ssize_t state_show(struct device_driver *ddri, char *buf)
 {
 	char temp_type = (char)cable_type;
-	int ret = 0;
 
 	if (buf == NULL) {
 		pr_notice("[%s] *buf is NULL!\n",  __func__);
 		return -EINVAL;
 	}
-	ret = snprintf(buf, 3, "%d\n", temp_type);
-	if (ret < 0)
-		pr_notice("snprintf failed\n");
+	snprintf(buf, 3, "%d\n", temp_type);
 
 	return strlen(buf);
 }
@@ -815,6 +783,14 @@ static u32 accdet_get_auxadc(int deCount)
 #endif
 }
 
+#ifdef CONFIG_SND_SOC_SAMSUNG_AUDIO
+u32 accdet_get_adc(void)
+{
+	return accdet_get_auxadc(1);
+}
+EXPORT_SYMBOL_GPL(accdet_get_auxadc);
+#endif
+
 static void accdet_get_efuse(void)
 {
 	u32 efuseval = 0;
@@ -879,14 +855,12 @@ static void accdet_get_efuse(void)
 		pr_info("%s internal moisture_vm=%d mv\n", __func__,
 			moisture_vm);
 	} else if (accdet_dts.moisture_use_ext_res == 0x1) {
-		if (moisture_vm == 0x0) {
-			moisture_vm = (2800 + moisture_vdd_offset);
-			moisture_vm = moisture_vm * water_r;
-			moisture_vm = moisture_vm / (water_r + moisture_ext_r);
-			moisture_vm = moisture_vm + (moisture_offset >> 1);
-			pr_info("%s external moisture_vm=%d mv\n", __func__,
-				moisture_vm);
-		}
+		moisture_vm = (2800 + moisture_vdd_offset);
+		moisture_vm = moisture_vm * water_r;
+		moisture_vm = moisture_vm / (water_r + moisture_ext_r);
+		moisture_vm = moisture_vm + (moisture_offset >> 1);
+		pr_info("%s external moisture_vm=%d mv\n", __func__,
+			moisture_vm);
 	}
 
 }
@@ -975,7 +949,7 @@ static void send_key_event(u32 keycode, u32 flag)
 		break;
 	}
 #ifdef CONFIG_SND_SOC_SAMSUNG_AUDIO
-	accdet_pdata.key_state = (flag) ? 1 : 0;
+	accdet_pdata.buttons_pressed = (flag) ? 1 : 0;
 #endif
 }
 
@@ -1009,13 +983,6 @@ static void send_accdet_status_event(u32 cable_type, u32 status)
 		input_sync(accdet_input_dev);
 		pr_info("%s MICROPHONE(4-pole) %s\n", __func__,
 			status ? "PlugIn" : "PlugOut");
-		/* when press key for a long time then plug in
-		 * even recoginized as 4-pole
-		 * disable micbias timer still timeout after 6s
-		 * it check AB=00(because keep to press key) then disable
-		 * micbias, it will cause key no response
-		 */
-		del_timer_sync(&micbias_timer);
 		break;
 	case LINE_OUT_DEVICE:
 		input_report_switch(accdet_input_dev, SW_LINEOUT_INSERT,
@@ -1029,9 +996,9 @@ static void send_accdet_status_event(u32 cable_type, u32 status)
 	}
 #ifdef CONFIG_SND_SOC_SAMSUNG_AUDIO
 	if (status == 0)
-		accdet_pdata.jack_state = NO_DEVICE;
+		accdet_pdata.hph_status = NO_DEVICE;
 	else
-		accdet_pdata.jack_state = cable_type;
+		accdet_pdata.hph_status = cable_type;
 #endif
 }
 #else
@@ -1061,18 +1028,11 @@ static void multi_key_detection(u32 cur_AB)
 	if (cur_AB == ACCDET_STATE_AB_00)
 		cur_key = key_check(cali_voltage);
 
-#ifdef CONFIG_SND_SOC_SAMSUNG_AUDIO
-	if (cur_AB == ACCDET_STATE_AB_00)
-		accdet_pdata.mic_adc = cali_voltage;
-	else 
-		accdet_pdata.mic_adc = 0;
-#endif
-
 	/* delay to fix side effect key when plug-out, when plug-out,seldom
 	 * issued AB=0 and Eint, delay to wait eint been flaged in register.
 	 * or eint handler issued. cur_eint_state == PLUG_OUT
 	 */
-	usleep_range(10000, 12000);
+	mdelay(10);
 
 #ifdef CONFIG_ACCDET_EINT_IRQ
 	irq_bit = !(pmic_read(ACCDET_IRQ_STS) & ACCDET_EINT_IRQ_B2_B3);
@@ -1353,18 +1313,10 @@ static void eint_work_callback(void)
 #elif defined CONFIG_ACCDET_SUPPORT_BI_EINT
 		enable_accdet(ACCDET_EINT_PWM_IDLE_B11_12 | ACCDET_PWM_EN);
 #endif
-#if NO_USE_COMPARATOR
-		msleep(180);/* may be need delay more, relevant to Bias vol. */
-		check_cable_type();
-		if (accdet_status == MIC_BIAS)
-			cali_voltage = accdet_get_auxadc(1);
-		mod_timer(&accdet_open_cable_timer,
-			jiffies + ACCDET_OPEN_CABLE_TIMER);
-#endif
 #else
 		enable_accdet(ACCDET_PWM_EN);
 #if NO_USE_COMPARATOR
-		msleep(180);/* may be need delay more, relevant to Bias vol. */
+		mdelay(180);/* may be need delay more, relevant to Bias vol. */
 		check_cable_type();
 		if (accdet_status == MIC_BIAS)
 			cali_voltage = accdet_get_auxadc(1);
@@ -1391,7 +1343,6 @@ static void eint_work_callback(void)
 	pr_info("accdet %s done !!\n", __func__);
 #endif
 }
-
 void accdet_set_debounce(int state, unsigned int debounce)
 {
 	switch (state) {
@@ -1483,7 +1434,7 @@ static inline void check_cable_type(void)
 				if (!fast_discharge) {
 					pmic_write(ACCDET_HW_MODE_DFF,
 						ACCDET_FAST_DISCAHRGE_REVISE);
-					msleep(20);
+					mdelay(20);
 					pmic_write(ACCDET_HW_MODE_DFF,
 						ACCDET_FAST_DISCAHRGE_EN);
 					fast_discharge = true;
@@ -1643,7 +1594,7 @@ static int pmic_eint_queue_work(int eintID)
 #ifdef CONFIG_ACCDET_SUPPORT_EINT0
 	if (eintID == PMIC_EINT0) {
 		if (cur_eint_state == EINT_PIN_PLUG_IN) {
-			eint_debounce_set(eintID, ACCDET_EINT0_DEB_512);
+			eint_debounce_set(eintID, ACCDET_EINT0_DEB_IN_256);
 			accdet_set_debounce(accdet_state110,
 				cust_pwm_deb->debounce3);
 			cur_eint_state = EINT_PIN_PLUG_OUT;
@@ -1797,8 +1748,10 @@ void accdet_irq_handle(void)
 	irq_status = pmic_read(ACCDET_IRQ_STS);
 
 	if ((irq_status & ACCDET_IRQ_B0) && (eintID == 0)) {
+#ifdef CONFIG_ACCDET_EINT
 		/* delete open cable timer if normal HP in */
 		del_timer_sync(&accdet_open_cable_timer);
+#endif
 		clear_accdet_int();
 		accdet_queue_work();
 		clear_accdet_int_check();
@@ -1862,6 +1815,7 @@ static void accdet_eint_handler(void)
 }
 #endif
 
+#ifdef CONFIG_ACCDET_EINT
 static void check_open_cable_timerhandler(struct timer_list *t)
 {
 	int ret;
@@ -1871,7 +1825,6 @@ static void check_open_cable_timerhandler(struct timer_list *t)
 		pr_info("%s return:%d!\n", __func__, ret);
 }
 
-#ifdef CONFIG_ACCDET_EINT
 static void check_moist_timerhandler(struct timer_list *t)
 {
 	if (cur_eint_state == EINT_PIN_THING_IN)
@@ -2234,10 +2187,7 @@ static int accdet_get_dts_data(void)
 #endif
 #if PMIC_ACCDET_KERNEL
 	int ret;
-	struct device_node *node = NULL;
-#if ACCDET_SW_MOISTURE_V1
-	struct device_node *rootnode = NULL;
-#endif
+	struct device_node *node = NULL, *rootnode = NULL;
 	int pwm_deb[8];
 #ifdef CONFIG_FOUR_KEY_HEADSET
 	int four_key[5];
@@ -2266,7 +2216,6 @@ static int accdet_get_dts_data(void)
 		return -EINVAL;
 	}
 #endif
-#if ACCDET_SW_MOISTURE_V1
 	rootnode = of_find_node_by_path("/");
 	if (IS_ERR_OR_NULL(rootnode)) {
 		pr_notice("root dev node is NULL\n");
@@ -2275,7 +2224,6 @@ static int accdet_get_dts_data(void)
 	ret = of_property_read_u32(rootnode, "dtbo-hw_rev", &hw_rev);
 	if (ret)
 		hw_rev = 0x2;
-#endif
 	node = of_find_matching_node(node, accdet_of_match);
 	if (!node) {
 		pr_notice("%s can't find compatible dts node\n", __func__);
@@ -2317,11 +2265,6 @@ static int accdet_get_dts_data(void)
 		pr_info("accdet get moist plug in threshold fail\n");
 	}
 #endif
-	ret = of_property_read_u32(node, "moisture-vm", &moisture_vm);
-	if (ret) {
-		/* moisture_vm threshold */
-		moisture_vm = 0x0;
-	}
 	of_property_read_u32(node, "accdet-mic-vol", &accdet_dts.mic_vol);
 	of_property_read_u32(node, "accdet-plugout-debounce",
 			&accdet_dts.plugout_deb);
@@ -2502,14 +2445,14 @@ static inline void accdet_eint_high_level_support(void)
 			/* set bit3 to enable default EINT init status */
 			pmic_write(ACCDET_CTRL, reg_val|
 				ACCDET_EINT0_SEQ_INIT_EN_B3);
-			mdelay(1); /* please do not change usleep_range(2000, 3000); */
+			mdelay(2);
 			reg_val = pmic_read(ACCDET_CTRL);
 			reg_val = pmic_read(ACCDET_DEFAULT_STATE_RG);
 			/* set default EINT init status */
 			pmic_write(ACCDET_DEFAULT_STATE_RG,
 				(reg_val|ACCDET_EINT0_IVAL_SEL_B14)&
 				(~ACCDET_EINT0_IVAL_B2_6_10));
-			mdelay(1); /* please do not change usleep_range(2000, 3000); */
+			mdelay(2);
 			reg_val = pmic_read(ACCDET_DEFAULT_STATE_RG);
 			/* clear bit3 to disable default EINT init status */
 			reg_val = pmic_read(ACCDET_CTRL);
@@ -2669,10 +2612,6 @@ static void accdet_init_once(void)
 #endif
 	accdet_eint_high_level_support();
 #endif
-#ifdef CONFIG_ACCDET_EINT_IRQ
-	/* extend plug in debounce time to 512ms, default is 256ms */
-	eint_debounce_set(PMIC_EINT0, ACCDET_EINT0_DEB_512);
-#endif
 	pr_info("%s() done.\n", __func__);
 #if PMIC_ACCDET_DEBUG
 	dump_register();
@@ -2685,10 +2624,10 @@ static inline void accdet_init(void)
 #if PMIC_ACCDET_KERNEL
 	/* set and clear initial bit every eint interrutp */
 	pmic_write(ACCDET_CTRL, pmic_read(ACCDET_CTRL)|ACCDET_SEQ_INIT_EN_B1);
-	mdelay(2); /* please do not change usleep_range(2000, 3000); */
+	mdelay(2);
 	pmic_write(ACCDET_CTRL,
 			pmic_read(ACCDET_CTRL)&(~ACCDET_SEQ_INIT_EN_B1));
-	mdelay(1); /* please do not change usleep_range(1000, 1500); */
+	mdelay(1);
 #endif
 	/* init the debounce time (debounce/32768)sec */
 	accdet_set_debounce(accdet_state000, cust_pwm_deb->debounce0);
@@ -2825,20 +2764,16 @@ int mt_accdet_probe(struct platform_device *dev)
 	accdet_init_timer.expires = jiffies + ACCDET_INIT_WAIT_TIMER;
 #ifdef CONFIG_ACCDET_EINT
 	timer_setup(&accdet_moist_timer, check_moist_timerhandler, 0);
-	accdet_moist_timer.expires = jiffies + ACCDET_MOIST_TIMER;
-#endif
 	timer_setup(&accdet_open_cable_timer,
 			check_open_cable_timerhandler, 0);
+	accdet_moist_timer.expires = jiffies + ACCDET_MOIST_TIMER;
 	accdet_open_cable_timer.expires = jiffies + ACCDET_OPEN_CABLE_TIMER;
+#endif
 	/* the third argument may include TIMER_* flags */
 
 	/* wake lock */
-	accdet_irq_lock = wakeup_source_register(NULL, "accdet_irq_lock");
-	if (!accdet_irq_lock)
-		return -ENOMEM;
-	accdet_timer_lock = wakeup_source_register(NULL, "accdet_timer_lock");
-	if (!accdet_timer_lock)
-		return -ENOMEM;
+	accdet_irq_lock = wakeup_source_register("accdet_irq_lock");
+	accdet_timer_lock = wakeup_source_register("accdet_timer_lock");
 
 	/* Create workqueue */
 	accdet_workqueue = create_singlethread_workqueue("accdet");

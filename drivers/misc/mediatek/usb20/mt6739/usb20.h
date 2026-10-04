@@ -29,7 +29,7 @@ struct mt_usb_phy_data {
 	u32 host;
 };
 
-#define MT_USB_PHY_SET(n, o, s, v, m)	.name = n, .offset = o, .shift = s, .value = v .mask = m
+#define MT_USB_PHY_SET(n, o, s, v, m)	.name=n, .offset=o, .shift=s, .value=v .mask=m
 
 struct mt_usb_work {
 	struct delayed_work dwork;

@@ -75,11 +75,11 @@
 
 #include "audit.h"
 
-// [ SEC_SELINUX_PORTING_QUALCOMM
+// [ SEC_SELINUX_PORTING_COMMON
 #ifdef CONFIG_PROC_AVC
 #include <linux/proc_avc.h>
 #endif
-// ] SEC_SELINUX_PORTING_QUALCOMM
+// ] SEC_SELINUX_PORTING_COMMON
 
 /* No auditing will take place until audit_initialized == AUDIT_INITIALIZED.
  * (Initialization happens after skb_init is called.) */
@@ -91,7 +91,6 @@ static int	audit_initialized;
 #define AUDIT_OFF	0
 #define AUDIT_ON	1
 #define AUDIT_LOCKED	2
-/* Default state when kernel boots without any parameters. */
 // [ SEC_SELINUX_PORTING_COMMON
 u32		audit_enabled = AUDIT_ON;
 u32		audit_ever_enabled = !!AUDIT_ON;
@@ -104,6 +103,7 @@ EXPORT_SYMBOL_GPL(audit_enabled);
 // Samsung Change Value from AUDIT_OFF to AUDIT_ON
 static u32	audit_default = AUDIT_ON;
 // ] SEC_SELINUX_PORTING_COMMON
+
 
 /* If auditing cannot proceed, audit_failure selects what happens. */
 static u32	audit_failure = AUDIT_FAIL_PRINTK;
@@ -514,7 +514,7 @@ static void kauditd_printk_skb(struct sk_buff *skb)
 	struct nlmsghdr *nlh = nlmsg_hdr(skb);
 	char *data = nlmsg_data(nlh);
 
-// [ SEC_SELINUX_PORTING_QUALCOMM
+// [ SEC_SELINUX_PORTING_COMMON
 #ifdef CONFIG_PROC_AVC
 	if (nlh->nlmsg_type != AUDIT_EOE && nlh->nlmsg_type != AUDIT_NETFILTER_CFG)
 		sec_avc_log("%s\n", data);
@@ -522,7 +522,7 @@ static void kauditd_printk_skb(struct sk_buff *skb)
 	if (nlh->nlmsg_type != AUDIT_EOE && printk_ratelimit())
 		pr_notice("type=%d %s\n", nlh->nlmsg_type, data);
 #endif
-// ] SEC_SELINUX_PORTING_QUALCOMM
+// ] SEC_SELINUX_PORTING_COMMON
 }
 
 /**
@@ -741,7 +741,7 @@ static int kauditd_send_queue(struct sock *sk, u32 portid,
 				/* no - requeue to preserve ordering */
 				skb_queue_head(queue, skb);
 		} else {
-// [ SEC_SELINUX_PORTING_QUALCOMM
+// [ SEC_SELINUX_PORTING_COMMON
 #ifdef CONFIG_PROC_AVC
 			struct nlmsghdr *nlh = nlmsg_hdr(skb);
 			char *data = nlmsg_data(nlh);
@@ -749,7 +749,7 @@ static int kauditd_send_queue(struct sock *sk, u32 portid,
 			if (nlh->nlmsg_type != AUDIT_EOE && nlh->nlmsg_type != AUDIT_NETFILTER_CFG)
 				sec_avc_log("%s\n", data);
 #endif
-// ] SEC_SELINUX_PORTING_QUALCOMM
+// ] SEC_SELINUX_PORTING_COMMON
 			/* it worked - drop the extra reference and continue */
 			consume_skb(skb);
 			failed = 0;
@@ -881,7 +881,8 @@ main_queue:
 	return 0;
 }
 
-#ifdef CONFIG_MTK_SELINUX_AEE_WARNING
+#if defined(CONFIG_MTK_SELINUX_AEE_WARNING) &&\
+	defined(MTK_SELINUX_WARNING_ENABLE)
 /*
  * return skb field of audit buffer
  */
@@ -894,7 +895,7 @@ struct sk_buff *audit_get_skb(struct audit_buffer *ab)
 }
 #endif
 
-int audit_send_list_thread(void *_dest)
+int audit_send_list(void *_dest)
 {
 	struct audit_netlink_list *dest = _dest;
 	struct sk_buff *skb;
@@ -938,30 +939,19 @@ out_kfree_skb:
 	return NULL;
 }
 
-static void audit_free_reply(struct audit_reply *reply)
-{
-	if (!reply)
-		return;
-
-	if (reply->skb)
-		kfree_skb(reply->skb);
-	if (reply->net)
-		put_net(reply->net);
-	kfree(reply);
-}
-
 static int audit_send_reply_thread(void *arg)
 {
 	struct audit_reply *reply = (struct audit_reply *)arg;
+	struct sock *sk = audit_get_sk(reply->net);
 
 	mutex_lock(&audit_cmd_mutex);
 	mutex_unlock(&audit_cmd_mutex);
 
 	/* Ignore failure. It'll only happen if the sender goes away,
 	   because our timeout is set to infinite. */
-	netlink_unicast(audit_get_sk(reply->net), reply->skb, reply->portid, 0);
-	reply->skb = NULL;
-	audit_free_reply(reply);
+	netlink_unicast(sk, reply->skb, reply->portid, 0);
+	put_net(reply->net);
+	kfree(reply);
 	return 0;
 }
 
@@ -975,32 +965,35 @@ static int audit_send_reply_thread(void *arg)
  * @payload: payload data
  * @size: payload size
  *
- * Allocates a skb, builds the netlink message, and sends it to the port id.
+ * Allocates an skb, builds the netlink message, and sends it to the port id.
+ * No failure notifications.
  */
 static void audit_send_reply(struct sk_buff *request_skb, int seq, int type, int done,
 			     int multi, const void *payload, int size)
 {
+	struct net *net = sock_net(NETLINK_CB(request_skb).sk);
+	struct sk_buff *skb;
 	struct task_struct *tsk;
-	struct audit_reply *reply;
+	struct audit_reply *reply = kmalloc(sizeof(struct audit_reply),
+					    GFP_KERNEL);
 
-	reply = kzalloc(sizeof(*reply), GFP_KERNEL);
 	if (!reply)
 		return;
 
-	reply->skb = audit_make_reply(seq, type, done, multi, payload, size);
-	if (!reply->skb)
-		goto err;
-	reply->net = get_net(sock_net(NETLINK_CB(request_skb).sk));
+	skb = audit_make_reply(seq, type, done, multi, payload, size);
+	if (!skb)
+		goto out;
+
+	reply->net = get_net(net);
 	reply->portid = NETLINK_CB(request_skb).portid;
+	reply->skb = skb;
 
 	tsk = kthread_run(audit_send_reply_thread, reply, "audit_send_reply");
-	if (IS_ERR(tsk))
-		goto err;
-
-	return;
-
-err:
-	audit_free_reply(reply);
+	if (!IS_ERR(tsk))
+		return;
+	kfree_skb(skb);
+out:
+	kfree(reply);
 }
 
 /*
@@ -1116,11 +1109,13 @@ static void audit_log_feature_change(int which, u32 old_feature, u32 new_feature
 	audit_log_end(ab);
 }
 
-static int audit_set_feature(struct audit_features *uaf)
+static int audit_set_feature(struct sk_buff *skb)
 {
+	struct audit_features *uaf;
 	int i;
 
 	BUILD_BUG_ON(AUDIT_LAST_FEATURE + 1 > ARRAY_SIZE(audit_feature_names));
+	uaf = nlmsg_data(nlmsg_hdr(skb));
 
 	/* if there is ever a version 2 we should handle that here */
 
@@ -1188,7 +1183,6 @@ static int audit_receive_msg(struct sk_buff *skb, struct nlmsghdr *nlh)
 {
 	u32			seq;
 	void			*data;
-	int			data_len;
 	int			err;
 	struct audit_buffer	*ab;
 	u16			msg_type = nlh->nlmsg_type;
@@ -1202,7 +1196,6 @@ static int audit_receive_msg(struct sk_buff *skb, struct nlmsghdr *nlh)
 
 	seq  = nlh->nlmsg_seq;
 	data = nlmsg_data(nlh);
-	data_len = nlmsg_len(nlh);
 
 	switch (msg_type) {
 	case AUDIT_GET: {
@@ -1226,7 +1219,7 @@ static int audit_receive_msg(struct sk_buff *skb, struct nlmsghdr *nlh)
 		struct audit_status	s;
 		memset(&s, 0, sizeof(s));
 		/* guard against past and future API changes */
-		memcpy(&s, data, min_t(size_t, sizeof(s), data_len));
+		memcpy(&s, data, min_t(size_t, sizeof(s), nlmsg_len(nlh)));
 		if (s.mask & AUDIT_STATUS_ENABLED) {
 			err = audit_set_enabled(s.enabled);
 			if (err < 0)
@@ -1330,9 +1323,7 @@ static int audit_receive_msg(struct sk_buff *skb, struct nlmsghdr *nlh)
 			return err;
 		break;
 	case AUDIT_SET_FEATURE:
-		if (data_len < sizeof(struct audit_features))
-			return -EINVAL;
-		err = audit_set_feature(data);
+		err = audit_set_feature(skb);
 		if (err)
 			return err;
 		break;
@@ -1341,14 +1332,9 @@ static int audit_receive_msg(struct sk_buff *skb, struct nlmsghdr *nlh)
 	case AUDIT_FIRST_USER_MSG2 ... AUDIT_LAST_USER_MSG2:
 		if (!audit_enabled && msg_type != AUDIT_USER_AVC)
 			return 0;
-		/* exit early if there isn't at least one character to print */
-		if (data_len < 2)
-			return -EINVAL;
 
 		err = audit_filter(msg_type, AUDIT_FILTER_USER);
 		if (err == 1) { /* match or error */
-			char *str = data;
-
 			err = 0;
 			if (msg_type == AUDIT_USER_TTY) {
 				err = tty_audit_push();
@@ -1356,24 +1342,26 @@ static int audit_receive_msg(struct sk_buff *skb, struct nlmsghdr *nlh)
 					break;
 			}
 			audit_log_common_recv_msg(&ab, msg_type);
-			if (msg_type != AUDIT_USER_TTY) {
-				/* ensure NULL termination */
-				str[data_len - 1] = '\0';
+			if (msg_type != AUDIT_USER_TTY)
 				audit_log_format(ab, " msg='%.*s'",
 						 AUDIT_MESSAGE_TEXT_MAX,
-						 str);
-			} else {
+						 (char *)data);
+			else {
+				int size;
+
 				audit_log_format(ab, " data=");
-				if (data_len > 0 && str[data_len - 1] == '\0')
-					data_len--;
-				audit_log_n_untrustedstring(ab, str, data_len);
+				size = nlmsg_len(nlh);
+				if (size > 0 &&
+				    ((unsigned char *)data)[size - 1] == '\0')
+					size--;
+				audit_log_n_untrustedstring(ab, data, size);
 			}
 			audit_log_end(ab);
 		}
 		break;
 	case AUDIT_ADD_RULE:
 	case AUDIT_DEL_RULE:
-		if (data_len < sizeof(struct audit_rule_data))
+		if (nlmsg_len(nlh) < sizeof(struct audit_rule_data))
 			return -EINVAL;
 		if (audit_enabled == AUDIT_LOCKED) {
 			audit_log_common_recv_msg(&ab, AUDIT_CONFIG_CHANGE);
@@ -1381,7 +1369,7 @@ static int audit_receive_msg(struct sk_buff *skb, struct nlmsghdr *nlh)
 			audit_log_end(ab);
 			return -EPERM;
 		}
-		err = audit_rule_change(msg_type, seq, data, data_len);
+		err = audit_rule_change(msg_type, seq, data, nlmsg_len(nlh));
 		break;
 	case AUDIT_LIST_RULES:
 		err = audit_list_rules_send(skb, seq);
@@ -1395,7 +1383,7 @@ static int audit_receive_msg(struct sk_buff *skb, struct nlmsghdr *nlh)
 	case AUDIT_MAKE_EQUIV: {
 		void *bufp = data;
 		u32 sizes[2];
-		size_t msglen = data_len;
+		size_t msglen = nlmsg_len(nlh);
 		char *old, *new;
 
 		err = -EINVAL;
@@ -1471,7 +1459,7 @@ static int audit_receive_msg(struct sk_buff *skb, struct nlmsghdr *nlh)
 
 		memset(&s, 0, sizeof(s));
 		/* guard against past and future API changes */
-		memcpy(&s, data, min_t(size_t, sizeof(s), data_len));
+		memcpy(&s, data, min_t(size_t, sizeof(s), nlmsg_len(nlh)));
 		/* check if new data is valid */
 		if ((s.enabled != 0 && s.enabled != 1) ||
 		    (s.log_passwd != 0 && s.log_passwd != 1))

@@ -44,6 +44,10 @@
 
 #define IPC_L4C_MSG_ID_LEN   (0x40)
 
+/* offset in whole share memory region */
+#define CCCI_SMEM_OFFSET_EXCEPTION 0
+#define CCCI_SMEM_OFFSET_EPON_UMOLY (CCCI_SMEM_OFFSET_EXCEPTION+0x1830)
+
 /* feature option, always try using platform info first! */
 /*#define ENABLE_EMI_PROTECTION*/
 #define ENABLE_32K_CLK_LESS

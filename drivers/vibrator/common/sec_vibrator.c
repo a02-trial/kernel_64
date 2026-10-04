@@ -30,12 +30,6 @@
 #include <linux/ssp_motorcallback.h>
 #endif
 #endif
-
-static const int  kMaxBufSize = 7;
-static const int kMaxHapticStepSize = 7;
-const char *str_delimiter = ",";
-const char *str_newline = "\n";
-
 static struct sec_vibrator_drvdata *g_ddata;
 
 #if IS_ENABLED(CONFIG_SEC_VIB_NOTIFIER)
@@ -55,7 +49,6 @@ int sec_vib_notifier_register(struct notifier_block *n)
 
 	return ret;
 }
-EXPORT_SYMBOL_GPL(sec_vib_notifier_register);
 
 int sec_vib_notifier_unregister(struct notifier_block *nb)
 {
@@ -69,9 +62,8 @@ int sec_vib_notifier_unregister(struct notifier_block *nb)
 
 	return ret;
 }
-EXPORT_SYMBOL_GPL(sec_vib_notifier_unregister);
 
-static int sec_vib_notifier_notify(int en, struct sec_vibrator_drvdata *ddata)
+int sec_vib_notifier_notify(int en, struct sec_vibrator_drvdata *ddata)
 {
 	int ret = 0;
 
@@ -152,6 +144,26 @@ static int sec_vibrator_set_intensity(struct sec_vibrator_drvdata *ddata, int in
 	}
 
 	ret = ddata->vib_ops->set_intensity(ddata->dev, intensity);
+
+	if (ret)
+		pr_err("%s error(%d)\n", __func__, ret);
+
+	return ret;
+}
+
+static int sec_vibrator_set_force_touch_intensity(struct sec_vibrator_drvdata *ddata, int intensity)
+{
+	int ret = 0;
+
+	if (!ddata->vib_ops->set_force_touch_intensity)
+		return -ENOSYS;
+
+	if ((intensity < -(MAX_INTENSITY)) || (intensity > MAX_INTENSITY)) {
+		pr_err("%s out of range(%d)\n", __func__, intensity);
+		return -EINVAL;
+	}
+
+	ret = ddata->vib_ops->set_force_touch_intensity(ddata->dev, intensity);
 
 	if (ret)
 		pr_err("%s error(%d)\n", __func__, ret);
@@ -618,143 +630,6 @@ static ssize_t num_waves_show(struct device *dev, struct device_attribute *attr,
 	return snprintf(buf, PAGE_SIZE, "%d\n", ret);
 }
 
-static ssize_t array2str(char *buf, int *arr_intensity, int size)
-{
-	int i, ret = 0;
-	char *str_buf = NULL;
-	struct sec_vibrator_drvdata *ddata = g_ddata;
-
-	if (!arr_intensity || ((size < 1) && (size > kMaxHapticStepSize)))
-		return -EINVAL;
-
-	str_buf = kzalloc(kMaxBufSize, GFP_KERNEL);
-	if (!str_buf)
-		return -ENOMEM;
-
-	mutex_lock(&ddata->vib_mutex);
-	for (i = 0; i < size; i++) {
-		if (i < (size - 1))
-			snprintf(str_buf, kMaxBufSize, "%u,", arr_intensity[i]);
-		else
-			snprintf(str_buf, (kMaxBufSize - 1), "%u", arr_intensity[i]);
-		strncat(buf, str_buf, strlen(str_buf));
-	}
-	strncat(buf, str_newline, strlen(str_newline));
-	ret = strlen(buf);
-	mutex_unlock(&ddata->vib_mutex);
-
-	kfree(str_buf);
-	return ret;
-}
-
-static ssize_t intensities_show(struct device *dev,
-			struct device_attribute *attr, char *buf)
-{
-	struct sec_vibrator_drvdata *ddata = g_ddata;
-	int *arr_intensity = NULL;
-	int ret = 0, step_size = 0;
-
-	pr_info("%s\n", __func__);
-
-	if (!ddata->vib_ops->get_step_size || !ddata->vib_ops->get_intensities)
-		return -EOPNOTSUPP;
-
-	ret = ddata->vib_ops->get_step_size(ddata->dev, &step_size);
-	if (ret)
-		return -EINVAL;
-
-	arr_intensity = kmalloc_array(kMaxHapticStepSize, sizeof(int), GFP_KERNEL);
-	if (!arr_intensity)
-		return -ENOMEM;
-
-	if ((step_size > 0) && (step_size < kMaxHapticStepSize)) {
-		ret = ddata->vib_ops->get_intensities(ddata->dev, arr_intensity);
-		if (ret) {
-			ret = -EINVAL;
-			goto err_arr_alloc;
-		}
-		ret = array2str(buf, arr_intensity, step_size);
-	} else {
-		ret = -EINVAL;
-	}
-
-err_arr_alloc:
-	kfree(arr_intensity);
-	return ret;
-}
-
-static ssize_t haptic_intensities_show(struct device *dev,
-			struct device_attribute *attr, char *buf)
-{
-	struct sec_vibrator_drvdata *ddata = g_ddata;
-	int *arr_intensity = NULL;
-	int ret = 0, step_size = 0;
-
-	pr_info("%s\n", __func__);
-
-	if (!ddata->vib_ops->get_step_size || !ddata->vib_ops->get_haptic_intensities)
-		return -EOPNOTSUPP;
-
-	ret = ddata->vib_ops->get_step_size(ddata->dev, &step_size);
-	if (ret)
-		return -EINVAL;
-
-	arr_intensity = kmalloc_array(kMaxHapticStepSize, sizeof(int), GFP_KERNEL);
-	if (!arr_intensity)
-		return -ENOMEM;
-
-	if ((step_size > 0) && (step_size < kMaxHapticStepSize)) {
-		ret = ddata->vib_ops->get_haptic_intensities(ddata->dev, arr_intensity);
-		if (ret) {
-			ret = -EINVAL;
-			goto err_arr_alloc;
-		}
-		ret = array2str(buf, arr_intensity, step_size);
-	} else {
-		ret = -EINVAL;
-	}
-
-err_arr_alloc:
-	kfree(arr_intensity);
-	return ret;
-}
-
-static ssize_t haptic_durations_show(struct device *dev,
-			struct device_attribute *attr, char *buf)
-{
-	struct sec_vibrator_drvdata *ddata = g_ddata;
-	int *arr_duration = NULL;
-	int ret = 0, step_size = 0;
-
-	pr_info("%s\n", __func__);
-
-	if (!ddata->vib_ops->get_step_size || !ddata->vib_ops->get_haptic_durations)
-		return -EOPNOTSUPP;
-
-	ret = ddata->vib_ops->get_step_size(ddata->dev, &step_size);
-	if (ret)
-		return -EINVAL;
-
-	arr_duration = kmalloc_array(kMaxHapticStepSize, sizeof(int), GFP_KERNEL);
-	if (!arr_duration)
-		return -ENOMEM;
-
-	if ((step_size > 0) && (step_size < kMaxHapticStepSize)) {
-		ret = ddata->vib_ops->get_haptic_durations(ddata->dev, arr_duration);
-		if (ret) {
-			ret = -EINVAL;
-			goto err_arr_alloc;
-		}
-		ret = array2str(buf, arr_duration, step_size);
-	} else {
-		ret = -EINVAL;
-	}
-
-err_arr_alloc:
-	kfree(arr_duration);
-	return ret;
-}
-
 static DEVICE_ATTR_RW(haptic_engine);
 static DEVICE_ATTR_RW(multi_freq);
 static DEVICE_ATTR_RW(intensity);
@@ -764,9 +639,6 @@ static DEVICE_ATTR_RW(cp_trigger_queue);
 static DEVICE_ATTR_RW(enable);
 static DEVICE_ATTR_RO(motor_type);
 static DEVICE_ATTR_RO(num_waves);
-static DEVICE_ATTR_RO(intensities);
-static DEVICE_ATTR_RO(haptic_intensities);
-static DEVICE_ATTR_RO(haptic_durations);
 
 static struct attribute *sec_vibrator_attributes[] = {
 	&dev_attr_enable.attr,
@@ -1014,94 +886,14 @@ int sec_vibrator_register(struct sec_vibrator_drvdata *ddata)
 #endif
 	}
 
-	if (ddata->vib_ops->get_calibration && ddata->vib_ops->get_calibration(ddata->dev)) {
-		if (ddata->vib_ops->get_intensities) {
-			ret = sysfs_create_file(&ddata->to_dev->kobj, &dev_attr_intensities.attr);
-			if (ret) {
-				ret = -ENODEV;
-				pr_err("Failed to create intensities %d\n", ret);
-				goto err_cal1;
-			}
-#if defined(CONFIG_SEC_VIBRATOR)
-			ret = sysfs_create_file(&ddata->cdev.dev->kobj, &dev_attr_intensities.attr);
-			if (ret) {
-				ret = -ENODEV;
-				pr_err("Failed to create led intensities %d\n", ret);
-				goto err_cal1;
-			}
-#endif
-		}
-
-		if (ddata->vib_ops->get_haptic_intensities) {
-			ret = sysfs_create_file(&ddata->to_dev->kobj, &dev_attr_haptic_intensities.attr);
-			if (ret) {
-				ret = -ENODEV;
-				pr_err("Failed to create haptic_intensities %d\n", ret);
-				goto err_cal2;
-			}
-#if defined(CONFIG_SEC_VIBRATOR)
-			ret = sysfs_create_file(&ddata->cdev.dev->kobj, &dev_attr_haptic_intensities.attr);
-			if (ret) {
-				ret = -ENODEV;
-				pr_err("Failed to create led haptic_intensities %d\n", ret);
-				goto err_cal2;
-			}
-#endif
-		}
-
-		if (ddata->vib_ops->get_haptic_durations) {
-			ret = sysfs_create_file(&ddata->to_dev->kobj, &dev_attr_haptic_durations.attr);
-			if (ret) {
-				ret = -ENODEV;
-				pr_err("Failed to create haptic_intensities %d\n", ret);
-				goto err_cal3;
-			}
-#if defined(CONFIG_SEC_VIBRATOR)
-			ret = sysfs_create_file(&ddata->cdev.dev->kobj, &dev_attr_haptic_durations.attr);
-			if (ret) {
-				ret = -ENODEV;
-				pr_err("Failed to create led haptic_intensities %d\n", ret);
-				goto err_cal3;
-			}
-#endif
-		}
-	}
-
 	pr_info("%s done\n", __func__);
 
 	return ret;
 
-err_cal3:
-	if (ddata->vib_ops->get_calibration && ddata->vib_ops->get_calibration(ddata->dev)) {
-		if (ddata->vib_ops->get_haptic_intensities) {
-			sysfs_remove_file(&ddata->to_dev->kobj, &dev_attr_haptic_intensities.attr);
-#if defined(CONFIG_SEC_VIBRATOR)
-			sysfs_remove_file(&ddata->cdev.dev->kobj, &dev_attr_haptic_intensities.attr);
-#endif
-		}
-	}
-err_cal2:
-	if (ddata->vib_ops->get_calibration && ddata->vib_ops->get_calibration(ddata->dev)) {
-		if (ddata->vib_ops->get_intensities) {
-			sysfs_remove_file(&ddata->cdev.dev->kobj, &dev_attr_intensities.attr);
-#if defined(CONFIG_SEC_VIBRATOR)
-			sysfs_remove_file(&ddata->to_dev->kobj, &dev_attr_intensities.attr);
-#endif
-		}
-	}
-err_cal1:
-	if (ddata->vib_ops->set_cp_trigger_index) {
-		sysfs_remove_group(&ddata->to_dev->kobj, &cp_trigger_attr_group);
-#if defined(CONFIG_SEC_VIBRATOR)
-		sysfs_remove_group(&ddata->cdev.dev->kobj, &cp_trigger_attr_group);
-#endif
-	}
 err_sysfs5:
 	if (ddata->vib_ops->set_frequency) {
 		sysfs_remove_group(&ddata->to_dev->kobj, &multi_freq_attr_group);
-#if defined(CONFIG_SEC_VIBRATOR)
 		sysfs_remove_group(&ddata->cdev.dev->kobj, &multi_freq_attr_group);
-#endif
 	}
 err_sysfs4:
 	if (ddata->vib_ops->set_force_touch_intensity) {
@@ -1169,6 +961,62 @@ int sec_vibrator_unregister(struct sec_vibrator_drvdata *ddata)
 	return 0;
 }
 EXPORT_SYMBOL_GPL(sec_vibrator_unregister);
+
+extern int haptic_homekey_press(void)
+{
+	struct sec_vibrator_drvdata *ddata = g_ddata;
+	struct hrtimer *timer;
+
+	if (ddata == NULL)
+		return -ENODEV;
+	if (!ddata->vib_ops->set_force_touch_intensity)
+		return -ENOSYS;
+
+	timer = &ddata->timer;
+
+	mutex_lock(&ddata->vib_mutex);
+	ddata->timeout = HOMEKEY_DURATION;
+	sec_vibrator_set_overdrive(ddata, true);
+	sec_vibrator_set_frequency(ddata, FREQ_PRESS);
+	sec_vibrator_set_force_touch_intensity(ddata, ddata->force_touch_intensity);
+	sec_vibrator_set_enable(ddata, true);
+
+	pr_info("%s freq:%d, intensity:%d, time:%d\n",
+		__func__, FREQ_PRESS, ddata->force_touch_intensity, ddata->timeout);
+	mutex_unlock(&ddata->vib_mutex);
+
+	hrtimer_start(timer, ns_to_ktime((u64)ddata->timeout * NSEC_PER_MSEC), HRTIMER_MODE_REL);
+
+	return 0;
+}
+
+extern int haptic_homekey_release(void)
+{
+	struct sec_vibrator_drvdata *ddata = g_ddata;
+	struct hrtimer *timer;
+
+	if (ddata == NULL)
+		return -ENODEV;
+	if (!ddata->vib_ops->set_force_touch_intensity)
+		return -ENOSYS;
+
+	timer = &ddata->timer;
+
+	mutex_lock(&ddata->vib_mutex);
+	ddata->timeout = HOMEKEY_DURATION;
+	sec_vibrator_set_overdrive(ddata, true);
+	sec_vibrator_set_frequency(ddata, FREQ_RELEASE);
+	sec_vibrator_set_force_touch_intensity(ddata, ddata->force_touch_intensity);
+	sec_vibrator_set_enable(ddata, true);
+
+	pr_info("%s freq:%d, intensity:%d, time:%d\n",
+		__func__, FREQ_RELEASE, ddata->force_touch_intensity, ddata->timeout);
+	mutex_unlock(&ddata->vib_mutex);
+
+	hrtimer_start(timer, ns_to_ktime((u64)ddata->timeout * NSEC_PER_MSEC), HRTIMER_MODE_REL);
+
+	return 0;
+}
 
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("sec vibrator driver");

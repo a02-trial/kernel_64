@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (C) 2011 Samsung Electronics, Co. Ltd
  *
  * This program is free software; you can redistribute it and/or modify
@@ -21,7 +21,7 @@
 
 #define IMGSENSOR_LATEST_ROM_VERSION_M 'M'
 #define IMGSENSOR_CAL_RETRY_CNT (2)
-#define ENABLE_CAM_CAL_DUMP 1
+#define ENABLE_CAM_CAL_DUMP 0
 #define IMGSENSOR_CAL_SDCARD_PATH "/data/vendor/camera/dump/"
 
 #define IMGSENSOR_HEADER_VER_SIZE 11
@@ -146,8 +146,6 @@ struct imgsensor_cam_info {
 	unsigned int dual_open;
 	bool includes_sub;
 	unsigned int sub_sensor_id;
-	unsigned int afcal_type;
-	unsigned int use_adaptive_mipi;
 };
 
 struct imgsensor_rom_info {
@@ -195,10 +193,6 @@ struct imgsensor_rom_info {
 	u32 ap_pdaf_end_addr;
 	char ap_pdaf_ver[IMGSENSOR_AP_PDAF_VER_SIZE + 1];
 
-	u32 ois_section_crc_addr;
-	u32 ois_start_addr;
-	u32 ois_end_addr;
-
 	unsigned long fw_size;
 	unsigned long setfile_size;
 	u8 sensor_version;
@@ -243,15 +237,12 @@ void imgsensor_get_common_cam_info(struct imgsensor_common_cam_info **caminfo);
 enum sensor_position map_position(enum IMGSENSOR_SENSOR_IDX img_position);
 void update_curr_sensor_pos(int sensorId);
 void update_mipi_sensor_err_cnt(void);
-int imgsensor_sysfs_update(unsigned char* pRomData, unsigned int dualDeviceId, unsigned int sensorId, unsigned int offset, unsigned int length, int i4RetValue);
+int imgsensor_sysfs_update(unsigned char *pRomData, unsigned int dualDeviceId, unsigned int sensorId, unsigned int offset, unsigned int length, int i4RetValue);
 int imgsensor_sys_get_cal_size_by_dual_device_id(unsigned int dualDeviceId, unsigned int sensorId);
 const struct imgsensor_vendor_rom_addr *imgsensor_sys_get_rom_addr_by_id(
 	unsigned int dualDeviceId, unsigned int sensorId);
 int imgsensor_get_cal_size_by_sensor_idx(int sensor_idx);
 int imgsensor_get_cal_buf_by_sensor_idx(int sensor_idx, char **buf);
-//return sac value for AF
-bool imgsensor_get_sac_value_by_sensor_idx(int sensor_idx, u8 *ac_mode, u8 *ac_time);
-//return cal_addr by command: ois, crosstalk(for remosaic)
-const struct rom_cal_addr *imgsensor_get_cal_addr_by_sensor_idx(int sensor_idx, enum imgsensor_cal_command command);
-bool imgsensor_get_adaptive_mipi_status(int position);
+int imgsensor_sys_get_cal_size(unsigned int remapped_device_id, unsigned int sensorId);
+int imgsensor_sys_get_cal_size_by_device_id(unsigned int deviceIdx, unsigned int sensorId);
 #endif /* _IMGSENSOR_SYSFS_H_ */

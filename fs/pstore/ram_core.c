@@ -288,7 +288,7 @@ static int notrace persistent_ram_update_user(struct persistent_ram_zone *prz,
 		-EFAULT : 0;
 
 #ifdef CONFIG_SEC_LOG_HOOK_PMSG		
-	sec_log_hook_pmsg(buffer->data + start, count);
+		sec_log_hook_pmsg(buffer->data + start, count);
 #endif			
 	persistent_ram_update_ecc(prz, start, count);
 	return ret;

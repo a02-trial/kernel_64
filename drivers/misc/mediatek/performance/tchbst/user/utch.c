@@ -21,7 +21,7 @@
 #include "fstb.h"
 #include "mtk_perfmgr_internal.h"
 
-static void notify_touch_up_timeout(struct work_struct *work);
+static void notify_touch_up_timeout(void);
 static DECLARE_WORK(mt_touch_timeout_work, (void *) notify_touch_up_timeout);
 
 static struct workqueue_struct *wq;
@@ -33,23 +33,16 @@ static int  touch_boost_value;
 static int touch_boost_opp; /* boost freq of touch boost */
 static struct ppm_limit_data *target_freq, *reset_freq;
 static int touch_boost_duration;
+static int prev_boost_pid;
 static long long active_time;
-static int time_to_last_touch;
-static int deboost_when_render;
 static int usrtch_debug;
 static int touch_event;/*touch down:1 */
-static ktime_t last_touch_time;
 
 void switch_usrtch(int enable)
 {
 	mutex_lock(&notify_lock);
 	usrtch_dbg = !enable;
 	mutex_unlock(&notify_lock);
-}
-
-void switch_eas_boost(int boost_value)
-{
-	touch_boost_value = boost_value;
 }
 
 void switch_init_opp(int boost_opp)
@@ -66,20 +59,9 @@ void switch_init_duration(int duration)
 {
 	touch_boost_duration = duration;
 }
-
 void switch_active_time(int duration)
 {
 	active_time = duration;
-}
-
-void switch_time_to_last_touch(int duration)
-{
-	time_to_last_touch = duration;
-}
-
-void switch_deboost_when_render(int enable)
-{
-	deboost_when_render = !!enable;
 }
 
 /*--------------------TIMER------------------------*/
@@ -109,68 +91,51 @@ static enum hrtimer_restart mt_touch_timeout(struct hrtimer *timer)
 }
 
 /*--------------------FRAME HINT OP------------------------*/
-int notify_touch(int action)
+static int notify_touch(int action)
 {
 	int ret = 0;
 	int isact = 0;
-	ktime_t now, delta;
+	/* lock is mandatory*/
+	WARN_ON(!mutex_is_locked(&notify_lock));
+	isact = is_fstb_active(active_time);
 
-	if (!deboost_when_render && action == 3)
+	prev_boost_pid = current->pid;
+	fpsgo_systrace_c_fbt(prev_boost_pid, isact, "isact");
+
+	if (is_fstb_active(active_time) || usrtch_dbg)
 		return ret;
 
-	if (action != 3) {
-		now = ktime_get();
-		delta = ktime_sub(now, last_touch_time);
-		last_touch_time = now;
-
-		/* lock is mandatory*/
-		WARN_ON(!mutex_is_locked(&notify_lock));
-		isact = is_fstb_active(active_time);
-
-		perfmgr_trace_count(isact, "isact");
-
-		if ((isact && ktime_to_ms(delta) < time_to_last_touch) ||
-				usrtch_dbg)
-			return ret;
-	}
-
 	/*action 1: touch down 2: touch up*/
-	/* -> 3: fpsgo active*/
 	if (action == 1) {
 		disable_touch_boost_timer();
 		enable_touch_boost_timer();
 
 		/* boost */
-		update_eas_uclamp_min(EAS_UCLAMP_KIR_TOUCH,
+		update_eas_boost_value(EAS_KIR_TOUCH,
 				CGROUP_TA, touch_boost_value);
 		update_userlimit_cpu_freq(CPU_KIR_TOUCH,
 				perfmgr_clusters, target_freq);
 		if (usrtch_debug)
 			pr_debug("touch down\n");
-		perfmgr_trace_count(1, "touch");
+		fpsgo_systrace_c_fbt(prev_boost_pid, 1, "touch");
 		touch_event = 1;
-	} else if (touch_event == 1 && action == 3) {
-		disable_touch_boost_timer();
-		update_eas_uclamp_min(EAS_UCLAMP_KIR_TOUCH, CGROUP_TA, 0);
-		update_userlimit_cpu_freq(CPU_KIR_TOUCH,
-			perfmgr_clusters, reset_freq);
-		perfmgr_trace_count(3, "touch");
-		touch_event = 2;
-		if (usrtch_debug)
-			pr_debug("touch timeout\n");
 	}
+
+
 
 	return ret;
 }
-
-
-static void notify_touch_up_timeout(struct work_struct *work)
+void switch_init_boost(int boost_value)
+{
+	touch_boost_value = boost_value;
+}
+static void notify_touch_up_timeout(void)
 {
 	mutex_lock(&notify_lock);
 
-	update_eas_uclamp_min(EAS_UCLAMP_KIR_TOUCH, CGROUP_TA, 0);
+	update_eas_boost_value(EAS_KIR_TOUCH, CGROUP_TA, 0);
 	update_userlimit_cpu_freq(CPU_KIR_TOUCH, perfmgr_clusters, reset_freq);
-	perfmgr_trace_count(0, "touch");
+	fpsgo_systrace_c_fbt(prev_boost_pid, 0, "touch");
 	touch_event = 2;
 	if (usrtch_debug)
 		pr_debug("touch timeout\n");
@@ -199,22 +164,16 @@ static ssize_t device_write(struct file *filp, const char *ubuf,
 
 	if (strncmp(cmd, "enable", 6) == 0)
 		switch_usrtch(arg);
-	else if (strncmp(cmd, "eas_boost", 4) == 0)
-		switch_eas_boost(arg);
+	else if (strncmp(cmd, "init", 4) == 0)
+		switch_init_boost(arg);
 	else if (strncmp(cmd, "touch_opp", 9) == 0) {
 		if (arg >= 0 && arg <= 15)
 			switch_init_opp(arg);
 	} else if (strncmp(cmd, "duration", 8) == 0) {
 		switch_init_duration(arg);
 	} else if (strncmp(cmd, "active_time", 11) == 0) {
-		if (arg >= 0)
+		if (arg > 0)
 			switch_active_time(arg);
-	} else if (strncmp(cmd, "time_to_last_touch", 18) == 0) {
-		if (arg >= 0)
-			switch_time_to_last_touch(arg);
-	} else if (strncmp(cmd, "deboost_when_render", 19) == 0) {
-		if (arg >= 0)
-			switch_deboost_when_render(arg);
 	}
 	return cnt;
 }
@@ -223,12 +182,10 @@ static int device_show(struct seq_file *m, void *v)
 {
 	seq_puts(m, "-----------------------------------------------------\n");
 	seq_printf(m, "enable:\t%d\n", !usrtch_dbg);
-	seq_printf(m, "eas_boost:\t%d\n", touch_boost_value);
+	seq_printf(m, "init:\t%d\n", touch_boost_value);
 	seq_printf(m, "touch_opp:\t%d\n", touch_boost_opp);
-	seq_printf(m, "duration(ns):\t%d\n", touch_boost_duration);
-	seq_printf(m, "active_time(us):\t%d\n", (int)active_time);
-	seq_printf(m, "time_to_last_touch(ms):\t%d\n", time_to_last_touch);
-	seq_printf(m, "deboost_when_render:\t%d\n", deboost_when_render);
+	seq_printf(m, "duration:\t%d\n", touch_boost_duration);
+	seq_printf(m, "active_time:\t%d\n", (int)active_time);
 	seq_printf(m, "touch_event:\t%d\n", touch_event);
 	seq_puts(m, "-----------------------------------------------------\n");
 	return 0;
@@ -330,8 +287,6 @@ int init_utch(struct proc_dir_entry *parent)
 	touch_boost_opp = TOUCH_BOOST_OPP;
 	touch_boost_duration = TOUCH_TIMEOUT_NSEC;
 	active_time = TOUCH_FSTB_ACTIVE_US;
-	time_to_last_touch = TOUCH_TIME_TO_LAST_TOUCH_MS;
-	last_touch_time = ktime_get();
 
 	target_freq = kcalloc(perfmgr_clusters,
 			sizeof(struct ppm_limit_data), GFP_KERNEL);

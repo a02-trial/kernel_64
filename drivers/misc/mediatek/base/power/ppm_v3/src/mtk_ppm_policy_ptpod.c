@@ -18,7 +18,6 @@
 
 #include "mtk_ppm_internal.h"
 
-#define MAGIC_NUM	0x1605FAFA
 
 static void ppm_ptpod_update_limit_cb(void);
 static void ppm_ptpod_status_change_cb(bool enable);
@@ -128,7 +127,7 @@ static ssize_t ppm_ptpod_test_proc_write(struct file *file,
 #ifdef PPM_SSPM_SUPPORT
 		ppm_ipi_ptpod_test(enabled);
 #else
-		if (enabled == MAGIC_NUM)
+		if (enabled)
 			mt_ppm_ptpod_policy_activate();
 		else
 			mt_ppm_ptpod_policy_deactivate();

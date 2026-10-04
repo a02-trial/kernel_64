@@ -1647,7 +1647,6 @@ int nvt_ts_mode_switch_extened(struct nvt_ts_data *ts, u8 *cmd, u8 len, bool pri
 int nvt_ts_mode_restore(struct nvt_ts_data *ts)
 {
 	u8 cmd;
-	u8 cmd_list[4] = {0};
 	int i;
 	int ret = 0;
 
@@ -1656,26 +1655,12 @@ int nvt_ts_mode_restore(struct nvt_ts_data *ts)
 
 	for (i = GLOVE; i < FUNCT_MAX; i++) {
 		if ((ts->sec_function >> i) & 0x01) {
-			cmd = 0;
 			switch(i) {
 			case GLOVE:
 				if (ts->sec_function & GLOVE_MASK)
 					cmd = GLOVE_ENTER;
 				else
 					cmd = GLOVE_LEAVE;
-				break;
-			case HOLSTER:
-				if (ts->sec_function & HOLSTER_MASK) {
-					cmd_list[0] = EVENT_MAP_HOST_CMD;
-					cmd_list[1] = HOLSTER_ENTER;
-					cmd_list[2] = ts->cover_mode_restored;
-					cmd_list[3] = 0x00;
-				} else {
-					cmd_list[0] = EVENT_MAP_HOST_CMD;
-					cmd_list[1] = HOLSTER_LEAVE;
-					cmd_list[2] = 0x00;
-					cmd_list[3] = 0x00;
-				}
 				break;
 /*
 			case EDGE_REJECT_L:
@@ -1704,14 +1689,13 @@ int nvt_ts_mode_restore(struct nvt_ts_data *ts)
 				else
 					cmd = HOLE_AREA_LEAVE;
 				break;
-*/
 			case SPAY_SWIPE:
 				if (ts->sec_function & SPAY_SWIPE_MASK)
 					cmd = SPAY_SWIPE_ENTER;
 				else
 					cmd = SPAY_SWIPE_LEAVE;
 				break;
-
+*/
 			case DOUBLE_CLICK:
 				if (ts->sec_function & DOUBLE_CLICK_MASK)
 					cmd = DOUBLE_CLICK_ENTER;
@@ -1725,7 +1709,7 @@ int nvt_ts_mode_restore(struct nvt_ts_data *ts)
 				else
 					cmd = BLOCK_AREA_LEAVE;
 				break;
-*/
+			*/
 			case SENSITIVITY:
 				if (ts->sec_function & SENSITIVITY_MASK)
 					cmd = SENSITIVITY_ENTER;
@@ -1743,17 +1727,10 @@ int nvt_ts_mode_restore(struct nvt_ts_data *ts)
 					cmd = BLOCK_AREA_LEAVE;
 			}
 #endif	// end of #if SHOW_NOT_SUPPORT_CMD
-			if (cmd) {
-				ret = nvt_ts_mode_switch(ts, cmd, false);
-				if (ret)
-					input_info(true, &ts->client->dev, "%s: failed to restore %X\n", __func__, cmd);
-			} else {
-				ret = nvt_ts_mode_switch_extened(ts, cmd_list, 4, false);
-				if (ret) {
-					input_info(true, &ts->client->dev, "%s: failed to restore %X %X %X\n",
-						__func__, cmd_list[0], cmd_list[1], cmd_list[2]);
-				}
-			}
+
+			ret = nvt_ts_mode_switch(ts, cmd, false);
+			if (ret)
+				input_info(true, &ts->client->dev, "%s: failed to restore %X\n", __func__, cmd);
 		}
 	}
 
@@ -2210,11 +2187,6 @@ static void prox_lp_scan_mode(void *device_data)
 
 	sec_cmd_set_default_result(sec);
 
-	if (!ts->platdata->prox_lp_scan_enabled) {
-		input_err(true, &ts->client->dev, "%s: Not support LPSCAN!\n", __func__);
-		goto out;
-	}
-
 	if (ts->power_status != LP_MODE_STATUS) {
 		input_err(true, &ts->client->dev, "%s: Not LP_MODE_STATUS!\n", __func__);
 		goto out;
@@ -2428,14 +2400,10 @@ static void aot_enable(void *device_data)
 		ts->sec_function |= DOUBLE_CLICK_MASK;
 	else
 		ts->sec_function &= ~DOUBLE_CLICK_MASK;
-	
-	if (sec->cmd_param[0])
-		ts->lowpower_mode |= SEC_TS_MODE_DOUBLETAP_TO_WAKEUP;
-	else
-		ts->lowpower_mode &= ~SEC_TS_MODE_DOUBLETAP_TO_WAKEUP;
 
 	mode = sec->cmd_param[0] ? DOUBLE_CLICK_ENTER : DOUBLE_CLICK_LEAVE;
-
+	ts->aot_enable = sec->cmd_param[0];
+	ts->lowpower_mode = ts->aot_enable;
 	input_info(true, &ts->client->dev, "%s: %s, %02X\n",
 			__func__, sec->cmd_param[0] ? "on" : "off", ts->lowpower_mode);
 
@@ -2529,6 +2497,7 @@ out:
 	input_info(true, &ts->client->dev, "%s: %s\n", __func__, buff);
 }
 
+#if SHOW_NOT_SUPPORT_CMD
 static void spay_enable(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
@@ -2539,32 +2508,13 @@ static void spay_enable(void *device_data)
 
 	sec_cmd_set_default_result(sec);
 
-	if (!ts->platdata->support_spay) {
-		input_err(true, &ts->client->dev, "%s: not support spay\n", __func__);
-		goto out;
-	}
-
 	if (sec->cmd_param[0] < 0 || sec->cmd_param[0] > 1) {
 		input_err(true, &ts->client->dev, "%s: invalid parameter %d\n",
 			__func__, sec->cmd_param[0]);
 		goto out;
+	} else {
+		mode = sec->cmd_param[0] ? SPAY_SWIPE_ENTER : SPAY_SWIPE_LEAVE;
 	}
-
-	if (sec->cmd_param[0])
-		ts->sec_function |= SPAY_SWIPE_MASK;
-	else
-		ts->sec_function &= ~SPAY_SWIPE_MASK;
-	
-	if (sec->cmd_param[0])
-		ts->lowpower_mode |= SEC_TS_MODE_SWIPE;
-	else
-		ts->lowpower_mode &= ~SEC_TS_MODE_SWIPE;
-
-	mode = sec->cmd_param[0] ? SPAY_SWIPE_ENTER : SPAY_SWIPE_LEAVE;
-
-	input_info(true, &ts->client->dev, "%s: %s, %02X\n",
-			__func__, sec->cmd_param[0] ? "on" : "off", ts->lowpower_mode);
-
 
 	if (mutex_lock_interruptible(&ts->lock)) {
 		input_err(true, &ts->client->dev, "%s: another task is running\n",
@@ -2597,87 +2547,6 @@ out:
 	input_info(true, &ts->client->dev, "%s: %s\n", __func__, buff);
 }
 
-/*
- *	cmd_param
- *		[0], 0  cover off
- *		     >0 cover on
- *		[1], -1  normal cover (not supprot)
- *		     16 Mini S View Wallet(A 2020)
- */
-static void clear_cover_mode(void *device_data)
-{
-	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
-	struct nvt_ts_data *ts = container_of(sec, struct nvt_ts_data, sec);
-	char buff[SEC_CMD_STR_LEN] = { 0 };
-	u8 buf[4], cmd, subcmd;
-	int reti;
-
-	sec_cmd_set_default_result(sec);
-
-	if (sec->cmd_param[0] < 0 || sec->cmd_param[0] > 3) {
-		input_err(true, &ts->client->dev, "%s: invalid parameter %d\n", __func__, sec->cmd_param[0]);
-		goto out_ng;
-	}
-
-	if (sec->cmd_param[0] > 1) {
-		cmd = HOLSTER_ENTER;
-		subcmd = sec->cmd_param[1];
-		input_info(true, &ts->client->dev, "%s: cover on. (cover type %d).\n", __func__, subcmd);
-		ts->sec_function |= HOLSTER_MASK;
-	} else {
-		cmd = HOLSTER_LEAVE;
-		subcmd = 0x00;
-		input_info(true, &ts->client->dev, "%s: cover off. (do nothing)\n", __func__);
-		ts->sec_function &= ~HOLSTER_MASK;
-	}
-
-	ts->cover_mode_restored = subcmd;
-
-	if (ts->power_status == POWER_OFF_STATUS) {
-		input_err(true, &ts->client->dev,
-					"%s: POWER_STATUS OFF It'll be set after screen on. sec_function : 0x%02x\n",
-					__func__, ts->sec_function);
-		goto out_ok;
-	}
-
-	if (mutex_lock_interruptible(&ts->lock)) {
-		input_err(true, &ts->client->dev, "%s: another task is running\n", __func__);
-		goto out_ng;
-	}
-
-	buf[0] = EVENT_MAP_HOST_CMD;
-	buf[1] = cmd;
-	buf[2] = subcmd;
-	buf[3] = 0x00;
-	reti = nvt_ts_mode_switch_extened(ts, buf, 4, true);
-	if (reti) {
-		input_err(true, &ts->client->dev, "%s : failed to switch %s mode with type %d\n",
-					__func__, (cmd == HOLSTER_ENTER) ? "HOLSTER_ENTER" : "HOLSTER_LEAVE", subcmd);
-		mutex_unlock(&ts->lock);
-		goto out_ng;
-	}
-	mutex_unlock(&ts->lock);
-
-out_ok:
-	snprintf(buff, sizeof(buff), "%s", "OK");
-	sec->cmd_state =  SEC_CMD_STATUS_OK;
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
-
-	input_info(true, &ts->client->dev, "%s: %s\n", __func__, buff);
-
-	return;
-
-out_ng:
-	snprintf(buff, sizeof(buff), "%s", "NG");
-	sec->cmd_state = SEC_CMD_STATUS_FAIL;
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
-
-	input_info(true, &ts->client->dev, "%s: %s\n", __func__, buff);
-}
-
-#if SHOW_NOT_SUPPORT_CMD
 static void set_touchable_area(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
@@ -5322,10 +5191,9 @@ static struct sec_cmd sec_cmds[] = {
 	{SEC_CMD_H("prox_lp_scan_mode", prox_lp_scan_mode),},
 #endif
 	{SEC_CMD_H("dead_zone_enable", dead_zone_enable),},
-	{SEC_CMD_H("spay_enable", spay_enable),},
-	{SEC_CMD_H("clear_cover_mode", clear_cover_mode),},
 #if SHOW_NOT_SUPPORT_CMD
 	{SEC_CMD("get_checksum_data", get_checksum_data),},
+	{SEC_CMD_H("spay_enable", spay_enable),},
 	{SEC_CMD_H("set_touchable_area", set_touchable_area),},
 	{SEC_CMD_H("set_untouchable_area_rect", set_untouchable_area_rect),},
 	{SEC_CMD_H("set_grip_data", set_grip_data),},
@@ -5365,20 +5233,6 @@ static struct sec_cmd sec_cmds[] = {
 	{SEC_CMD("factory_lcdoff_cmd_result_all", factory_lcdoff_cmd_result_all),},
 	{SEC_CMD("not_support_cmd", not_support_cmd),},
 };
-
-static ssize_t scrub_position_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	struct sec_cmd_data *sec = dev_get_drvdata(dev);
-	struct nvt_ts_data *ts = container_of(sec, struct nvt_ts_data, sec);
-	char buff[256] = { 0 };
-
-	snprintf(buff, sizeof(buff), "%d %d %d", ts->scrub_id, 0, 0);
-	input_info(true, &ts->client->dev, "%s: scrub_id: %s\n", __func__, buff);
-
-	return snprintf(buf, PAGE_SIZE, "%s", buff);
-}
-static DEVICE_ATTR(scrub_pos, 0444, scrub_position_show, NULL);
 
 #if SHOW_NOT_SUPPORT_CMD
 static ssize_t read_multi_count_show(struct device *dev,
@@ -5723,14 +5577,10 @@ static ssize_t read_support_feature(struct device *dev,
 	if (ts->platdata->enable_sysinput_enabled)
 		feature |= INPUT_FEATURE_ENABLE_SYSINPUT_ENABLED;
 
-	if (ts->platdata->prox_lp_scan_enabled)
-		feature |= INPUT_FEATURE_ENABLE_PROX_LP_SCAN_ENABLED;
-
-	input_info(true, &ts->client->dev, "%s: %d%s%s%s\n",
+	input_info(true, &ts->client->dev, "%s: %d%s%s\n",
 				__func__, feature,
 				feature & INPUT_FEATURE_ENABLE_SETTINGS_AOT ? " aot" : "",
-				feature & INPUT_FEATURE_ENABLE_SYSINPUT_ENABLED ? " SE" : "",
-				feature & INPUT_FEATURE_ENABLE_PROX_LP_SCAN_ENABLED ? " LPSCAN" : "");
+				feature & INPUT_FEATURE_ENABLE_SYSINPUT_ENABLED ? " SE" : "");
 
 	return snprintf(buf, SEC_CMD_BUF_SIZE, "%d", feature);
 }
@@ -5763,10 +5613,6 @@ static ssize_t enabled_store(struct device *dev, struct device_attribute *attr,
 
 	input_info(true, &ts->client->dev, "%s: %d %d\n", __func__, buff[0], buff[1]);
 
-	/* handle same sequence : buff[0] = LCD_ON, LCD_DOZE1, LCD_DOZE2*/
-	if (buff[0] == LCD_DOZE1 || buff[0] == LCD_DOZE2)
-		buff[0] = LCD_ON;
-
 	if (buff[0] == LCD_ON) {
 		if (buff[1] == LCD_EARLY_EVENT)
 			nvt_ts_early_resume(&ts->client->dev);
@@ -5775,8 +5621,6 @@ static ssize_t enabled_store(struct device *dev, struct device_attribute *attr,
 	} else if (buff[0] == LCD_OFF) {
 		if (buff[1] == LCD_EARLY_EVENT)
 			nvt_ts_suspend(&ts->client->dev);
-	} else if (buff[0] == SERVICE_SHUTDOWN) {
-		nvt_ts_shutdown(ts->client);
 	}
 
 	return count;
@@ -5802,7 +5646,6 @@ static DEVICE_ATTR(noise_mode, 0664, noise_mode_show, NULL);
 static DEVICE_ATTR(enabled, 0664, enabled_show, enabled_store);
 
 static struct attribute *cmd_attributes[] = {
-	&dev_attr_scrub_pos.attr,
 #if SHOW_NOT_SUPPORT_CMD
 	&dev_attr_multi_count.attr,
 	&dev_attr_comm_err_count.attr,

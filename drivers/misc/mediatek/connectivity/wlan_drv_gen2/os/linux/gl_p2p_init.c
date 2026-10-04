@@ -29,11 +29,7 @@
 */
 
 #define P2P_INF_NAME "p2p%d"
-#if CFG_TC10_FEATURE
-#define AP_INF_NAME  "swlan%d"
-#else
 #define AP_INF_NAME  "ap%d"
-#endif
 
 #define RUNNING_P2P_MODE  0
 #define RUNNING_AP_MODE   1

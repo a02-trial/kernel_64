@@ -66,8 +66,7 @@ static inline bool pd_dbg_print_out(void)
 	if (used == 0)
 		return false;
 
-	if (used < (PD_INFO_BUF_SIZE + 1 + OUT_BUF_MAX))
-		pd_dbg_buffer[index].buf[used] = '\0';
+	pd_dbg_buffer[index].buf[used] = '\0';
 
 	pr_info("///PD dbg info %ud\n", used);
 
@@ -78,7 +77,7 @@ static inline bool pd_dbg_print_out(void)
 		while (atomic_read(&busy))
 			usleep_range(1000, 2000);
 
-		pr_notice("%s", pd_dbg_buffer[index].buf + i);
+		printk(pd_dbg_buffer[index].buf + i);
 		pd_dbg_buffer[index].buf[OUT_BUF_MAX + i] = temp;
 	}
 

@@ -182,7 +182,7 @@ typedef enum _ENUM_WMT_OPID_T {
 	WMT_OPID_BLANK_STATUS_CTRL = 36,
 	WMT_OPID_MET_CTRL = 37,
 	WMT_OPID_GPS_SUSPEND = 38,
-	WMT_OPID_GET_CONSYS_STATE = 39,
+	WMT_OPID_RESUME_DUMP_INFO = 39,
 	WMT_OPID_MAX
 } ENUM_WMT_OPID_T, *P_ENUM_WMT_OPID_T;
 
@@ -274,8 +274,7 @@ typedef struct _WMT_GEN_CONF {
 	UINT32 coex_wmt_ext_elna_gain_p1_D1;
 	UINT32 coex_wmt_ext_elna_gain_p1_D2;
 	UINT32 coex_wmt_ext_elna_gain_p1_D3;
-	PINT8  coex_wmt_antsel_invert_support;
-	UINT8  coex_wmt_ext_epa_mode;
+	PINT8 coex_wmt_antsel_invert_support;
 
 	struct WMT_BYTE_ARRAY *coex_wmt_epa_elna;
 
@@ -298,8 +297,6 @@ typedef struct _WMT_GEN_CONF {
 	UINT8 wifi_ant_swap_mode;
 	UINT8 wifi_main_ant_polarity;
 	UINT8 wifi_ant_swap_ant_sel_gpio;
-
-	struct WMT_BYTE_ARRAY *wifi_config;
 } WMT_GEN_CONF, *P_WMT_GEN_CONF;
 
 typedef enum _ENUM_DRV_STS_ {
@@ -357,7 +354,6 @@ typedef MTK_WCN_BOOL(*DEEP_SLEEP_CONTROL) (INT32 value);
 
 typedef struct _WMT_IC_OPS_ {
 	UINT32 icId;
-	UINT64 options;
 	SW_INIT sw_init;
 	SW_DEINIT sw_deinit;
 	IC_PIN_CTRL ic_pin_ctrl;
@@ -444,28 +440,6 @@ struct wmt_rom_patch {
 	UINT32 u4PatchType;
 	UINT32 u4CRC[4];
 };
-
-
-#define WMT_CORE_DMP_CPUPCR_NUM 10
-enum wmt_consys_dump_status {
-	WMT_DUMP_STATE_NONE = 0,
-	WMT_DUMP_STATE_SCHEDULED = 1,
-	WMT_DUMP_STATE_ONGOING = 2
-};
-
-typedef struct consys_state_dmp_info {
-	UINT32 cpu_pcr[WMT_CORE_DMP_CPUPCR_NUM];
-	CONSYS_STATE state;
-} CONSYS_STATE_DMP_INFO, *P_CONSYS_STATE_DMP_INFO;
-
-typedef struct consys_state_dmp_op {
-	enum wmt_consys_dump_status status;
-	OSAL_SLEEPABLE_LOCK lock;
-	UINT32 times;
-	UINT32 cpu_sleep_ms;
-	CONSYS_STATE_DMP_INFO dmp_info;
-	ULONG version;
-} CONSYS_STATE_DMP_OP, *P_CONSYS_STATE_DMP_OP;
 
 
 /*******************************************************************************

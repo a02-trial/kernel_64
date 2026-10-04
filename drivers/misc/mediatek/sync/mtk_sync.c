@@ -25,13 +25,6 @@
 #include "mtk_sync.h"
 
 /* ---------------------------------------------------------------- */
-static inline struct sync_timeline *dma_fence_parent(struct dma_fence *fence)
-{
-	return container_of(fence->lock, struct sync_timeline, lock);
-}
-
-static LIST_HEAD(sync_timeline_list_head);
-static DEFINE_SPINLOCK(sync_timeline_list_lock);
 
 static const struct dma_fence_ops timeline_fence_ops;
 
@@ -42,30 +35,12 @@ static inline struct sync_pt *fence_to_sync_pt(struct dma_fence *fence)
 	return container_of(fence, struct sync_pt, base);
 }
 
-static void mt_sync_timeline_debug_add(struct sync_timeline *obj)
-{
-	unsigned long flags;
-
-	spin_lock_irqsave(&sync_timeline_list_lock, flags);
-	list_add_tail(&obj->sync_timeline_list, &sync_timeline_list_head);
-	spin_unlock_irqrestore(&sync_timeline_list_lock, flags);
-}
-
-static void mt_sync_timeline_debug_remove(struct sync_timeline *obj)
-{
-	unsigned long flags;
-
-	spin_lock_irqsave(&sync_timeline_list_lock, flags);
-	list_del(&obj->sync_timeline_list);
-	spin_unlock_irqrestore(&sync_timeline_list_lock, flags);
-}
-
 static void sync_timeline_free(struct kref *kref)
 {
 	struct sync_timeline *obj =
 		container_of(kref, struct sync_timeline, kref);
 
-	mt_sync_timeline_debug_remove(obj);
+	sync_timeline_debug_remove(obj);
 
 	kfree(obj);
 }
@@ -162,7 +137,7 @@ static void timeline_fence_release(struct dma_fence *fence)
 	struct sync_pt *pt = fence_to_sync_pt(fence);
 	struct sync_timeline *parent = dma_fence_parent(fence);
 
-	if ((pt) && (!list_empty(&pt->link))) {
+	if (!list_empty(&pt->link)) {
 		unsigned long flags;
 
 		spin_lock_irqsave(fence->lock, flags);
@@ -276,7 +251,7 @@ static struct sync_timeline *sync_timeline_create(const char *name)
 	INIT_LIST_HEAD(&obj->pt_list);
 	spin_lock_init(&obj->lock);
 
-	mt_sync_timeline_debug_add(obj);
+	sync_timeline_debug_add(obj);
 
 	return obj;
 }

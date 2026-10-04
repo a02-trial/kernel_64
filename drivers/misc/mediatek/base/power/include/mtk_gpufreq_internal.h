@@ -14,10 +14,7 @@
 #ifndef _MTK_GPUFREQ_INTERNAL_H_
 #define _MTK_GPUFREQ_INTERNAL_H_
 
-#if defined(CONFIG_MACH_MT6885) \
-	|| defined(CONFIG_MACH_MT6873) \
-	|| defined(CONFIG_MACH_MT6853) \
-	|| defined(CONFIG_MACH_MT6893)
+#if defined(CONFIG_MACH_MT6885)
 
 #include "gpufreq_v1/mtk_gpufreq_internal.h"
 

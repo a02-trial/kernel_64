@@ -438,7 +438,6 @@ static int autok_send_tune_cmd(struct msdc_host *host, unsigned int opcode,
 	unsigned int i = 0;
 	int ret = E_RES_PASS;
 	unsigned int clk_tx_pre = 0;
-	u8 bus_width;
 
 	switch (opcode) {
 	case MMC_SEND_EXT_CSD:
@@ -532,18 +531,10 @@ static int autok_send_tune_cmd(struct msdc_host *host, unsigned int opcode,
 			MSDC_WRITE32(SDC_BLK_NUM, 1);
 		break;
 	case MMC_SEND_TUNING_BLOCK_HS200:
-		MSDC_GET_FIELD(SDC_CFG, SDC_CFG_BUSWIDTH, bus_width);
-		if (bus_width == 2) {
-			left = 128;
-			rawcmd = (128 << 16) | (0 << 13)
-				| (1 << 11) | (1 << 7) | (21);
-			arg = 0;
-		} else if (bus_width == 1) {
-			left = 64;
-			rawcmd = (64 << 16) | (0 << 13)
-				| (1 << 11) | (1 << 7) | (21);
-			arg = 0;
-		}
+		left = 128;
+		rawcmd = (128 << 16) | (0 << 13)
+			| (1 << 11) | (1 << 7) | (21);
+		arg = 0;
 		if (tune_type_value == TUNE_LATCH_CK)
 			MSDC_WRITE32(SDC_BLK_NUM, host->tune_latch_ck_cnt);
 		else
@@ -3157,14 +3148,12 @@ static int autok_write_param(struct msdc_host *host,
 int autok_path_sel(struct msdc_host *host)
 {
 	void __iomem *base = host->base;
-	void __iomem *base_top = NULL;
+	void __iomem *base_top = host->base_top;
+
 	struct AUTOK_PLAT_PARA_TX platform_para_tx;
 	struct AUTOK_PLAT_PARA_RX platform_para_rx;
 	struct AUTOK_PLAT_FUNC platform_para_func;
 	struct AUTOK_PLAT_TOP_CTRL platform_top_ctrl;
-#if !defined(FPGA_PLATFORM)
-	base_top = host->base_top;
-#endif
 
 	memset(&platform_para_tx, 0, sizeof(struct AUTOK_PLAT_PARA_TX));
 	memset(&platform_para_rx, 0, sizeof(struct AUTOK_PLAT_PARA_RX));
@@ -3663,13 +3652,6 @@ int execute_online_tuning_hs400(struct msdc_host *host, u8 *res)
 	/* tune data pad delay , find data pad boundary */
 	for (j = 0; j < 32; j++) {
 		autok_adjust_paddly(host, &j, DAT_PAD_RDLY);
-		AUTOK_RAWPRINT("[AUTOK]%d:DMA STATUS:%d\r\n",
-				__LINE__, atomic_read(&host->dma_status));
-		if (MSDC_READ32(MSDC_DMA_CFG) & 0x01) {
-			msdc_dump_info(NULL, 0, NULL, host->id);
-			/* Trigger KE when dma is active */
-			(void)0;
-		}
 		for (k = 0; k < AUTOK_CMD_TIMES / 4; k++) {
 			ret = autok_send_tune_cmd(host, opcode, TUNE_DATA,
 			    &autok_host_para);
@@ -3696,13 +3678,6 @@ int execute_online_tuning_hs400(struct msdc_host *host, u8 *res)
 	/* tune DS delay , base on data pad boundary */
 	for (j = 0; j < 32; j++) {
 		autok_adjust_paddly(host, &j, DS_PAD_RDLY);
-		AUTOK_RAWPRINT("[AUTOK]%d:DMA STATUS:%d\r\n",
-				__LINE__, atomic_read(&host->dma_status));
-		if (MSDC_READ32(MSDC_DMA_CFG) & 0x01) {
-			msdc_dump_info(NULL, 0, NULL, host->id);
-			/* Trigger KE when dma is active */
-			(void)0;
-		}
 		for (k = 0; k < AUTOK_CMD_TIMES / 4; k++) {
 			ret = autok_send_tune_cmd(host, opcode, TUNE_DATA,
 			    &autok_host_para);
@@ -3839,35 +3814,18 @@ int execute_cmd_online_tuning(struct msdc_host *host, u8 *res)
 		return 0;
 #endif
 		} else {
-			if (host->base_top) {
-#if !defined(FPGA_PLATFORM)
-				MSDC_GET_FIELD(EMMC_TOP_CMD,
-					PAD_CMD_RXDLY,
-					p_autok_tune_res[1]);
-				MSDC_GET_FIELD(EMMC_TOP_CMD,
-					PAD_CMD_RD_RXDLY_SEL,
-					p_autok_tune_res[2]);
-				MSDC_GET_FIELD(EMMC_TOP_CMD,
-					PAD_CMD_RXDLY2,
-					p_autok_tune_res[3]);
-				MSDC_GET_FIELD(EMMC_TOP_CMD,
-					PAD_CMD_RD_RXDLY2_SEL,
-					p_autok_tune_res[4]);
-#endif
-			} else {
-				MSDC_GET_FIELD(MSDC_PAD_TUNE0,
-					MSDC_PAD_TUNE0_CMDRDLY,
-					p_autok_tune_res[1]);
-				MSDC_GET_FIELD(MSDC_PAD_TUNE0,
-					MSDC_PAD_TUNE0_CMDRRDLYSEL,
-					p_autok_tune_res[2]);
-				MSDC_GET_FIELD(MSDC_PAD_TUNE1,
-					MSDC_PAD_TUNE1_CMDRDLY2,
-					p_autok_tune_res[3]);
-				MSDC_GET_FIELD(MSDC_PAD_TUNE1,
-					MSDC_PAD_TUNE1_CMDRRDLY2SEL,
-					p_autok_tune_res[4]);
-			}
+			MSDC_GET_FIELD(MSDC_PAD_TUNE0,
+			    MSDC_PAD_TUNE0_CMDRDLY,
+			    p_autok_tune_res[1]);
+			MSDC_GET_FIELD(MSDC_PAD_TUNE0,
+			    MSDC_PAD_TUNE0_CMDRRDLYSEL,
+			    p_autok_tune_res[2]);
+			MSDC_GET_FIELD(MSDC_PAD_TUNE1,
+			    MSDC_PAD_TUNE1_CMDRDLY2,
+			    p_autok_tune_res[3]);
+			MSDC_GET_FIELD(MSDC_PAD_TUNE1,
+			    MSDC_PAD_TUNE1_CMDRRDLY2SEL,
+			    p_autok_tune_res[4]);
 	}
 
 	AUTOK_RAWPRINT("[AUTOK]CMD [EDGE:%d DLY1:%d DLY2:%d]\r\n",

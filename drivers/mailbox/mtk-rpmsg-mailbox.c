@@ -98,27 +98,21 @@ int mtk_mbox_send_data(struct mbox_chan *chan, void *data)
 {
 	struct mtk_mbox_chan *mchan = to_mtk_mbox_chan(chan);
 
-	if (mchan)
-		return mchan->ops->mtk_send_ipi(mchan, data);
-
-	return false;
+	return mchan->ops->mtk_send_ipi(mchan, data);
 }
 
 bool mtk_mbox_last_tx_done(struct mbox_chan *chan)
 {
 	struct mtk_mbox_chan *mchan = to_mtk_mbox_chan(chan);
 
-	if (mchan)
-		return mchan->ops->mtk_tx_done(mchan);
-
-	return false;
+	return mchan->ops->mtk_tx_done(mchan);
 }
 
 int mtk_mbox_startup(struct mbox_chan *chan)
 {
 	struct mtk_mbox_chan *mchan = to_mtk_mbox_chan(chan);
 
-	if (mchan)
+	if (mchan->ops->mtk_startup)
 		return mchan->ops->mtk_startup(mchan);
 
 	return 0;
@@ -128,7 +122,7 @@ void mtk_mbox_shutdown(struct mbox_chan *chan)
 {
 	struct mtk_mbox_chan *mchan = to_mtk_mbox_chan(chan);
 
-	if (mchan)
+	if (mchan->ops->mtk_shutdown)
 		mchan->ops->mtk_shutdown(mchan);
 }
 

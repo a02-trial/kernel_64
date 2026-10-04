@@ -311,12 +311,12 @@ static int ion_system_heap_create_pools(struct ion_page_pool **pools,
 					bool cached)
 {
 	int i;
+	gfp_t gfp_flags = low_order_gfp_flags;
 
 	for (i = 0; i < NUM_ORDERS; i++) {
 		struct ion_page_pool *pool;
-		gfp_t gfp_flags = low_order_gfp_flags;
 
-		if (orders[i] >= 4)
+		if (orders[i] > 4)
 			gfp_flags = high_order_gfp_flags;
 
 		pool = ion_page_pool_create(gfp_flags, orders[i], cached);
@@ -397,8 +397,6 @@ static int ion_system_contig_heap_allocate(struct ion_heap *heap,
 	len = PAGE_ALIGN(len);
 	for (i = len >> PAGE_SHIFT; i < (1 << order); i++)
 		__free_page(page + i);
-	for (i = 0; i < (len >> PAGE_SHIFT); i++)
-		SetPageIommu(&page[i]);
 	atomic64_add_return((len >> PAGE_SHIFT), &page_sz_cnt);
 	table = kmalloc(sizeof(*table), GFP_KERNEL);
 	if (!table) {

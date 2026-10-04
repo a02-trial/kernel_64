@@ -91,6 +91,7 @@ of_get_fixed_voltage_config(struct device *dev,
 	config->skip_gpio_request = of_property_read_bool(np, "skip-gpio-request");
 #endif
 
+
 	if (of_find_property(np, "vin-supply", NULL))
 		config->input_supply = "vin";
 

@@ -35,7 +35,7 @@ static struct ilitek_protocol_info protocol_info[PROTOCL_VER_NUM] = {
 	[7] = {PROTOCOL_VER_570, 9, 4, 14, 30, 5, 5, 3, 8, 15, 14},
 };
 
-#define FUNC_CTRL_NUM	19
+#define FUNC_CTRL_NUM	18
 static struct ilitek_ic_func_ctrl func_ctrl[FUNC_CTRL_NUM] = {
 	/* cmd[3] = cmd, func, ctrl */
 	// rec_state 0:disable, 1: enable, 2: ignore record
@@ -57,7 +57,6 @@ static struct ilitek_ic_func_ctrl func_ctrl[FUNC_CTRL_NUM] = {
 	[15] = {"ear_phone", {0x1, 0x17, 0x0}, 3, 0x0, 0, 0xFF},
 	[16] = {"sip_mode", {0x1, 0x20, 0x0}, 3, 0x1, 2, 0xFF},
 	[17] = {"dead_zone_ctrl", {0x1, 0x12, 0x3}, 3, 0x0, 2, 0xFF},
-	[18] = {"cover_mode", {0x1, 0x0C, 0x00}, 3, 0x0, 2, 0xFF},
 };
 
 #define CHIP_SUP_NUM	5
@@ -101,7 +100,7 @@ int ili_tddi_ic_sram_test(void)
 		}
 		break;
 	case ILI9882_CHIP:
-	/* 9882N */
+		/* 9882N */
 		ili_ice_mode_write(0x046004, 0x1FFFFF00, 4);
 		break;
 	case ILI7807_CHIP:
@@ -1090,19 +1089,11 @@ void ili_get_ini_path(void)
 	snprintf(ini_name[P2P_TD_PATH_NUM], INI_PATH_SIZE, "%s", P2P_TD_PATH);
 	snprintf(ini_name[RAWDATATD_PATH_NUM], INI_PATH_SIZE, "%s", RAWDATATD_PATH);
 	snprintf(ini_name[RAWDATANOBK_LCMOFF_PATH_NUM], INI_PATH_SIZE, "%s", RAWDATANOBK_LCMOFF_PATH);
-	/* only for 9882Q ic */
-	snprintf(ini_name[RAWDATAHAVEBK_LCMON_PATH_NUM], INI_PATH_SIZE, "%s", RAWDATAHAVEBK_LCMON_PATH);
-	snprintf(ini_name[RAWDATAHAVEBK_LCMOFF_PATH_NUM], INI_PATH_SIZE, "%s", RAWDATAHAVEBK_LCMOFF_PATH);
 
 	switch (ilits->chip->id) {
 	case ILI9882_CHIP:
-		if (ilits->chip->id == ILI9882_CHIP && ilits->chip->type == 0x1A) {
-			/* 9882Q */
-			snprintf(chip_id, sizeof(chip_id), "%s", CHIP_ID_9882Q);
-		} else {
-			/* 9882N */
-			snprintf(chip_id, sizeof(chip_id), "%s", CHIP_ID_9882);
-		}
+	/* 9882N */
+		snprintf(chip_id, sizeof(chip_id), "%s", CHIP_ID_9882);
 		break;
 	case ILI7807_CHIP:
 		if (ilits->chip->type == 0x1F) {

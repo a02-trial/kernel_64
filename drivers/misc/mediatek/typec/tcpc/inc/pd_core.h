@@ -16,15 +16,10 @@
 
 #include <linux/platform_device.h>
 #include <linux/pm_wakeup.h>
-#include <linux/wait.h>
 #include "tcpci_timer.h"
 #include "tcpci_event.h"
 #include "pd_dbg_info.h"
 #include "tcpm.h"
-#if IS_ENABLED(CONFIG_PDIC_NOTIFIER)
-#include <linux/usb/typec/common/pdic_notifier.h>
-#include <linux/usb/typec/common/pdic_core.h>
-#endif /* CONFIG_PDIC_NOTIFIER */
 
 #define PD_BUG_ON(x)	WARN_ON(x)
 /*---------------------------------------------------------------------------*/
@@ -407,7 +402,7 @@
 	| ((ptype_dfp) & 0x07) << 23 \
 	 | (is_modal) << 26 | ((vid) & 0xffff))
 
-#define VDO_IDH_PD20(idh)	(idh & (~(0x1f << 21)))
+#define VDO_IDH_PD20(idh)	(idh & (~(0x07 << 23)))
 
 #define PD_IDH_PTYPE(vdo) (((vdo) >> 27) & 0x7)
 #define PD_IDH_PTYPE_DFP(vdo) (((vdo) >> 23) & 0x7)
@@ -436,7 +431,6 @@
 #define PD_PRODUCT_BCD(vdo) ((vdo) & 0xffff)
 #define PD_PRODUCT_PID(vdo) (((vdo) >> 16) & 0xffff)
 
-#define SAMSUNG_VID	0x04e8
 /*
  * Cable VDO
  * ---------
@@ -684,7 +678,6 @@
 #define PD_WAIT_RETRY_COUNT		1
 #define PD_DISCOVER_ID_COUNT	3	/* max : 20 */
 #define PD_DISCOVER_ID30_COUNT	2	/* max : 20 */
-#define PD_ERROR_RECOVERY_COUNT	2
 
 enum {
 	PD_WAIT_VBUS_DISABLE = 0,
@@ -693,36 +686,6 @@ enum {
 	PD_WAIT_VBUS_SAFE0V_ONCE = 3,
 	PD_WAIT_VBUS_STABLE_ONCE = 4,
 };
-
-#if IS_ENABLED(CONFIG_PDIC_NOTIFIER)
-enum uvdm_res_type {
-	RES_INIT = 0,
-	RES_ACK,
-	RES_NAK,
-	RES_BUSY,
-};
-
-enum uvdm_rx_type {
-	RX_ACK = 0,
-	RX_NAK,
-	RX_BUSY,
-};
-
-typedef union {
-	uint32_t object;
-	uint16_t word[2];
-	uint8_t  byte[4];
-
-	struct {
-		unsigned data:8;
-		unsigned total_set_num:4;
-		unsigned direction:1;
-		unsigned cmd_type:2;
-		unsigned data_type:1;
-		unsigned pid:16;
-	} sec_uvdm_header;
-} data_obj_type;
-#endif /* CONFIG_PDIC_NOTIFIER */
 
 struct pd_port_power_caps {
 	uint8_t nr;
@@ -867,12 +830,6 @@ struct pe_data {		/* reset after detached */
 #ifdef CONFIG_USB_PD_REV30_STATUS_LOCAL
 	uint8_t pd_status_event;
 #endif	/* CONFIG_USB_PD_REV30_STATUS_LOCAL */
-
-#ifdef CONFIG_USB_PD_DISCARD_AND_UNEXPECT_MSG
-	bool pd_sent_ams_init_cmd;
-	bool pd_unexpected_event_pending;
-	struct pd_event pd_unexpected_event;
-#endif	/* CONFIG_USB_PD_DISCARD_AND_UNEXPECT_MSG */
 };
 
 #ifdef CONFIG_USB_PD_REV30_BAT_INFO
@@ -998,22 +955,6 @@ struct pd_port {
 	bool custom_dbgacc;
 #endif	/* CONFIG_USB_PD_CUSTOM_DBGACC */
 
-#if IS_ENABLED(CONFIG_PDIC_NOTIFIER)
-	int sec_acc_type;
-	uint32_t sec_vid;
-	uint32_t sec_pid;
-	uint32_t sec_bcd_device;
-	int sec_dfp_state;
-	bool uvdm_first_req;
-	bool uvdm_dir;
-	wait_queue_head_t uvdm_in_wq;
-	wait_queue_head_t uvdm_out_wq;
-	int uvdm_in_ok;
-	int uvdm_out_ok;
-	msg_header_type uvdm_msg_header;
-	data_obj_type uvdm_data_obj[PD_DATA_OBJ_SIZE];
-#endif	/* CONFIG_PDIC_NOTIFIER */
-
 #ifdef CONFIG_USB_PD_RICHTEK_UVDM
 	bool richtek_init_done;
 #endif	/* CONFIG_USB_PD_RICHTEK_UVDM */
@@ -1097,12 +1038,10 @@ struct pd_port {
 	uint8_t cap_miss_match; /* For src_cap miss match */
 };
 
-#ifdef CONFIG_USB_PD_ALT_MODE
 static inline struct dp_data *pd_get_dp_data(struct pd_port *pd_port)
 {
 	return &pd_port->pe_data.dp_data;
 }
-#endif	/* CONFIG_USB_PD_ALT_MODE */
 
 extern int pd_core_init(struct tcpc_device *tcpc_dev);
 
@@ -1205,14 +1144,6 @@ static inline bool pd_check_rev30(struct pd_port *pd_port)
 #endif /* CONFIG_USB_PD_REV30_SYNC_SPEC_REV */
 }
 
-static inline bool pd_check_rev30_prime(struct pd_port *pd_port)
-{
-#ifdef CONFIG_USB_PD_REV30_SYNC_SPEC_REV
-	return pd_port->pd_revision[1] >= PD_REV30;
-#else
-	return false;
-#endif /* CONFIG_USB_PD_REV30_SYNC_SPEC_REV */
-}
 #endif	/* CONFIG_USB_PD_REV30 */
 
 extern bool pd_is_reset_cable(struct pd_port *pd_port);
@@ -1271,7 +1202,6 @@ enum {
 };
 
 void pd_reset_svid_data(struct pd_port *pd_port);
-void pd_free_unexpected_event(struct pd_port *pd_port);
 int pd_reset_protocol_layer(struct pd_port *pd_port, bool sop_only);
 
 int pd_set_rx_enable(struct pd_port *pd_port, uint8_t enable);
@@ -1339,8 +1269,6 @@ extern void pd_notify_tcp_event_1st_result(struct pd_port *pd_port, int ret);
 extern void pd_notify_tcp_event_2nd_result(struct pd_port *pd_port, int ret);
 extern void pd_notify_tcp_vdm_event_2nd_result(
 		struct pd_port *pd_port, uint8_t ret);
-
-extern bool pd_is_pe_wait_pd_transmit_done(struct pd_port *pd_port);
 
 /* ---- pd_timer ---- */
 
@@ -1438,13 +1366,12 @@ static inline bool pd_put_dpm_event(struct pd_port *pd_port, uint8_t msg)
 	return pd_put_event(pd_port->tcpc_dev, &evt, false);
 }
 
-static inline bool pd_put_tcp_pd_event(struct pd_port *pd_port, uint8_t event,
-				       uint8_t from)
+static inline bool pd_put_tcp_pd_event(struct pd_port *pd_port, uint8_t event)
 {
 	struct pd_event evt = {
 		.event_type = PD_EVT_TCP_MSG,
 		.msg = event,
-		.msg_sec = from,
+		.msg_sec = PD_TCP_FROM_PE,
 		.pd_msg = NULL,
 	};
 

@@ -477,7 +477,7 @@ static int init_freecom(struct us_data *us)
 	usb_stor_dbg(us, "result from activate reset is %d\n", result);
 
 	/* wait 250ms */
-	mdelay(250);
+	msleep_interruptible(250);
 
 	/* clear reset */
 	result = usb_stor_control_msg(us, us->send_ctrl_pipe,
@@ -485,7 +485,7 @@ static int init_freecom(struct us_data *us)
 	usb_stor_dbg(us, "result from clear reset is %d\n", result);
 
 	/* wait 3 seconds */
-	mdelay(3 * 1000);
+	msleep_interruptible(3 * 1000);
 
 	return USB_STOR_TRANSPORT_GOOD;
 }

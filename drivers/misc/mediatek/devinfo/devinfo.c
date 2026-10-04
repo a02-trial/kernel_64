@@ -231,7 +231,7 @@ static long devinfo_ioctl(struct file *file, u32 cmd, unsigned long arg)
 		break;
 	}
 
-	return ret;
+	return 0;
 }
 
 /******************************************************************************
@@ -253,7 +253,7 @@ static long devinfo_ioctl(struct file *file, u32 cmd, unsigned long arg)
 static int __init devinfo_init(void)
 {
 	int ret = 0;
-	struct device *device = NULL;
+	struct device *device;
 
 	devinfo_dev = MKDEV(MAJOR_DEV_NUM, 0);
 	pr_debug("[%s]init\n", MODULE_NAME);
@@ -310,7 +310,7 @@ static int __init devinfo_init(void)
 #ifdef CONFIG_OF
 static void devinfo_parse_dt(void)
 {
-	struct devinfo_tag *tags = NULL;
+	struct devinfo_tag *tags;
 	u32 size = 0;
 	u32 hrid_magic_and_size = 0;
 	u32 hrid_magic = 0;
@@ -332,12 +332,6 @@ static void devinfo_parse_dt(void)
 
 		g_devinfo_data = kmalloc(sizeof(struct devinfo_tag) +
 				(size * sizeof(u32)), GFP_KERNEL);
-
-		if (g_devinfo_data == NULL) {
-			pr_err("devinfo kmalloc fail!!\n");
-			return;
-		}
-
 		g_devinfo_size = size;
 
 		WARN_ON(size > 300); /* for size integer too big protection */
@@ -364,15 +358,14 @@ static void devinfo_parse_dt(void)
 		pr_info("tag_devinfo_data size:%d, HRID size:%d\n",
 				size, g_hrid_size);
 
-		snprintf(devinfo_segment_buff, sizeof(devinfo_segment_buff),
-				"segment code=0x%x\n",
+		sprintf(devinfo_segment_buff, "segment code=0x%x\n",
 				g_devinfo_data[DEVINFO_SEGCODE_INDEX]);
 
 		pr_info("[devinfo][SegCode] Segment Code=0x%x\n",
 				g_devinfo_data[DEVINFO_SEGCODE_INDEX]);
 
 	} else {
-		snprintf(devinfo_segment_buff, sizeof(devinfo_segment_buff),
+		sprintf(devinfo_segment_buff,
 				"segment code=[Fail in parsing DT]\n");
 
 		pr_err("'atag,devinfo' is not found\n");

@@ -154,7 +154,7 @@ static ssize_t rawbulk_attr_show(struct device *dev, struct device_attribute
 static ssize_t rawbulk_attr_store(struct device *dev, struct device_attribute
 				  *attr, const char *buf, size_t count);
 
-static inline void add_device_attr(struct rawbulk_function *fn, unsigned int n,
+static inline void add_device_attr(struct rawbulk_function *fn, int n,
 				const char *name, int mode)
 {
 	if (n < MAX_ATTRIBUTES) {
@@ -182,15 +182,13 @@ static ssize_t rawbulk_attr_show(struct device *dev,
 				struct device_attribute *attr, char *buf)
 {
 	int n;
-	int idx = 0;
+	int idx;
 	int enab;
 	struct rawbulk_function *fn;
 	ssize_t count = 0;
 
 	for (n = 0; n < _MAX_TID; n++) {
 		fn = rawbulk_lookup_function(n);
-		if (IS_ERR_OR_NULL(fn))
-			break;
 		if (fn->dev == dev) {
 			idx = which_attr(fn, attr);
 			break;
@@ -291,8 +289,6 @@ static ssize_t rawbulk_attr_store(struct device *dev,
 
 	for (n = 0; n < _MAX_TID; n++) {
 		fn = rawbulk_lookup_function(n);
-		if (IS_ERR_OR_NULL(fn))
-			break;
 		if (fn->dev == dev) {
 			idx = which_attr(fn, attr);
 			break;
@@ -323,7 +319,7 @@ static ssize_t rawbulk_attr_store(struct device *dev,
 	if (idx == ATTR_ENABLE) {
 #endif
 		int enable;
-		long tmp = 0;
+		long tmp;
 
 #ifdef SUPPORT_LEGACY_CONTROL
 		if (idx == ATTR_ENABLE) {
@@ -455,7 +451,7 @@ static ssize_t rawbulk_attr_store(struct device *dev,
 		if (fn->transfer_id == RAWBULK_TID_MODEM) {
 			if (check_enable_state(fn)) {
 				int val, ret;
-				long tmp = 0;
+				long tmp;
 
 				ret = kstrtol(buf, 0, &tmp);
 				val = (int)tmp;
@@ -464,14 +460,14 @@ static ssize_t rawbulk_attr_store(struct device *dev,
 		}
 	} else if (idx == ATTR_AUTORECONN) {
 		int val, ret;
-		long tmp = 0;
+		long tmp;
 
 		ret = kstrtol(buf, 0, &tmp);
 		val = (int)tmp;
 		fn->autoreconn = !!val;
 	} else {
 		int val, ret;
-		long tmp = 0;
+		long tmp;
 
 		ret = kstrtol(buf, 0, &tmp);
 		val = (int)tmp;
@@ -607,7 +603,7 @@ static __init struct rawbulk_function *rawbulk_alloc_function(int transfer_id)
 		return NULL;
 
 	fn = kzalloc(sizeof(*fn), GFP_KERNEL);
-	if (IS_ERR_OR_NULL(fn))
+	if (IS_ERR(fn))
 		return NULL;
 
 	/* init default features of rawbulk functions */

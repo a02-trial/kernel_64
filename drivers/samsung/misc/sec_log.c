@@ -135,6 +135,7 @@ static const struct file_operations sec_log_file_ops = {
 
 static int __init sec_log_init(void)
 {
+#if 0    // To avoid panic issue, sec_log does not need for MT6739 project.
 	struct proc_dir_entry *entry;
 
 	if (sec_log_buf == NULL)
@@ -148,6 +149,7 @@ static int __init sec_log_init(void)
 	}
 
 	proc_set_size(entry, seclog_size);
+#endif
 	return 0;
 }
 late_initcall(sec_log_init);
@@ -302,7 +304,7 @@ static int sec_log_combine_pmsg(char *buffer, size_t count, unsigned int level)
 					pr_info("%s\n", buffer);
 #ifdef CONFIG_SEC_BOOTSTAT
 					if (count > 5 && strncmp(buffer, "!@Boot", 6) == 0)
-						sec_boot_stat_add(buffer);
+					sec_boot_stat_add(buffer);
 #endif /* CONFIG_SEC_BOOTSTAT */
 				}
 			}

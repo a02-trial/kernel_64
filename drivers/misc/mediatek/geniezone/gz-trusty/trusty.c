@@ -18,7 +18,7 @@
 #include <linux/of.h>
 #include <linux/of_platform.h>
 #include <linux/platform_device.h>
-#if IS_ENABLED(CONFIG_MT_GZ_TRUSTY_DEBUGFS)
+#ifdef CONFIG_MT_GZ_TRUSTY_DEBUGFS
 #include <linux/random.h>
 #endif
 #include <linux/slab.h>
@@ -30,17 +30,13 @@
 
 #include <linux/string.h>
 
-#define enable_code 0 /*replace #if 0*/
-
-#if enable_code /*#if 0*/
-#if IS_ENABLED(CONFIG_MTK_RAM_CONSOLE)
+#ifdef CONFIG_MTK_RAM_CONSOLE
 #include "trusty-ramconsole.h"
-#endif
 #endif
 
 /* #define TRUSTY_SMC_DEBUG */
 
-#if IS_ENABLED(TRUSTY_SMC_DEBUG)
+#ifdef TRUSTY_SMC_DEBUG
 #define trusty_dbg(fmt...) dev_dbg(fmt)
 #define trusty_info(fmt...) dev_info(fmt)
 #define trusty_err(fmt...) dev_info(fmt)
@@ -50,7 +46,7 @@
 #define trusty_err(fmt...) dev_info(fmt)
 #endif
 
-#if IS_ENABLED(CONFIG_ARM64)
+#ifdef CONFIG_ARM64
 #define SMC_ARG0		"x0"
 #define SMC_ARG1		"x1"
 #define SMC_ARG2		"x2"
@@ -105,7 +101,7 @@ s32 trusty_fast_call32(struct device *dev, u32 smcnr, u32 a0, u32 a1, u32 a2)
 }
 EXPORT_SYMBOL(trusty_fast_call32);
 
-#if IS_ENABLED(CONFIG_64BIT)
+#ifdef CONFIG_64BIT
 s64 trusty_fast_call64(struct device *dev, u64 smcnr, u64 a0, u64 a1, u64 a2)
 {
 	struct trusty_state *s = platform_get_drvdata(to_platform_device(dev));
@@ -126,7 +122,8 @@ static inline bool is_busy(int ret)
 
 static inline bool is_nop_call(u32 smc_nr)
 {
-	return (smc_nr == MTEE_SMCNR_TID(SMCF_SC_NOP, 0) ||
+	return (smc_nr == SMC_SC_GZ_NOP ||
+		smc_nr == MTEE_SMCNR_TID(SMCF_SC_NOP, 0) ||
 		smc_nr == MTEE_SMCNR_TID(SMCF_SC_NOP, 1));
 }
 
@@ -187,7 +184,8 @@ static ulong trusty_std_call_helper(struct device *dev, ulong smcnr,
 			 * 0 means NOP, 1 means STDCALL
 			 * a1 = cpu core (get after local IRQ is disabled)
 			 */
-			if (smcnr == MTEE_SMCNR_TID(SMCF_SC_RESTART_LAST, 0) ||
+			if (smcnr == SMC_SC_GZ_RESTART_LAST ||
+			    smcnr == MTEE_SMCNR_TID(SMCF_SC_RESTART_LAST, 0) ||
 			    smcnr == MTEE_SMCNR_TID(SMCF_SC_RESTART_LAST, 1))
 				a1 = smp_processor_id();
 		}
@@ -297,7 +295,7 @@ s32 trusty_std_call32(struct device *dev, u32 smcnr, u32 a0, u32 a1, u32 a2)
 	WARN_ON(SMC_IS_FASTCALL(smcnr));
 	WARN_ON(SMC_IS_SMC64(smcnr));
 
-	if (smcnr != MTEE_SMCNR_TID(SMCF_SC_NOP, 0) &&
+	if (smcnr != SMC_SC_GZ_NOP && smcnr != MTEE_SMCNR_TID(SMCF_SC_NOP, 0) &&
 	    smcnr != MTEE_SMCNR_TID(SMCF_SC_NOP, 1)) {
 		//mutex_lock(&multi_lock);
 		mutex_lock(&s->smc_lock);
@@ -319,7 +317,7 @@ s32 trusty_std_call32(struct device *dev, u32 smcnr, u32 a0, u32 a1, u32 a2)
 
 	WARN_ONCE(ret == SM_ERR_PANIC, "trusty crashed");
 
-	if (smcnr == MTEE_SMCNR_TID(SMCF_SC_NOP, 0) ||
+	if (smcnr == SMC_SC_GZ_NOP || smcnr == MTEE_SMCNR_TID(SMCF_SC_NOP, 0) ||
 	    smcnr == MTEE_SMCNR_TID(SMCF_SC_NOP, 1))
 		complete(&s->cpu_idle_completion);
 	else {
@@ -356,66 +354,6 @@ int trusty_call_notifier_unregister(struct device *dev,
 }
 EXPORT_SYMBOL(trusty_call_notifier_unregister);
 
-int trusty_callback_notifier_register(struct device *dev,
-				struct notifier_block *n)
-{
-	struct trusty_state *s;
-
-	if (IS_ERR_OR_NULL(dev))
-		return -EINVAL;
-
-	s = platform_get_drvdata(to_platform_device(dev));
-	return blocking_notifier_chain_register(&s->callback, n);
-}
-EXPORT_SYMBOL(trusty_callback_notifier_register);
-
-int trusty_callback_notifier_unregister(struct device *dev,
-				struct notifier_block *n)
-{
-	struct trusty_state *s;
-
-	if (IS_ERR_OR_NULL(dev))
-		return -EINVAL;
-
-	s = platform_get_drvdata(to_platform_device(dev));
-	return blocking_notifier_chain_unregister(&s->callback, n);
-}
-EXPORT_SYMBOL(trusty_callback_notifier_unregister);
-
-int trusty_adjust_task_attr(struct device *dev,
-				struct trusty_task_attr *manual_task_attr)
-{
-	struct trusty_state *s;
-
-	if (IS_ERR_OR_NULL(dev))
-		return -EINVAL;
-
-	s = platform_get_drvdata(to_platform_device(dev));
-
-	blocking_notifier_call_chain(&s->callback,
-			TRUSTY_CALLBACK_VIRTIO_WQ_ATTR, manual_task_attr);
-
-	return 0;
-}
-EXPORT_SYMBOL(trusty_adjust_task_attr);
-
-int trusty_dump_systrace(struct device *dev, void *data)
-{
-#if ENABLE_GZ_TRACE_DUMP
-	struct trusty_state *s;
-
-	if (IS_ERR_OR_NULL(dev))
-		return -EINVAL;
-
-	s = platform_get_drvdata(to_platform_device(dev));
-
-	blocking_notifier_call_chain(&s->callback,
-			TRUSTY_CALLBACK_SYSTRACE, data);
-#endif
-	return 0;
-}
-EXPORT_SYMBOL(trusty_dump_systrace);
-
 static int trusty_remove_child(struct device *dev, void *data)
 {
 	platform_device_unregister(to_platform_device(dev));
@@ -440,30 +378,23 @@ static ssize_t trusty_version_store(struct device *dev,
 
 DEVICE_ATTR_RW(trusty_version);
 
-#if enable_code /*#if 0*/
-#if IS_ENABLED(CONFIG_MTK_RAM_CONSOLE)
+#ifdef CONFIG_MTK_RAM_CONSOLE
 static void init_gz_ramconsole(struct device *dev)
 {
 	u32 low, high;
-#ifdef SRAM_TEST
-
-	low = 0x0011E000;
-	high = 0x00000000;
-#else
 	unsigned long *gz_irq_pa;
 
 	gz_irq_pa = aee_rr_rec_gz_irq_pa();
-	trusty_info(dev, "ram console: get PA %p\n", gz_irq_pa);
+	trusty_info(dev, "ram console get PA 0x%lx\n",
+		    (unsigned long)gz_irq_pa);
 
 	low = (u32) (((u64) gz_irq_pa << 32) >> 32);
 	high = (u32) ((u64) gz_irq_pa >> 32);
-#endif
 
-	trusty_info(dev,
-		"ram console: send ram console PA from kernel to GZ\n");
-	trusty_std_call32(dev, MT_SMC_SC_SET_RAMCONSOLE, low, high, 0);
+	trusty_info(dev, "send ram console PA from kernel to GZ\n");
+	trusty_std_call32(dev, MTEE_SMCNR(MT_SMCF_SC_SET_RAMCONSOLE, dev),
+			  low, high, 0);
 }
-#endif
 #endif
 
 const char *trusty_version_str_get(struct device *dev)
@@ -696,7 +627,7 @@ EXPORT_SYMBOL(trusty_dequeue_nop);
 
 static int trusty_probe(struct platform_device *pdev)
 {
-	int ret, tee_id = 0;
+	int ret, tee_id;
 	unsigned int cpu;
 	work_func_t work_func;
 	struct trusty_state *s;
@@ -734,7 +665,6 @@ static int trusty_probe(struct platform_device *pdev)
 	INIT_LIST_HEAD(&s->nop_queue);
 	mutex_init(&s->smc_lock);
 	ATOMIC_INIT_NOTIFIER_HEAD(&s->notifier);
-	BLOCKING_INIT_NOTIFIER_HEAD(&s->callback);
 	init_completion(&s->cpu_idle_completion);
 	platform_set_drvdata(pdev, s);
 
@@ -782,16 +712,15 @@ static int trusty_probe(struct platform_device *pdev)
 		trusty_info(&pdev->dev, "Failed to add children: %d\n", ret);
 		goto err_add_children;
 	}
-#if IS_ENABLED(CONFIG_MT_GZ_TRUSTY_DEBUGFS)
+#ifdef CONFIG_MT_GZ_TRUSTY_DEBUGFS
 	mtee_create_debugfs(s, &pdev->dev);
 #else
 	trusty_info(&pdev->dev, "%s, Not MT_GZ_TRUSTY_DEBUGFS\n", __func__);
 #endif
 
-#if enable_code /*#if 0*/
-#if IS_ENABLED(CONFIG_MTK_RAM_CONSOLE)
-	init_gz_ramconsole(&pdev->dev);
-#endif
+#ifdef CONFIG_MTK_RAM_CONSOLE
+	if (s->tee_id == TEE_ID_TRUSTY)
+		init_gz_ramconsole(&pdev->dev);
 #endif
 	return 0;
 
@@ -900,9 +829,5 @@ static void __exit trusty_driver_exit(void)
 	platform_driver_unregister(&nebula_driver);
 }
 
-//subsys_initcall(trusty_driver_init);
 arch_initcall(trusty_driver_init);
 module_exit(trusty_driver_exit);
-
-MODULE_LICENSE("GPL");
-

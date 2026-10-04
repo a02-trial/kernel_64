@@ -31,10 +31,9 @@
 #include <linux/gpio.h>
 #include <linux/uaccess.h>
 #include <linux/regulator/consumer.h>
-#include <linux/spu-verify.h>
 
 #include <linux/input/mt.h>
-#include <linux/sec_sysfs.h>
+//#include <linux/sec_sysfs.h>
 #include <linux/input/sec_cmd.h>
 #include <linux/input/sec_tclm_v2.h>
 #include <linux/of_gpio.h>
@@ -43,11 +42,9 @@
 #ifdef CONFIG_BATTERY_SAMSUNG
 #include <linux/sec_batt.h>
 #endif
-#if defined(CONFIG_MUIC_NOTIFIER)
-#include <linux/muic/common/muic.h>
-#include <linux/muic/common/muic_notifier.h>
-#endif
-#if defined(CONFIG_VBUS_NOTIFIER)
+#ifdef CONFIG_VBUS_NOTIFIER
+#include <linux/muic/muic.h>
+#include <linux/muic/muic_notifier.h>
 #include <linux/vbus_notifier.h>
 #endif
 
@@ -61,17 +58,11 @@
 #define GLOVE_MODE
 
 #define MAX_FW_PATH 255
+#define TSP_FW_FILENAME "zinitix_fw.bin"
 
-#define SPU_FW_SIGNED
-
-#define TSP_PATH_EXTERNAL_FW		"/sdcard/Firmware/TSP/tsp.bin"
-#define TSP_PATH_EXTERNAL_FW_SIGNED	"/sdcard/Firmware/TSP/tsp_signed.bin"
-#define TSP_PATH_SPU_FW_SIGNED		"/spu/TSP/ffu_tsp.bin"
-
-#define TSP_TYPE_BUILTIN_FW			0
-#define TSP_TYPE_EXTERNAL_FW		1
-#define TSP_TYPE_EXTERNAL_FW_SIGNED	2
-#define TSP_TYPE_SPU_FW_SIGNED		3
+#ifdef CONFIG_INPUT_BOOSTER
+#include <linux/input/input_booster.h>
+#endif
 
 #ifdef CONFIG_TRUSTONIC_TRUSTED_UI
 #include <linux/t-base-tui.h>
@@ -87,7 +78,7 @@ static bool bypass_mode = false;
 #define ZINITIX_DEBUG				0
 #define PDIFF_DEBUG					1
 #if !defined(CONFIG_SAMSUNG_PRODUCT_SHIP)
-#define USE_MISC_DEVICE
+//#define USE_MISC_DEVICE
 #endif
 
 /* added header file */
@@ -145,9 +136,9 @@ enum key_event {
 
 /* ESD Protection */
 /*second : if 0, no use. if you have to use, 3 is recommended*/
-#define ESD_TIMER_INTERVAL			2
+#define ESD_TIMER_INTERVAL			1
 #define SCAN_RATE_HZ				1000
-#define CHECK_ESD_TIMER				4
+#define CHECK_ESD_TIMER				3
 
 /*Test Mode (Monitoring Raw Data) */
 #define TSP_INIT_TEST_RATIO  100
@@ -216,12 +207,9 @@ struct reg_ioctl {
 #define TOUCH_JITTER_MODE			15
 #define TOUCH_SELF_DND_MODE			17
 #define TOUCH_SENTIVITY_MEASUREMENT_MODE	21
-#define TOUCH_CHARGE_PUMP_MODE			25
 #define TOUCH_REF_ABNORMAL_TEST_MODE		33
 #define DEF_RAW_SELF_SSR_DATA_MODE		39	/* SELF SATURATION RX */
 #define DEF_RAW_SELF_SFR_UNIT_DATA_MODE		40
-
-#define TOUCH_SENTIVITY_MEASUREMENT_COUNT	9
 
 /*  Other Things */
 #define INIT_RETRY_CNT				3
@@ -269,8 +257,8 @@ struct reg_ioctl {
 #define BT532_EEPROM_INFO					0x0018
 #define BT532_INITIAL_TOUCH_MODE			0x0019
 
-#define BT532_TOTAL_NUMBER_OF_X				0x0061
-#define BT532_TOTAL_NUMBER_OF_Y				0x0060
+#define BT532_TOTAL_NUMBER_OF_X				0x0060
+#define BT532_TOTAL_NUMBER_OF_Y				0x0061
 
 #define BT532_CONNECTION_CHECK_REG			0x0062
 
@@ -284,8 +272,6 @@ struct reg_ioctl {
 #define BT532_Y_RESOLUTION					0x00C1
 
 #define ZT75XX_CALL_AOT_REG				0x00D3
-
-#define ZT75XX_STATUS_REG					0x0080
 
 #define BT532_POINT_STATUS_REG				0x0200
 #define BT532_POINT_STATUS_REG1				0x0201
@@ -325,33 +311,6 @@ struct reg_ioctl {
 
 #define ZT75XX_REJECT_ZONE_AREA			0x01AD
 
-#define	ZT75XX_EDGE_LANDSCAPE_MODE					0x0038
-#define	ZT75XX_EDGE_REJECT_PORT_SIDE_UP_DOWN_DIV	0x0039
-#define	ZT75XX_EDGE_REJECT_PORT_SIDE_UP_WIDTH		0x003A
-#define	ZT75XX_EDGE_REJECT_PORT_SIDE_DOWN_WIDTH		0x003E
-#define	ZT75XX_EDGE_REJECT_PORT_EDGE_EXCEPT_SEL		0x003F
-#define	ZT75XX_EDGE_REJECT_PORT_EDGE_EXCEPT_START	0x0040
-#define	ZT75XX_EDGE_REJECT_PORT_EDGE_EXCEPT_END		0x0041
-//#define	ZT75XX_EDGE_GRIP_PORT_TOP_BOT_WIDTH			0x0042
-#define	ZT75XX_EDGE_GRIP_PORT_SIDE_WIDTH			0x0045
-#define	ZT75XX_EDGE_REJECT_LAND_SIDE_WIDTH			0x0046
-#define	ZT75XX_EDGE_REJECT_LAND_TOP_BOT_WIDTH		0x0047
-#define	ZT75XX_EDGE_GRIP_LAND_SIDE_WIDTH			0x0048
-#define	ZT75XX_EDGE_GRIP_LAND_TOP_BOT_WIDTH			0x0049
-
-enum grip_write_mode {
-	G_NONE				= 0,
-	G_SET_EDGE_HANDLER		= 1,
-	G_SET_EDGE_ZONE			= 2,
-	G_SET_NORMAL_MODE		= 4,
-	G_SET_LANDSCAPE_MODE	= 8,
-	G_CLR_LANDSCAPE_MODE	= 16,
-};
-enum grip_set_data {
-	ONLY_EDGE_HANDLER		= 0,
-	GRIP_ALL_DATA			= 1,
-};
-
 #define ZT75XX_RESOLUTION_EXPANDER			0x0186
 #define ZT75XX_MUTUAL_AMP_V_SEL			0x02F9
 #define ZT75XX_SX_AMP_V_SEL				0x02DF
@@ -383,19 +342,6 @@ enum grip_set_data {
 #define ZT75XX_PROXIMITY_THRESHOLD_Y	0x02D5
 
 #define ZT75XX_POCKET_DETECT			0x0037
-
-#define REG_FOD_AREA_STR_X				0x013B
-#define REG_FOD_AREA_STR_Y				0x013C
-#define REG_FOD_AREA_END_X				0x013E
-#define REG_FOD_AREA_END_Y				0x013F
-
-#define REG_FOD_MODE_SET				0x0142
-
-#define REG_FOD_MODE_VI_DATA				0x0143
-#define REG_FOD_MODE_VI_DATA_LEN			0x0144
-#define REG_FOD_MODE_VI_DATA_CH				0x0145
-
-#define FOD_VI_DATA_LENGTH			17
 
 /* Interrupt & status register flag bit
 -------------------------------------------------
@@ -461,7 +407,6 @@ enum grip_set_data {
 #define COVER_OPEN			0x0200
 #define LED_COVER_CLOSE		0x0700
 #define CLEAR_COVER_CLOSE	0x0800
-#define S_VIEW_COVER_CLOSE	0x1000
 
 enum zt_cover_id {
 	ZT_FLIP_WALLET = 0,
@@ -476,7 +421,6 @@ enum zt_cover_id {
 	ZT_QWERTY_KEYBOARD_EUR,
 	ZT_QWERTY_KEYBOARD_KOR,
 	ZT_NEON_COVER,
-	ZT_S_VIEW_COVER = 16,
 	ZT_MONTBLANC_COVER = 100,
 };
 
@@ -494,7 +438,7 @@ enum zt_cover_id {
 #define	DEF_OPTIONAL_MODE_DUO_TOUCH		4
 #define DEF_OPTIONAL_MODE_TOUCHABLE_AREA		5
 #define DEF_OPTIONAL_MODE_EAR_DETECT		6
-#define DEF_OPTIONAL_MODE_EAR_DETECT_MUTUAL		7
+#define DEF_OPTIONAL_MODE_REJECT_ZONE		7
 #define DEF_OPTIONAL_MODE_POCKET_MODE		8
 
 /* end header file */
@@ -505,19 +449,14 @@ enum zt_cover_id {
 
 #define BIT_EVENT_SPAY	1
 #define BIT_EVENT_AOD	2
-#define BIT_EVENT_SINGLE_TAP   3
 #define BIT_EVENT_AOT	5
-#define BIT_EVENT_FOD   6
 
 typedef enum {
 	SPONGE_EVENT_TYPE_SPAY			= 0x04,
-	SPONGE_EVENT_TYPE_SINGLE_TAP		= 0x08,
+	SPONGE_EVENT_TYPE_AOD			= 0x08,
 	SPONGE_EVENT_TYPE_AOD_PRESS		= 0x09,
 	SPONGE_EVENT_TYPE_AOD_LONGPRESS		= 0x0A,
-	SPONGE_EVENT_TYPE_AOD_DOUBLETAB		= 0x0B,
-	SPONGE_EVENT_TYPE_FOD_PRESS			= 0x0F,
-	SPONGE_EVENT_TYPE_FOD_RELEASE		= 0x10,
-	SPONGE_EVENT_TYPE_FOD_OUT			= 0x11,
+	SPONGE_EVENT_TYPE_AOD_DOUBLETAB		= 0x0B
 } SPONGE_EVENT_TYPE;
 
 #ifdef SEC_FACTORY_TEST
@@ -531,7 +470,6 @@ typedef enum {
 #define tostring(x) #x
 
 struct tsp_raw_data {
-	s16 cnd_data[TSP_CMD_NODE_NUM];
 	s16 dnd_data[TSP_CMD_NODE_NUM];
 	s16 hfdnd_data[TSP_CMD_NODE_NUM];
 	s16 delta_data[TSP_CMD_NODE_NUM];
@@ -547,7 +485,6 @@ struct tsp_raw_data {
 	s16 jitter_data[TSP_CMD_NODE_NUM];
 	s16 reference_data[TSP_CMD_NODE_NUM];
 	s16 reference_data_abnormal[TSP_CMD_NODE_NUM];
-	s16 charge_pump_data[TSP_CMD_NODE_NUM];
 	u16 channel_test_data[5];
 };
 
@@ -601,7 +538,8 @@ static bool g_ta_connected =0;
 typedef union {
 	u16 optional_mode;
 	struct select_mode {
-		u16 flag;
+		u8 flag;
+		u8 cover_type;
 	} select_mode;
 } zt7538_setting;
 
@@ -671,7 +609,6 @@ enum {
 	BUILT_IN = 0,
 	UMS,
 	REQ_FW,
-	SPU,
 };
 
 struct bt532_ts_info {
@@ -715,7 +652,6 @@ struct bt532_ts_info {
 	struct semaphore				raw_data_lock;
 	u16								touch_mode;
 	s16								cur_data[MAX_TRAW_DATA_SZ];
-	s16								sensitivity_data[TOUCH_SENTIVITY_MEASUREMENT_COUNT];
 	u8								update;
 
 #ifdef SEC_FACTORY_TEST
@@ -741,7 +677,9 @@ struct bt532_ts_info {
 	s16 Gap_min_val;
 	s16 Gap_Gap_val;
 	s16 Gap_node_num;
-
+#ifdef CONFIG_INPUT_BOOSTER
+	u8 touch_pressed_num;
+#endif
 	struct pinctrl *pinctrl;
 	bool tsp_pwr_enabled;
 #ifdef CONFIG_VBUS_NOTIFIER
@@ -750,38 +688,15 @@ struct bt532_ts_info {
 	u8 cover_type;
 	bool flip_enable;
 	bool spay_enable;
-	bool fod_enable;
-	bool fod_lp_mode;
-	bool singletap_enable;
 	bool aod_enable;
 	bool aot_enable;
 	bool sleep_mode;
 	bool glove_touch;
 	u8 lpm_mode;
-	int enabled;
-
-	u16 fod_mode_set;
-	u8 fod_info_vi_trx[2];
-	u16 fod_info_vi_data_len;
 
 	unsigned int scrub_id;
 	unsigned int scrub_x;
 	unsigned int scrub_y;
-
-	u8 grip_edgehandler_direction;
-	int grip_edgehandler_start_y;
-	int grip_edgehandler_end_y;
-	u16 grip_edge_range;
-	u8 grip_deadzone_up_x;
-	u8 grip_deadzone_dn_x;
-	int grip_deadzone_y;
-	u8 grip_landscape_mode;
-	int grip_landscape_edge;
-	u16 grip_landscape_deadzone;
-	u16 grip_landscape_top_deadzone;
-	u16 grip_landscape_bottom_deadzone;
-	u16 grip_landscape_top_gripzone;
-	u16 grip_landscape_bottom_gripzone;
 
 	u8 check_multi;
 	unsigned int multi_count;
@@ -794,13 +709,8 @@ struct bt532_ts_info {
 	u16 pressed_x[MAX_SUPPORTED_FINGER_NUM];
 	u16 pressed_y[MAX_SUPPORTED_FINGER_NUM];
 	long prox_power_off;
-
-	u32 palm_flag;
-
 	bool ed_enable;
 	int pocket_enable;
-	u16 hover_event; /* keystring for protos */
-	u16 store_reg_data;
 
 	u8 ito_test[4];
 	struct sec_tclm_data *tdata;
@@ -1087,15 +997,10 @@ static void esd_timer_init(struct bt532_ts_info *info);
 static void esd_timeout_handler(unsigned long data);
 #endif
 
-static void zinitix_display_rawdata(struct bt532_ts_info *info, struct tsp_raw_data *raw_data, int type, int gap);
-void zinitix_set_grip_type(struct bt532_ts_info *info, u8 set_type);
-
 #ifdef TCLM_CONCEPT
 int get_zt_tsp_nvm_data(struct bt532_ts_info *info, u8 addr, u8 *values, u16 length);
 int set_zt_tsp_nvm_data(struct bt532_ts_info *info, u8 addr, u8 *values, u16 length);
 #endif
-
-void location_detect(struct bt532_ts_info *info, char *loc, int x, int y);
 
 #ifdef USE_MISC_DEVICE
 static long ts_misc_fops_ioctl(struct file *filp, unsigned int cmd,
@@ -1147,7 +1052,7 @@ static void set_cover_type(struct bt532_ts_info *info, bool enable)
 	struct i2c_client *client = info->client;
 
 	write_cmd(info->client, 0x0A);
-	if (enable){
+	if(enable){
 		switch (info->cover_type) {
 			case ZT_FLIP_WALLET:
 				write_reg(client, BT532_COVER_CONTROL_REG, WALLET_COVER_CLOSE);
@@ -1161,9 +1066,6 @@ static void set_cover_type(struct bt532_ts_info *info, bool enable)
 			case ZT_NEON_COVER:
 				write_reg(client, BT532_COVER_CONTROL_REG, LED_COVER_CLOSE);
 				break;
-			case ZT_S_VIEW_COVER:
-				write_reg(client, BT532_COVER_CONTROL_REG, S_VIEW_COVER_CLOSE);
-				break;				
 			default:
 				input_err(true, &info->client->dev, "%s: touch is not supported for %d cover\n",
 							__func__, info->cover_type);
@@ -1211,10 +1113,10 @@ static bool get_raw_data(struct bt532_ts_info *info, u8 *buff, int skip_cnt)
 
 	info->work_state = RAW_DATA;
 
-	for (i = 0; i < skip_cnt; i++) {
+	for(i = 0; i < skip_cnt; i++) {
 		while (gpio_get_value(pdata->gpio_int)) {
 			usleep_range(1 * 1000, 1 * 1000);
-			if (++j > 3000) {
+			if(++j > 3000) {
 				input_err(true, &info->client->dev, "%s: (skip_cnt) wait int timeout\n", __func__);
 				break;
 			}
@@ -1230,14 +1132,14 @@ static bool get_raw_data(struct bt532_ts_info *info, u8 *buff, int skip_cnt)
 	j = 0;
 	while (gpio_get_value(pdata->gpio_int)) {
 		usleep_range(1 * 1000, 1 * 1000);
-		if (++j > 3000) {
+		if(++j > 3000) {
 			input_err(true, &info->client->dev, "%s: wait int timeout\n", __func__);
 			break;
 		}
 	}
 
 	if (read_raw_data(client, BT532_RAWDATA_REG, (char *)buff, sz) < 0) {
-		input_info(true, &client->dev, "error : read zinitix tc raw data\n");
+		zinitix_printk("error : read zinitix tc raw data\n");
 		info->work_state = NOTHING;
 		enable_irq(info->irq);
 		up(&info->work_lock);
@@ -1284,9 +1186,7 @@ static bool ts_get_raw_data(struct bt532_ts_info *info)
 static bool ts_read_coord(struct bt532_ts_info *info)
 {
 	struct i2c_client *client = info->client;
-	int i, retry_cnt;
-	u16 status_data;
-	u16 pocket_data;
+	int retry_cnt;
 
 	/* zinitix_debug_msg("ts_read_coord+\r\n"); */
 
@@ -1296,32 +1196,12 @@ static bool ts_read_coord(struct bt532_ts_info *info)
 		if (ts_get_raw_data(info) == false)
 			return false;
 
-		if (info->touch_mode == TOUCH_SENTIVITY_MEASUREMENT_MODE) {
-			for (i = 0; i < TOUCH_SENTIVITY_MEASUREMENT_COUNT; i++) {
-				info->sensitivity_data[i] = info->cur_data[i];
-			}
-		}
+		input_err(true, &client->dev, "%s: Failed to read get raw data\n", __func__);
 
 		goto out;
 	}
 
-	if (info->pocket_enable) {
-		if (read_data(info->client, ZT75XX_STATUS_REG, (u8 *)&status_data, 2) < 0) {
-			input_err(true, &client->dev, "%s: fail to read status reg\n", __func__);
-		}
-
-		if (zinitix_bit_test(status_data, BIT_POCKET_MODE)) {
-			if (read_data(info->client, ZT75XX_POCKET_DETECT, (u8 *)&pocket_data, 2) < 0) {
-				input_err(true, &client->dev, "%s: fail to read pocket reg\n", __func__);
-			} else {
-				input_info(true, &client->dev, "Pocket %s \n", pocket_data == 11 ? "IN" : "OUT");
-				input_report_abs(info->input_dev_proximity, ABS_MT_CUSTOM, pocket_data);
-				input_sync(info->input_dev_proximity);
-			}
-		}
-	}
-
-	memset(&info->touch_info[0], 0x0, sizeof(struct point_info) * MAX_SUPPORTED_FINGER_NUM);
+	memset(&info->touch_info[0], 0x0, sizeof(struct point_info)*MAX_SUPPORTED_FINGER_NUM);
 
 	retry_cnt = 0;
 	while(retry_cnt < 10) {
@@ -1352,7 +1232,7 @@ static bool ts_read_coord(struct bt532_ts_info *info)
 				return false;
 		}
 	} else if ((info->pdata->support_lpm_mode) && (info->touch_info[0].byte00.value.eid == GESTURE_EVENT)) {
-		if (info->touch_info[0].byte00.value.tid == SWIPE_UP) {
+		if (info->touch_info[0].byte01.value_u8bit == SWIPE_UP) {
 			input_info(true, &client->dev, "Spay Gesture\n");
 
 			info->scrub_id = SPONGE_EVENT_TYPE_SPAY;
@@ -1363,91 +1243,11 @@ static bool ts_read_coord(struct bt532_ts_info *info)
 			input_sync(info->input_dev);
 			input_report_key(info->input_dev, KEY_BLACK_UI_GESTURE, 0);
 			input_sync(info->input_dev);
-		} else if(info->touch_info[0].byte00.value.tid == FINGERPRINT) {
-			if (info->fod_enable &&
-				((info->touch_info[0].byte01.value_u8bit == 0)
-				|| (info->touch_info[0].byte01.value_u8bit == 1))) {
-				info->scrub_id = SPONGE_EVENT_TYPE_FOD_PRESS;
-
-				info->scrub_x = ((info->touch_info[0].byte02.value_u8bit << 4) & 0xFF0)
-								| ((info->touch_info[0].byte04.value_u8bit & 0xF0) >> 4);
-				info->scrub_y = ((info->touch_info[0].byte03.value_u8bit << 4) & 0xFF0)
-								| ((info->touch_info[0].byte04.value_u8bit & 0x0F));
-
-				input_report_key(info->input_dev, KEY_BLACK_UI_GESTURE, 1);
+		} else if (info->touch_info[0].byte01.value_u8bit == DOUBLE_TAP) {
+			if (info->aot_enable) {
+				input_report_key(info->input_dev, KEY_HOMEPAGE, 1);
 				input_sync(info->input_dev);
-				input_report_key(info->input_dev, KEY_BLACK_UI_GESTURE, 0);
-				input_sync(info->input_dev);
-#ifdef CONFIG_SAMSUNG_PRODUCT_SHIP
-				input_info(true, &client->dev, "%s: FOD %s PRESS: %d\n", __func__,
-					info->touch_info[0].byte01.value_u8bit ? "NORMAL" : "LONG", info->scrub_id);
-#else
-				input_info(true, &client->dev, "%s: FOD %s PRESS: %d, %d, %d\n", __func__,
-					info->touch_info[0].byte01.value_u8bit ? "NORMAL" : "LONG",
-					info->scrub_id, info->scrub_x, info->scrub_y);
-#endif
-			} else if (info->fod_enable && (info->touch_info[0].byte01.value_u8bit == 2)) {
-				info->scrub_id = SPONGE_EVENT_TYPE_FOD_RELEASE;
-
-				info->scrub_x = ((info->touch_info[0].byte02.value_u8bit << 4) & 0xFF0)
-								| ((info->touch_info[0].byte04.value_u8bit & 0xF0) >> 4);
-				info->scrub_y = ((info->touch_info[0].byte03.value_u8bit << 4) & 0xFF0)
-								| ((info->touch_info[0].byte04.value_u8bit & 0x0F));
-
-				input_report_key(info->input_dev, KEY_BLACK_UI_GESTURE, 1);
-				input_sync(info->input_dev);
-				input_report_key(info->input_dev, KEY_BLACK_UI_GESTURE, 0);
-				input_sync(info->input_dev);
-#ifdef CONFIG_SAMSUNG_PRODUCT_SHIP
-				input_info(true, &client->dev, "%s: FOD RELEASE: %d\n", __func__, info->scrub_id);
-#else
-				input_info(true, &client->dev, "%s: FOD RELEASE: %d, %d, %d\n",
-						__func__, info->scrub_id, info->scrub_x, info->scrub_y);
-#endif
-			} else if (info->fod_enable && (info->touch_info[0].byte01.value_u8bit == 3)) {
-				info->scrub_id = SPONGE_EVENT_TYPE_FOD_OUT;
-
-				info->scrub_x = ((info->touch_info[0].byte02.value_u8bit << 4) & 0xFF0)
-								| ((info->touch_info[0].byte04.value_u8bit & 0xF0) >> 4);
-				info->scrub_y = ((info->touch_info[0].byte03.value_u8bit << 4) & 0xFF0)
-								| ((info->touch_info[0].byte04.value_u8bit & 0x0F));
-
-				input_report_key(info->input_dev, KEY_BLACK_UI_GESTURE, 1);
-				input_sync(info->input_dev);
-				input_report_key(info->input_dev, KEY_BLACK_UI_GESTURE, 0);
-				input_sync(info->input_dev);
-#ifdef CONFIG_SAMSUNG_PRODUCT_SHIP
-				input_info(true, &client->dev, "%s: FOD OUT: %d\n", __func__, info->scrub_id);
-#else
-				input_info(true, &client->dev, "%s: FOD OUT: %d, %d, %d\n",
-						__func__, info->scrub_id, info->scrub_x, info->scrub_y);
-#endif
-			}
-		} else if(info->touch_info[0].byte00.value.tid == SINGLE_TAP) {
-			if (info->singletap_enable) {
-				info->scrub_id = SPONGE_EVENT_TYPE_SINGLE_TAP;
-
-				info->scrub_x = ((info->touch_info[0].byte02.value_u8bit << 4) & 0xFF0)
-								| ((info->touch_info[0].byte04.value_u8bit & 0xF0) >> 4);
-				info->scrub_y = ((info->touch_info[0].byte03.value_u8bit << 4) & 0xFF0)
-								| ((info->touch_info[0].byte04.value_u8bit & 0x0F));
-
-				input_report_key(info->input_dev, KEY_BLACK_UI_GESTURE, 1);
-				input_sync(info->input_dev);
-				input_report_key(info->input_dev, KEY_BLACK_UI_GESTURE, 0);
-				input_sync(info->input_dev);
-#ifdef CONFIG_SAMSUNG_PRODUCT_SHIP
-				input_info(true, &client->dev, "%s: SINGLE TAP: %d\n", __func__, info->scrub_id);
-#else
-				input_info(true, &client->dev, "%s: SINGLE TAP: %d, %d, %d\n",
-						__func__, info->scrub_id, info->scrub_x, info->scrub_y);
-#endif
-			}
-		} else if (info->touch_info[0].byte00.value.tid == DOUBLE_TAP) {
-			if (info->aot_enable && (info->touch_info[0].byte01.value_u8bit == 1)) {
-				input_report_key(info->input_dev, KEY_WAKEUP, 1);
-				input_sync(info->input_dev);
-				input_report_key(info->input_dev, KEY_WAKEUP, 0);
+				input_report_key(info->input_dev, KEY_HOMEPAGE, 0);
 				input_sync(info->input_dev);
 
 				/* request from sensor team */
@@ -1457,25 +1257,18 @@ static bool ts_read_coord(struct bt532_ts_info *info)
 				input_sync(info->input_dev_proximity);
 
 				input_info(true, &client->dev, "AOT Doubletab\n");
-			} else if (info->aod_enable && (info->touch_info[0].byte01.value_u8bit == 0)) {
+			} else {
 				info->scrub_id = SPONGE_EVENT_TYPE_AOD_DOUBLETAB;
 
-				info->scrub_x = ((info->touch_info[0].byte02.value_u8bit << 4) & 0xFF0)
-								| ((info->touch_info[0].byte04.value_u8bit & 0xF0) >> 4);
-				info->scrub_y = ((info->touch_info[0].byte03.value_u8bit << 4) & 0xFF0)
-								| ((info->touch_info[0].byte04.value_u8bit & 0x0F));
+				info->scrub_x = (info->touch_info[0].byte02.value_u8bit << 8) | (info->touch_info[0].byte03.value_u8bit);
+				info->scrub_y = (info->touch_info[0].byte04.value_u8bit << 8) | (info->touch_info[0].byte05.value_u8bit);
 
 				input_report_key(info->input_dev, KEY_BLACK_UI_GESTURE, 1);
 				input_sync(info->input_dev);
 				input_report_key(info->input_dev, KEY_BLACK_UI_GESTURE, 0);
 				input_sync(info->input_dev);
 
-#ifdef CONFIG_SAMSUNG_PRODUCT_SHIP
-				input_info(true, &client->dev, "%s: AOD Doubletab: %d\n", __func__, info->scrub_id);
-#else
-				input_info(true, &client->dev, "%s: AOD Doubletab: %d, %d, %d\n",
-						__func__, info->scrub_id, info->scrub_x, info->scrub_y);
-#endif
+				input_info(true, &client->dev, "AOD Doubletab\n");
 			}
 		}
 	}
@@ -1518,7 +1311,7 @@ static void esd_timer_start(u16 sec, struct bt532_ts_info *info)
 {
 	unsigned long flags;
 
-	if (info->sleep_mode){
+	if(info->sleep_mode){
 		input_info(true, &info->client->dev, "%s skip (sleep_mode)!\n", __func__);
 		return;
 	}
@@ -1576,7 +1369,7 @@ static void ts_tmr_work(struct work_struct *work)
 	input_info(true, &client->dev, "tmr queue work ++\n");
 #endif
 
-	if (down_trylock(&info->work_lock)) {
+	if(down_trylock(&info->work_lock)) {
 		input_err(true, &client->dev, "%s: Failed to occupy work lock\n", __func__);
 		esd_timer_start(CHECK_ESD_TIMER, info);
 
@@ -1642,15 +1435,15 @@ retry_power_sequence:
 	input_info(true, &client->dev, "%s: chip code = 0x%x\n", __func__, chip_code);
 	usleep_range(10, 10);
 
-	if (chip_code == ZT7554_CHIP_CODE)
+	if(chip_code == ZT7554_CHIP_CODE)
 		info->cap_info.ic_fw_size = 64*1024;
-	else if (chip_code == ZT7548_CHIP_CODE)
+	else if(chip_code == ZT7548_CHIP_CODE)
 		info->cap_info.ic_fw_size = 48*1024;
-	else if (chip_code == ZT7538_CHIP_CODE)
+	else if(chip_code == ZT7538_CHIP_CODE)
 		info->cap_info.ic_fw_size = 44*1024;
-	else if (chip_code == BT43X_CHIP_CODE)
+	else if(chip_code == BT43X_CHIP_CODE)
 		info->cap_info.ic_fw_size = 24*1024;
-	else if (chip_code == BT53X_CHIP_CODE)
+	else if(chip_code == BT53X_CHIP_CODE)
 		info->cap_info.ic_fw_size = 32*1024;
 
 	if (write_cmd(client, 0xc004) != I2C_SUCCESS) {
@@ -1783,7 +1576,7 @@ static bool crc_check(struct bt532_ts_info *info)
 
 	input_info(true, &info->client->dev, "%s: 0x%04X\n", __func__, chip_check_sum);
 
-	if (chip_check_sum == 0x55aa)
+	if(chip_check_sum == 0x55aa)
 		return true;
 	else
 		return false;
@@ -1861,7 +1654,7 @@ static u8 ts_upgrade_firmware(struct bt532_ts_info *info,
 
 	verify_data = vzalloc(size);
 	if (verify_data == NULL) {
-		input_info(true, &client->dev, "cannot alloc verify buffer\n");
+		zinitix_printk(KERN_ERR "cannot alloc verify buffer\n");
 		return false;
 	}
 
@@ -1871,72 +1664,72 @@ retry_upgrade:
 	usleep_range(10 * 1000, 10 * 1000);
 
 	if (write_reg(client, 0xc000, 0x0001) != I2C_SUCCESS){
-		input_info(true, &client->dev, "power sequence error (vendor cmd enable)\n");
+		zinitix_printk("power sequence error (vendor cmd enable)\n");
 		goto fail_upgrade;
 	}
 
 	usleep_range(10, 10);
 
 	if (read_data(client, 0xcc00, (u8 *)&chip_code, 2) < 0) {
-		input_info(true, &client->dev, "failed to read chip code\n");
+		zinitix_printk("failed to read chip code\n");
 		goto fail_upgrade;
 	}
 
-	input_info(true, &client->dev, "chip code = 0x%x\n", chip_code);
+	zinitix_printk("chip code = 0x%x\n", chip_code);
 
 #ifdef TCLM_CONCEPT
-	if (chip_code == ZT7538_CHIP_CODE || chip_code == ZT7548_CHIP_CODE || chip_code == ZT7532_CHIP_CODE) {
+	if(chip_code == ZT7538_CHIP_CODE || chip_code == ZT7548_CHIP_CODE || chip_code == ZT7532_CHIP_CODE) {
 		flash_addr = (firmware_data[0x61]<<16) | (firmware_data[0x62]<<8) | firmware_data[0x63];
 		flash_addr += ((firmware_data[0x65]<<16) | (firmware_data[0x66]<<8) | firmware_data[0x67]);
 
-		if (flash_addr != 0)
+		if(flash_addr != 0)
 			size = flash_addr;
 
 		page_sz = 64;
 
 		if (write_reg(client, 0xc201, 0x00be) != I2C_SUCCESS) {
-			input_info(true, &client->dev, "power sequence error (set clk speed)\n");
+			zinitix_printk("power sequence error (set clk speed)\n");
 			goto fail_upgrade;
 		}
 		usleep_range(200, 200);
 	}
-	input_info(true, &client->dev, "f/w size = 0x%x Page_sz = %d \n", size, page_sz);
+	zinitix_printk("f/w size = 0x%x Page_sz = %d \n", size, page_sz);
 
 #else
-	if ((chip_code == ZT7538_CHIP_CODE)||(chip_code == ZT7548_CHIP_CODE)||(chip_code == BT43X_CHIP_CODE))
+	if((chip_code == ZT7538_CHIP_CODE)||(chip_code == ZT7548_CHIP_CODE)||(chip_code == BT43X_CHIP_CODE))
 		page_sz = 64;
 #endif
 	usleep_range(10, 10);
 
 	if (write_cmd(client, 0xc004) != I2C_SUCCESS){
-		input_info(true, &client->dev, "power sequence error (intn clear)\n");
+		zinitix_printk("power sequence error (intn clear)\n");
 		goto fail_upgrade;
 	}
 
 	usleep_range(10, 10);
 
 	if (write_reg(client, 0xc002, 0x0001) != I2C_SUCCESS){
-		input_info(true, &client->dev, "power sequence error (nvm init)\n");
+		zinitix_printk("power sequence error (nvm init)\n");
 		goto fail_upgrade;
 	}
 
 	usleep_range(5 * 1000, 5 * 1000);
 
-	input_info(true, &client->dev, "init flash\n");
+	zinitix_printk(KERN_INFO "init flash\n");
 
 	if (write_reg(client, 0xc003, 0x0001) != I2C_SUCCESS) {
-		input_info(true, &client->dev, "failed to write nvm vpp on\n");
+		zinitix_printk("failed to write nvm vpp on\n");
 		goto fail_upgrade;
 	}
 
 	if (write_reg(client, 0xc104, 0x0001) != I2C_SUCCESS){
-		input_info(true, &client->dev, "failed to write nvm wp disable\n");
+		zinitix_printk("failed to write nvm wp disable\n");
 		goto fail_upgrade;
 	}
 
 #ifdef TCLM_CONCEPT
 	if (write_reg(client, BT532_INIT_FLASH, 2) != I2C_SUCCESS) {
-		input_info(true, &client->dev, "failed to enter burst upgrade mode\n");
+		zinitix_printk("failed to enter burst upgrade mode\n");
 		goto fail_upgrade;
 	}
 
@@ -1944,55 +1737,55 @@ retry_upgrade:
 		for (i = 0; i < page_sz/TC_SECTOR_SZ_WRITE; i++) {
 			if (write_data(client, BT532_WRITE_FLASH,
 						(u8 *)&firmware_data[flash_addr], TC_SECTOR_SZ_WRITE) < 0) {
-				input_info(true, &client->dev, "error : write zinitix tc firmare\n");
+				zinitix_printk(KERN_INFO"error : write zinitix tc firmare\n");
 				goto fail_upgrade;
 			}
 			flash_addr += TC_SECTOR_SZ_WRITE;
 		}
 		i = 0;
 		while(1) {
-			if (flash_addr >= size)
+			if(flash_addr >= size)
 				break;
-			if (gpio_get_value(info->pdata->gpio_int))
+			if(gpio_get_value(info->pdata->gpio_int))
 				break;
 			msleep(30);
-			if (++i>100)
+			if(++i>100)
 				break;
 		}
 
-		if (i>100) {
-			input_info(true, &client->dev, "write timeout\n");
+		if(i>100) {
+			zinitix_printk("write timeout\n");
 			goto fail_upgrade;
 		}
 	}
 
 	if (write_cmd(client, 0x01DD) != I2C_SUCCESS) {
-		input_info(true, &client->dev, "failed to flush cmd\n");
+		zinitix_printk("failed to flush cmd\n");
 		goto fail_upgrade;
 	}
 	msleep(100);
 	i = 0;
 
 	while(1) {
-		if (gpio_get_value(info->pdata->gpio_int))
+		if(gpio_get_value(info->pdata->gpio_int))
 			break;
 		msleep(30);
-		if (++i>1000) {
-			input_info(true, &client->dev, "flush timeout\n");
+		if(++i>1000) {
+			zinitix_printk("flush timeout\n");
 			goto fail_upgrade;
 		}
 	}
 #else
-	if ((chip_code == ZT7538_CHIP_CODE)||(chip_code == ZT7548_CHIP_CODE)||(chip_code == ZT7554_CHIP_CODE)) {
+	if((chip_code == ZT7538_CHIP_CODE)||(chip_code == ZT7548_CHIP_CODE)||(chip_code == ZT7554_CHIP_CODE)) {
 		if (write_cmd(client, BT532_INIT_FLASH) != I2C_SUCCESS) {
-			input_info(true, &client->dev, "failed to init flash\n");
+			zinitix_printk("failed to init flash\n");
 			goto fail_upgrade;
 		}
 
 		// Mass Erase
 		//====================================================
 		if (write_cmd(client, 0x01DF) != I2C_SUCCESS) {
-			input_info(true, &client->dev, "failed to mass erase\n");
+			zinitix_printk("failed to mass erase\n");
 			goto fail_upgrade;
 		}
 
@@ -2002,55 +1795,55 @@ retry_upgrade:
 		//====================================================
 
 		if (write_reg(client, 0x01DE, 0x0001) != I2C_SUCCESS) {
-			input_info(true, &client->dev, "failed to enter upgrade mode\n");
+			zinitix_printk("failed to enter upgrade mode\n");
 			goto fail_upgrade;
 		}
 
 		usleep_range(1000, 1000);
 
 		if (write_reg(client, 0x01D3, 0x0008) != I2C_SUCCESS) {
-			input_info(true, &client->dev, "failed to init upgrade mode\n");
+			zinitix_printk("failed to init upgrade mode\n");
 			goto fail_upgrade;
 		}
-	} else if (chip_code == BT43X_CHIP_CODE){
+	} else if(chip_code == BT43X_CHIP_CODE){
 	// Mass Erase
 	//====================================================
 	if (write_reg(client, 0xc108, 0x0007) != I2C_SUCCESS) {
-		input_info(true, &client->dev, "failed to write 0xc108 - 7\n");
+		zinitix_printk("failed to write 0xc108 - 7\n");
 		goto fail_upgrade;
 	}
 
 	if (write_reg(client, 0xc109, 0x0000) != I2C_SUCCESS) {
-		input_info(true, &client->dev, "failed to write 0xc109\n");
+		zinitix_printk("failed to write 0xc109\n");
 		goto fail_upgrade;
 	}
 
 	if (write_reg(client, 0xc10A, 0x0000) != I2C_SUCCESS) {
-		input_info(true, &client->dev, "failed to write nvm wp disable\n");
+		zinitix_printk("failed to write nvm wp disable\n");
 		goto fail_upgrade;
 	}
 
 	if (write_cmd(client, 0xc10B) != I2C_SUCCESS) {
-		input_info(true, &client->dev, "failed to write mass erease\n");
+		zinitix_printk("failed to write mass erease\n");
 		goto fail_upgrade;
 	}
 
 	msleep(20);
 
 	if (write_reg(client, 0xc108, 0x0008) != I2C_SUCCESS) {
-		input_info(true, &client->dev, "failed to write 0xc108 - 8\n");
+		zinitix_printk("failed to write 0xc108 - 8\n");
 		goto fail_upgrade;
 	}
 
 	if (write_cmd(client, BT532_INIT_FLASH) != I2C_SUCCESS) {
-		input_info(true, &client->dev, "failed to init flash\n");
+		zinitix_printk(KERN_INFO "failed to init flash\n");
 		goto fail_upgrade;
 	}
 
 	}else {
 		fuzing_udelay = 30000;
 		if (write_cmd(client, BT532_INIT_FLASH) != I2C_SUCCESS) {
-			input_info(true, &client->dev, "failed to init flash\n");
+			zinitix_printk(KERN_INFO "failed to init flash\n");
 			goto fail_upgrade;
 		}
 	}
@@ -2060,7 +1853,7 @@ retry_upgrade:
 			if (write_data(client,
 				BT532_WRITE_FLASH,
 				(u8 *)&firmware_data[flash_addr],TC_SECTOR_SZ) < 0) {
-				input_info(true, &client->dev, "error : write zinitix tc firmare\n");
+				zinitix_printk(KERN_INFO"error : write zinitix tc firmare\n");
 				goto fail_upgrade;
 			}
 			flash_addr += TC_SECTOR_SZ;
@@ -2072,27 +1865,27 @@ retry_upgrade:
 #endif
 
 	if (write_reg(client, 0xc003, 0x0000) != I2C_SUCCESS) {
-		input_info(true, &client->dev, "nvm write vpp off\n");
+		zinitix_printk("nvm write vpp off\n");
 		goto fail_upgrade;
 	}
 
 	if (write_reg(client, 0xc104, 0x0000) != I2C_SUCCESS){
-		input_info(true, &client->dev, "nvm wp enable\n");
+		zinitix_printk("nvm wp enable\n");
 		goto fail_upgrade;
 	}
 
-	input_info(true, &client->dev, "init flash\n");
+	zinitix_printk(KERN_INFO "init flash\n");
 
 	if (write_cmd(client, BT532_INIT_FLASH) != I2C_SUCCESS) {
-		input_info(true, &client->dev, KERN_INFO "failed to init flash\n");
+		zinitix_printk(KERN_INFO "failed to init flash\n");
 		goto fail_upgrade;
 	}
 
-	input_info(true, &client->dev, "read firmware data\n");
+	zinitix_printk(KERN_INFO "read firmware data\n");
 
 #ifdef TCLM_CONCEPT
 	if (write_reg(client, 0x01D3, 0x0008) != I2C_SUCCESS) {
-		input_info(true, &client->dev,  "failed to init upgrade mode\n");
+		zinitix_printk( "failed to init upgrade mode\n");
 		goto fail_upgrade;
 	}
 	usleep_range(1 * 1000, 1 * 1000);
@@ -2134,7 +1927,7 @@ retry_upgrade:
 			goto fail_upgrade;
 
 		if (verify_data){
-			input_info(true, &client->dev, "vfree\n");
+			zinitix_printk("vfree\n");
 			vfree(verify_data);
 			verify_data = NULL;
 		}
@@ -2151,7 +1944,7 @@ fail_upgrade:
 	}
 
 	if (verify_data){
-		input_info(true, &client->dev, "vfree\n");
+		zinitix_printk("vfree\n");
 		vfree(verify_data);
 	}
 
@@ -2207,14 +2000,14 @@ static bool ts_hw_calibration(struct bt532_ts_info *info)
 		if (!zinitix_bit_test(chip_eeprom_info, 0))
 			break;
 
-		if (time_out++ == 4){
+		if(time_out++ == 4){
 			write_cmd(client, BT532_CALIBRATE_CMD);
 			usleep_range(10 * 1000, 10 * 1000);
 			write_cmd(client, BT532_CLEAR_INT_STATUS_CMD);
 			input_err(true, &client->dev, "h/w calibration retry timeout.\n");
 		}
 
-		if (time_out++ > 10){
+		if(time_out++ > 10){
 			input_err(true, &client->dev, "h/w calibration timeout.\n");
 			break;
 		}
@@ -2282,7 +2075,7 @@ static int fw_update_work(struct bt532_ts_info *info, bool force_update)
 #ifdef TCLM_CONCEPT
 	int restore_cal = 0;
 #endif
-	if (pdata->bringup){
+	if(pdata->bringup){
 		input_info(true, &info->client->dev, "%s: bringup\n", __func__);
 		return 0;
 	}
@@ -2308,10 +2101,6 @@ static int fw_update_work(struct bt532_ts_info *info, bool force_update)
 	}
 
 	if (need_update == true || force_update == true) {
-		ret = ts_upgrade_firmware(info, info->fw_data, cap->ic_fw_size);
-		if (!ret)
-			input_err(true, &info->client->dev, "%s: failed fw update\n", __func__);
-		
 #ifdef TCLM_CONCEPT
 		ret = sec_tclm_get_nvm_all(info->tdata);
 		if (ret < 0) {
@@ -2330,7 +2119,13 @@ static int fw_update_work(struct bt532_ts_info *info, bool force_update)
 			sec_tclm_root_of_cal(info->tdata, CALPOSITION_FIRMUP);
 			restore_cal = 1;
 		}
+#endif
 
+		ret = ts_upgrade_firmware(info, info->fw_data, cap->ic_fw_size);
+		if (!ret)
+			input_err(true, &info->client->dev, "%s: failed fw update\n", __func__);
+
+#ifdef TCLM_CONCEPT
 		if (restore_cal == 1) {
 			input_err(true, &info->client->dev, "%s: RUN OFFSET CALIBRATION\n", __func__);
 			ret = sec_execute_tclm_package(info->tdata, 0);
@@ -2358,7 +2153,7 @@ static int fw_update_work(struct bt532_ts_info *info, bool force_update)
 #ifndef TCLM_CONCEPT
 	if (zinitix_bit_test(chip_eeprom_info, 0)) /* hw calibration bit*/
 	{
-		if (ts_hw_calibration(info) == false){
+		if(ts_hw_calibration(info) == false){
 			ret = -1;
 			goto fw_request_fail;
 		}
@@ -2376,12 +2171,11 @@ static bool init_touch(struct bt532_ts_info *info)
 	struct bt532_ts_platform_data *pdata = info->pdata;
 	u16 reg_val = 0;
 	u8 data[6] = {0};
-	int ret;
 
 	/* get x,y data */
-	read_data(info->client, BT532_TOTAL_NUMBER_OF_Y, data, 4);
-	info->cap_info.x_node_num = data[2] | (data[3] << 8);
-	info->cap_info.y_node_num = data[0] | (data[1] << 8);
+	read_data(info->client, BT532_TOTAL_NUMBER_OF_X, data, 4);
+	info->cap_info.x_node_num = data[0] | (data[1] << 8);
+	info->cap_info.y_node_num = data[2] | (data[3] << 8);
 
 	info->cap_info.MaxX= pdata->x_resolution;
 	info->cap_info.MaxY = pdata->y_resolution;
@@ -2391,22 +2185,6 @@ static bool init_touch(struct bt532_ts_info *info)
 
 	input_info(true, &info->client->dev, "node x %d, y %d  resolution x %d, y %d\n",
 		info->cap_info.x_node_num, info->cap_info.y_node_num, info->cap_info.MaxX, info->cap_info.MaxY	);
-
-	/* get fod information */
-	write_cmd(info->client, 0x0A);
-	ret = read_data(info->client, REG_FOD_MODE_VI_DATA_CH, info->fod_info_vi_trx, 2);
-	if (ret < 0) {
-		input_err(true, &info->client->dev,"%s: fail fod channel info.\n", __func__);
-	}
-
-	ret = read_data(info->client, REG_FOD_MODE_VI_DATA_LEN, (u8 *)&info->fod_info_vi_data_len, 2);
-	if (ret < 0) {
-		input_err(true, &info->client->dev, "%s: fail fod data len.\n", __func__);
-	}
-	write_cmd(info->client, 0x0B);
-
-	input_info(true, &info->client->dev, "%s: fod info %d,%d,%d\n", __func__,
-		info->fod_info_vi_trx[1], info->fod_info_vi_trx[0], info->fod_info_vi_data_len);
 
 #if ESD_TIMER_INTERVAL
 	if (write_reg(info->client, BT532_PERIODICAL_INTERRUPT_INTERVAL,
@@ -2469,9 +2247,8 @@ static bool mini_init_touch(struct bt532_ts_info *info)
 #endif
 #endif
 
-	if (pdata->support_lpm_mode) {
+	if(pdata->support_lpm_mode){
 		write_reg(info->client, ZT75XX_LPM_MODE_REG, 0);
-
 		if (pdata->support_aod && !pdata->support_aot) {
 			write_reg(info->client, ZT75XX_SET_AOD_W_REG, 0);
 			write_reg(info->client, ZT75XX_SET_AOD_H_REG, 0);
@@ -2480,14 +2257,14 @@ static bool mini_init_touch(struct bt532_ts_info *info)
 		}
 	}
 
-	if (info->sleep_mode) {
+	if((pdata->support_lpm_mode)&&(info->spay_enable||info->aod_enable || info->aot_enable)){
+		if(info->sleep_mode){
 #if ESD_TIMER_INTERVAL
-		esd_timer_stop(info);
+			esd_timer_stop(info);
 #endif
-		write_cmd(info->client, BT532_SLEEP_CMD);
-		input_info(true, &misc_info->client->dev, "%s, sleep mode\n", __func__);
-	} else {
-		zinitix_set_grip_type(info, ONLY_EDGE_HANDLER);
+			write_cmd(info->client, BT532_SLEEP_CMD);
+			input_info(true, &misc_info->client->dev, "%s, sleep mode\n", __func__);
+		}
 	}
 
 	input_info(true, &client->dev, "Successfully mini initialized\r\n");
@@ -2498,7 +2275,7 @@ fail_mini_init:
 /*	bt532_power_control(info, POWER_OFF);
 	bt532_power_control(info, POWER_ON_SEQUENCE);
 
-	if (init_touch(info) == false) {
+	if(init_touch(info) == false) {
 		input_err(true, &client->dev, "Failed to initialize\n");
 
 		return false;
@@ -2520,7 +2297,6 @@ static void clear_report_data(struct bt532_ts_info *info)
 	struct i2c_client *client = info->client;
 	int i;
 	u8 reported = 0;
-	char location[7] = "";
 
 	if (pdata->support_touchkey) {
 		for (i = 0; i < info->cap_info.button_num; i++) {
@@ -2539,37 +2315,17 @@ static void clear_report_data(struct bt532_ts_info *info)
 	}
 
 	for (i = 0; i < info->cap_info.multi_fingers; i++) {
-		if (info->cur_coord[i].touch_status > FINGER_NONE) {
+		if (info->old_coord[i].touch_status > FINGER_NONE) {
 			input_mt_slot(info->input_dev, i);
 #ifdef CONFIG_SEC_FACTORY
 			input_report_abs(info->input_dev, ABS_MT_PRESSURE, 0);
 #endif
 			input_mt_report_slot_state(info->input_dev, MT_TOOL_FINGER, 0);
 			reported = true;
-			if (!m_ts_debug_mode && TSP_NORMAL_EVENT_MSG) {
-				location_detect(info, location, info->cur_coord[i].x, info->cur_coord[i].y);
-	
-#if !defined(CONFIG_SAMSUNG_PRODUCT_SHIP)
-				input_info(true, &client->dev, "[RA] tID:%d loc:%s dd:%d,%d mc:%d tc:%d lx:%d ly:%d p:%d\n",
-					i, location,
-					info->cur_coord[i].x - info->pressed_x[i],
-					info->cur_coord[i].y - info->pressed_y[i],
-					info->move_count[i], info->finger_cnt1,
-					info->cur_coord[i].x,
-					info->cur_coord[i].y,
-					info->cur_coord[i].palm_count);
-#else
-				input_info(true, &client->dev, "[RA] tID:%02d loc:%s dd:%d,%d mc:%d tc:%d p:%d\n",
-					i, location,
-					info->cur_coord[i].x - info->pressed_x[i],
-					info->cur_coord[i].y - info->pressed_y[i],
-					info->move_count[i], info->finger_cnt1,
-					info->cur_coord[i].palm_count);
-#endif
-			}
+			if (!m_ts_debug_mode && TSP_NORMAL_EVENT_MSG)
+				input_info(true, &client->dev, "RA [%02d] mc=%d\n", i, info->move_count[i]);
 		}
-		memset(&info->old_coord[i], 0, sizeof(struct ts_coordinate));
-		memset(&info->cur_coord[i], 0, sizeof(struct ts_coordinate));
+		memset(&info->old_coord[i], 0x00, sizeof(struct ts_coordinate));
 		info->move_count[i] = 0;
 	}
 
@@ -2578,15 +2334,15 @@ static void clear_report_data(struct bt532_ts_info *info)
 	info->glove_touch = 0;
 #endif
 
-	input_report_key(info->input_dev, BTN_PALM, false);
-	info->palm_flag = 0;
-
 	if (reported) {
 		input_sync(info->input_dev);
 	}
 
 	info->finger_cnt1 = 0;
 	info->check_multi = 0;
+#ifdef CONFIG_INPUT_BOOSTER
+	input_booster_send_event(BOOSTER_DEVICE_TOUCH, BOOSTER_MODE_FORCE_OFF);
+#endif
 }
 
 #define	PALM_REPORT_WIDTH	200
@@ -2600,7 +2356,6 @@ void trustedui_mode_on(void){
 #if ESD_TIMER_INTERVAL
 	esd_timer_stop(tui_tsp_info);
 	write_reg(tui_tsp_info->client, BT532_PERIODICAL_INTERRUPT_INTERVAL, 0);
-	write_cmd(tui_tsp_info->client, BT532_CLEAR_INT_STATUS_CMD);
 #endif
 }
 EXPORT_SYMBOL(trustedui_mode_on);
@@ -2637,28 +2392,29 @@ void location_detect(struct bt532_ts_info *info, char *loc, int x, int y)
 static irqreturn_t bt532_touch_work(int irq, void *data)
 {
 	struct bt532_ts_info* info = (struct bt532_ts_info*)data;
+	struct bt532_ts_platform_data *pdata = info->pdata;
 	struct i2c_client *client = info->client;
 	int i;
 	u8 reported = false;
 	u8 tid = 0;
-	u8 ttype, tstatus;
 	u16 x, y, z, maxX, maxY, sen_max;
 	u16 st;
 	u16 prox_data = 0; 
 	u8 info_major_w = 0;
 	u8 info_minor_w = 0;
-	char noise_flag = -1;
-	char flip_cover_flag = 0;
 	
+#ifdef CONFIG_INPUT_BOOSTER
+	bool booster_enable = false;
+#endif
+	u16 ic_status;
 	char location[7] = "";
 	int ret;
 	char pos[5];
 	char cur = 0;
 	char old = 0;
-	char tclm_buff[55];
 
-	if (info->sleep_mode) {
-		pm_wakeup_event(info->input_dev->dev.parent, 500);
+	if((pdata->support_lpm_mode) && (info->spay_enable || info->aod_enable || info->aot_enable)){
+		pm_wakeup_event(info->input_dev->dev.parent, 2000);
 
 		/* waiting for blsp block resuming, if not occurs i2c error */
 		ret = wait_for_completion_interruptible_timeout(&info->resume_done, msecs_to_jiffies(500));
@@ -2688,7 +2444,7 @@ static irqreturn_t bt532_touch_work(int irq, void *data)
 #endif
 
 	if (info->work_state != NOTHING) {
-		input_err(true, &client->dev, "%s: Other process occupied\n", __func__);
+		input_err(true, &client->dev, "%s: Other process occupied (0x%02x)\n", __func__, ic_status);
 		usleep_range(DELAY_FOR_SIGNAL_DELAY, DELAY_FOR_SIGNAL_DELAY);
 
 		if (!gpio_get_value(info->pdata->gpio_int)) {
@@ -2712,12 +2468,9 @@ static irqreturn_t bt532_touch_work(int irq, void *data)
 		goto out;
 	}
 
-	if (info->touch_info[0].byte00.value.eid == CUSTOM_EVENT)
-		goto out;
-
 	reported = false;
 #if 0 /* support_touchkey, need button state*/
-	if (pdata->support_touchkey){
+	if(pdata->support_touchkey){
 		if (zinitix_bit_test(info->touch_info.status, BIT_ICON_EVENT)) {
 			if (read_data(info->client, BT532_ICON_STATUS_REG,
 				(u8 *)(&info->icon_event_reg), 2) < 0) {
@@ -2758,83 +2511,50 @@ static irqreturn_t bt532_touch_work(int irq, void *data)
 	}
 #endif
 
-	for (i = 0; i < info->cap_info.multi_fingers; i++) {
+	for (i = 0; i < (info->touched_finger_num + 1); i++) {
 		info->old_coord[i] = info->cur_coord[i];
-		memset(&info->cur_coord[i], 0, sizeof(struct ts_coordinate));
-	}
-
-	for (i = 0; i < info->cap_info.multi_fingers; i++) {
-		ttype = (info->touch_info[i].byte06.value.touch_type23 << 2) | (info->touch_info[i].byte07.value.touch_type01);
-		tstatus = info->touch_info[i].byte00.value.touch_status;
-
-		if (tstatus == FINGER_NONE && ttype != TOUCH_PROXIMITY) 
-			continue;
 
 		tid = info->touch_info[i].byte00.value.tid;
 
 		info->cur_coord[tid].id = tid;
-		info->cur_coord[tid].touch_status = tstatus;
+		info->cur_coord[tid].touch_status = info->touch_info[i].byte00.value.touch_status;
 		info->cur_coord[tid].x = (info->touch_info[i].byte01.value.x_coord_h << 4) | (info->touch_info[i].byte03.value.x_coord_l);
 		info->cur_coord[tid].y = (info->touch_info[i].byte02.value.y_coord_h << 4) | (info->touch_info[i].byte03.value.y_coord_l);
 		info->cur_coord[tid].z = info->touch_info[i].byte06.value.z_value;
-		info->cur_coord[tid].ttype = ttype;
+		info->cur_coord[tid].ttype = (info->touch_info[i].byte06.value.touch_type23 << 2) | (info->touch_info[i].byte07.value.touch_type01);
 		info->cur_coord[tid].major = info->touch_info[i].byte04.value_u8bit;
 		info->cur_coord[tid].minor = info->touch_info[i].byte05.value_u8bit;
 		info->cur_coord[tid].noise = info->touch_info[i].byte08.value_u8bit;
 		info->cur_coord[tid].max_sense= info->touch_info[i].byte09.value_u8bit;
-
-		if (!info->cur_coord[tid].palm && (info->cur_coord[tid].ttype == TOUCH_PALM))
-			info->cur_coord[tid].palm_count++;
-		info->cur_coord[tid].palm = (info->cur_coord[tid].ttype == TOUCH_PALM);
-		if (info->cur_coord[tid].palm)
-			info->palm_flag |= (1 << tid);
-		else
-			info->palm_flag &= ~(1 << tid);
-
-		if (info->cur_coord[tid].z <= 0)
-			info->cur_coord[tid].z = 1;
 	}
 
 	for (i = 0; i < info->cap_info.multi_fingers; i++) {
-		if((info->cur_coord[i].ttype == TOUCH_PROXIMITY)
-			&& (info->pdata->support_ear_detect)) {
-			if (read_data(info->client, ZT75XX_PROXIMITY_DETECT, (u8 *)&prox_data, 2) < 0)
-				input_err(true, &client->dev, "%s: fail to read proximity detect reg\n", __func__);
-
-			info->hover_event = prox_data;
-
-			input_info(true, &client->dev, "PROXIMITY DETECT. LVL = %d \n", prox_data);
-			input_report_abs(info->input_dev_proximity, ABS_MT_CUSTOM, prox_data);
-			input_sync(info->input_dev_proximity);
-			break;
-		}
-	}
-
-	noise_flag = -1;
-	flip_cover_flag = 0;
-
-	for (i = 0; i < info->cap_info.multi_fingers; i++) {
-		if (info->cur_coord[i].touch_status == FINGER_NONE)
+		if (info->cur_coord[i].touch_status == FINGER_NONE) {
+			memset(&info->cur_coord[i], 0, sizeof(struct ts_coordinate));
 			continue;
-
-		if ((noise_flag == -1) && (info->old_coord[i].noise != info->cur_coord[i].noise)) {
-			noise_flag = info->cur_coord[i].noise;
-			input_info(true, &client->dev, "NOISE MODE %s [%d]\n", noise_flag > 0 ? "ON":"OFF", noise_flag);
 		}
 
-		if (flip_cover_flag == 0) {
-			if (info->old_coord[i].ttype != TOUCH_FLIP_COVER && info->cur_coord[i].ttype == TOUCH_FLIP_COVER) {
-				flip_cover_flag = 1;
-				input_info(true, &client->dev, "FLIP COVER MODE ON\n");
-			}
-
-			if (info->old_coord[i].ttype == TOUCH_FLIP_COVER && info->cur_coord[i].ttype != TOUCH_FLIP_COVER) {
-				flip_cover_flag = 1;
-				input_info(true, &client->dev, "FLIP COVER MODE OFF\n");
-			}
-		}
+		if (info->old_coord[i].noise != info->cur_coord[i].noise) 
+			input_info(true, &client->dev, "NOISE MODE %s [%d]\n", info->cur_coord[i].noise > 0 ? "ON" : "OFF", info->cur_coord[i].noise);
 
 		if (info->old_coord[i].ttype != info->cur_coord[i].ttype) {
+			if ((info->cur_coord[i].ttype == TOUCH_PROXIMITY) && (info->pdata->support_ear_detect)) {
+				if (read_data(info->client, ZT75XX_PROXIMITY_DETECT, (u8 *)&prox_data, 2) < 0)
+					input_err(true, &client->dev, "%s: fail to read proximity detect reg\n", __func__);
+
+				input_info(true, &client->dev, "PROXIMITY DETECT. LVL = %d, [%d]\n", prox_data, info->cur_coord[i].ttype);
+				input_report_abs(info->input_dev_proximity, ABS_MT_CUSTOM, prox_data);
+				input_sync(info->input_dev_proximity);
+			} else if (info->cur_coord[i].ttype == TOUCH_FLIP_COVER) {
+				input_info(true, &client->dev, "FLIP COVER MODE %s [%d]\n", "ON", info->cur_coord[i].ttype);
+			} else if (info->cur_coord[i].ttype == TOUCH_PALM) {
+				cur = 'P';
+			} else if (info->cur_coord[i].ttype == TOUCH_GLOVE) {
+				cur = 'G';
+			} else {
+				cur = 'N';
+			}
+
 			if (info->cur_coord[i].touch_status == FINGER_PRESS)
 				snprintf(pos, 5, "P");
 			else if (info->cur_coord[i].touch_status == FINGER_MOVE)
@@ -2842,23 +2562,18 @@ static irqreturn_t bt532_touch_work(int irq, void *data)
 			else 
 				snprintf(pos, 5, "R");
 
-			if (info->cur_coord[i].ttype == TOUCH_PALM)
-				cur = 'P';
-			else if (info->cur_coord[i].ttype == TOUCH_GLOVE)
-				cur = 'G';
-			else 
-				cur = 'N';
-
 			if (info->old_coord[i].ttype == TOUCH_PALM)
 				old = 'P';
-			else if (info->old_coord[i].ttype == TOUCH_GLOVE)
+			else if(info->old_coord[i].ttype == TOUCH_GLOVE)
 				old = 'G';
 			else
 				old = 'N';
 
 			if (cur != old) 
 				input_info(true, &client->dev, "tID:%d ttype(%c->%c) : %s\n", i, old, cur, pos);
+
 		}
+
 
 		if ((info->cur_coord[i].touch_status == FINGER_PRESS || info->cur_coord[i].touch_status == FINGER_MOVE)) {
 			x = info->cur_coord[i].x;
@@ -2886,6 +2601,21 @@ static irqreturn_t bt532_touch_work(int irq, void *data)
 			if ((info->cur_coord[i].touch_status == FINGER_PRESS) && (info->cur_coord[i].touch_status != info->old_coord[i].touch_status)) {
 				info->pressed_x[i] = x; /*for getting coordinates of pressed point*/
 				info->pressed_y[i] = y;
+				location_detect(info, location, x, y);
+#if !defined(CONFIG_SAMSUNG_PRODUCT_SHIP)
+				input_info(true, &client->dev, "[P] tID:%d,%d x:%d y:%d z:%d(st:%d) max:%d major:%d minor:%d loc:%s tc:%d touch_type:%x noise:%x\n",
+							i, info->input_dev->mt->trkid - 1, x, y, z, st, sen_max, info_major_w,
+							info_minor_w, location, info->finger_cnt1, info->cur_coord[i].ttype, info->cur_coord[i].noise);
+#else
+				input_info(true, &client->dev, "[P] tID:%d z:%d(st:%d) max:%d major:%d minor:%d loc:%s tc:%d touch_type:%x noise:%x\n",
+							i, z, st, sen_max, info_major_w,
+							info_minor_w, location, info->finger_cnt1, info->cur_coord[i].ttype, info->cur_coord[i].noise);
+#endif
+
+#ifdef CONFIG_INPUT_BOOSTER
+				info->touch_pressed_num++;
+				booster_enable = true;
+#endif
 				info->finger_cnt1++;
 
 				if ((info->finger_cnt1 > 4) && (info->check_multi == 0)) {
@@ -2893,18 +2623,7 @@ static irqreturn_t bt532_touch_work(int irq, void *data)
 					info->multi_count++;
 					input_info(true, &client->dev,"data : pn=%d mc=%d \n", info->finger_cnt1, info->multi_count);
 				}
-
-				location_detect(info, location, x, y);
-#if !defined(CONFIG_SAMSUNG_PRODUCT_SHIP)
-				input_info(true, &client->dev, "[P] tID:%d.%d x:%d y:%d z:%d(st:%d) max:%d major:%d minor:%d loc:%s tc:%d touch_type:%x noise:%x\n",
-							i, (info->input_dev->mt->trkid) & TRKID_MAX, x, y, z, st, sen_max, info_major_w,
-							info_minor_w, location, info->finger_cnt1, info->cur_coord[i].ttype, info->cur_coord[i].noise);
-#else
-				input_info(true, &client->dev, "[P] tID:%d.%d z:%d(st:%d) max:%d major:%d minor:%d loc:%s tc:%d touch_type:%x noise:%x\n",
-							i, (info->input_dev->mt->trkid) & TRKID_MAX, z, st, sen_max, info_major_w,
-							info_minor_w, location, info->finger_cnt1, info->cur_coord[i].ttype, info->cur_coord[i].noise);
-#endif
-			} else if (info->cur_coord[i].touch_status == FINGER_MOVE) {
+			} else if(info->cur_coord[i].touch_status == FINGER_MOVE) {
 				info->move_count[i]++;
 			}
 
@@ -2921,53 +2640,25 @@ static irqreturn_t bt532_touch_work(int irq, void *data)
 
 			input_report_abs(info->input_dev, ABS_MT_POSITION_X, x);
 			input_report_abs(info->input_dev, ABS_MT_POSITION_Y, y);
-			input_report_key(info->input_dev, BTN_PALM, info->palm_flag);
-
 			input_report_key(info->input_dev, BTN_TOUCH, 1);
 		} else if (info->cur_coord[i].touch_status == FINGER_RELEASE) {
-			u16 fw_version = (info->cap_info.fw_version & 0xf) << 12
-							| (info->cap_info.fw_minor_version & 0xf) << 8
-							| (info->cap_info.reg_data_version & 0xff);
-
 			location_detect(info, location, info->cur_coord[i].x, info->cur_coord[i].y);
-
-#if IS_ENABLED(CONFIG_INPUT_TOUCHSCREEN_TCLMV2)
-			if (info->tdata && info->tdata->tclm_string)
-				snprintf(tclm_buff, sizeof(tclm_buff), "C%02XT%04X.%4s%s Cal_flag:%d fail_cnt:%d",
-						info->tdata->nvdata.cal_count, info->tdata->nvdata.tune_fix_ver,
-						info->tdata->tclm_string[info->tdata->nvdata.cal_position].f_name,
-						(info->tdata->tclm_level == TCLM_LEVEL_LOCKDOWN) ? ".L" : " ",
-						info->tdata->nvdata.cal_fail_falg, info->tdata->nvdata.cal_fail_cnt);
-			else
-				snprintf(tclm_buff, sizeof(tclm_buff), "TCLM data is empty");
-#else
-			snprintf(tclm_buff, sizeof(tclm_buff), "");
-#endif
-
-			if (info->cur_coord[i].palm_count > 0) {
-				input_info(true, &client->dev, "tID:%d ttype(P->N) : R\n", i);
-			}
-
-#if !defined(CONFIG_SAMSUNG_PRODUCT_SHIP)
-			input_info(true, &client->dev,
-						"[R] tID:%d loc:%s dd:%d,%d mc:%d tc:%d lx:%d ly:%d p:%d v:%04X (%s)\n",
+#ifdef TCLM_CONCEPT
+			input_info(true, &client->dev, "[R] tID:%d loc:%s dd:%d,%d mc:%d tc:%d lx:%d ly:%d\n",
 						i, location,
 						info->cur_coord[i].x - info->pressed_x[i],
 						info->cur_coord[i].y - info->pressed_y[i],
 						info->move_count[i], info->finger_cnt1,
 						info->cur_coord[i].x,
-						info->cur_coord[i].y,
-						info->cur_coord[i].palm_count, fw_version, tclm_buff);
+						info->cur_coord[i].y);
 #else
-			input_info(true, &client->dev,
-						"[R] tID:%02d loc:%s dd:%d,%d mc:%d tc:%d p:%d v:%04X (%s)\n",
+			input_info(true, &client->dev, "[R] tID:%02d loc:%s dd:%d,%d mc:%d tc:%d",
 						i, location,
 						info->cur_coord[i].x - info->pressed_x[i],
 						info->cur_coord[i].y - info->pressed_y[i],
-						info->move_count[i], info->finger_cnt1,
-						info->cur_coord[i].palm_count, fw_version, tclm_buff);
+						info->move_count[i], info->finger_cnt1);
 #endif
-			if (info->finger_cnt1 > 0)
+			if(info->finger_cnt1 > 0)
 				info->finger_cnt1--;
 
 			if (info->finger_cnt1 == 0) {
@@ -2977,16 +2668,27 @@ static irqreturn_t bt532_touch_work(int irq, void *data)
 
 			input_mt_slot(info->input_dev, i);
 			input_mt_report_slot_state(info->input_dev, MT_TOOL_FINGER, 0);
-
-			info->palm_flag &= ~(1 << i);
-			input_report_key(info->input_dev, BTN_PALM, info->palm_flag);
-
 			info->move_count[i] = 0;
-			memset(&info->cur_coord[i], 0, sizeof(struct ts_coordinate));
+#ifdef CONFIG_INPUT_BOOSTER
+			info->touch_pressed_num--;
+#endif
+			info->cur_coord[i].touch_status = FINGER_NONE;
 		}
 	}
 
 	input_sync(info->input_dev);
+
+#ifdef CONFIG_INPUT_BOOSTER
+touch_booster_out:
+	if (!!info->touch_pressed_num){
+		if (booster_enable) {
+			input_booster_send_event(BOOSTER_DEVICE_TOUCH, BOOSTER_MODE_ON);
+		}
+	}
+	else{
+		input_booster_send_event(BOOSTER_DEVICE_TOUCH, BOOSTER_MODE_OFF);
+	}
+#endif
 
 out:
 	if (info->work_state == NORMAL) {
@@ -3007,18 +2709,6 @@ static int  bt532_ts_open(struct input_dev *dev)
 	struct bt532_ts_info *info = misc_info;
 	u8 prev_work_state;
 
-#ifdef CONFIG_TRUSTONIC_TRUSTED_UI
-	msleep(100);
-	if (TRUSTEDUI_MODE_TUI_SESSION & trustedui_get_current_mode()){
-		tui_force_close(1);
-		msleep(100);
-		if (TRUSTEDUI_MODE_TUI_SESSION & trustedui_get_current_mode()){
-			trustedui_clear_mask(TRUSTEDUI_MODE_VIDEO_SECURED|TRUSTEDUI_MODE_INPUT_SECURED);
-			trustedui_set_mode(TRUSTEDUI_MODE_OFF);
-		}
-	}
-#endif // CONFIG_TRUSTONIC_TRUSTED_UI
-
 	if (info == NULL)
 		return 0;
 
@@ -3029,7 +2719,7 @@ static int  bt532_ts_open(struct input_dev *dev)
 
 	input_info(true, &misc_info->client->dev, "%s, %d \n", __func__, __LINE__);
 
-	if ((info->pdata->support_lpm_mode) && (info->sleep_mode)) {
+	if((info->pdata->support_lpm_mode)&&(info->sleep_mode)){
 		down(&info->work_lock);
 		prev_work_state = info->work_state;
 		info->work_state = SLEEP_MODE_OUT;
@@ -3053,7 +2743,7 @@ static int  bt532_ts_open(struct input_dev *dev)
 		down(&info->work_lock);
 		if (info->work_state != RESUME
 			&& info->work_state != EALRY_SUSPEND) {
-			input_info(true, &misc_info->client->dev, "invalid work proceedure (%d)\r\n",
+			zinitix_printk("invalid work proceedure (%d)\r\n",
 				info->work_state);
 			up(&info->work_lock);
 			return 0;
@@ -3075,13 +2765,12 @@ static int  bt532_ts_open(struct input_dev *dev)
 		zinitix_debug_msg("bt532_ts_open--\n");
 		return 0;
 
-fail_late_resume:
-		input_info(true, &misc_info->client->dev, "failed to late resume\n");
+	fail_late_resume:
+		zinitix_printk("failed to late resume\n");
 		enable_irq(info->irq);
 		info->work_state = NOTHING;
 		up(&info->work_lock);
 	}
-
 	return 0;
 }
 
@@ -3091,18 +2780,6 @@ static void bt532_ts_close(struct input_dev *dev)
 	int i;
 	u8 prev_work_state;
 
-#ifdef CONFIG_TRUSTONIC_TRUSTED_UI
-	msleep(100);
-	if (TRUSTEDUI_MODE_TUI_SESSION & trustedui_get_current_mode()){
-		tui_force_close(1);
-		msleep(100);
-		if (TRUSTEDUI_MODE_TUI_SESSION & trustedui_get_current_mode()){
-			trustedui_clear_mask(TRUSTEDUI_MODE_VIDEO_SECURED|TRUSTEDUI_MODE_INPUT_SECURED);
-			trustedui_set_mode(TRUSTEDUI_MODE_OFF);
-		}
-	}
-#endif // CONFIG_TRUSTONIC_TRUSTED_UI
-
 	if (info == NULL)
 		return;
 
@@ -3111,11 +2788,8 @@ static void bt532_ts_close(struct input_dev *dev)
 		return;
 	}
 
-	input_info(true, &misc_info->client->dev,
-			"%s, spay:%d aod:%d aot:%d singletap:%d prox:%d pocket:%d ed:%d\n",
-			__func__, info->spay_enable, info->aod_enable,
-			info->aot_enable, info->singletap_enable, info->prox_power_off,
-			info->pocket_enable, info->ed_enable);
+	input_info(true, &misc_info->client->dev, "%s, spay:%d aod:%d aot:%d prox:%d\n",
+				__func__, info->spay_enable, info->aod_enable, info->aot_enable, info->prox_power_off);
 
 #ifdef TCLM_CONCEPT
 	sec_tclm_debug_info(info->tdata);
@@ -3125,9 +2799,7 @@ static void bt532_ts_close(struct input_dev *dev)
 	flush_work(&info->tmr_work);
 #endif
 
-	if (((info->pdata->support_lpm_mode) &&
-		(info->spay_enable || info->aod_enable || info->aot_enable || info->singletap_enable))
-		|| info->pocket_enable || info->ed_enable || info->fod_enable || info->fod_lp_mode){
+	if(((info->pdata->support_lpm_mode) && (info->spay_enable || info->aod_enable || info->aot_enable)) || info->pocket_enable || info->ed_enable){
 		down(&info->work_lock);
 		prev_work_state = info->work_state;
 		info->work_state = SLEEP_MODE_IN;
@@ -3136,28 +2808,21 @@ static void bt532_ts_close(struct input_dev *dev)
 #if ESD_TIMER_INTERVAL
 		esd_timer_stop(info);
 #endif
-
-		if (info->prox_power_off && info->aot_enable)
-			zinitix_bit_clr(info->lpm_mode, BIT_EVENT_AOT);
-
 		input_info(true, &misc_info->client->dev,
-				"%s: write lpm_mode 0x%02x (spay:%d, aod:%d, singletap:%d, aot:%d, fod:%d, fod_lp:%d)\n",
-				__func__, info->lpm_mode,
+				"%s: write lpm_mode 0x%02x (spay:%d, aod:%d, aot:%d)\n", __func__, info->lpm_mode,
 				(info->lpm_mode & (1 << BIT_EVENT_SPAY)) ? 1 : 0,
 				(info->lpm_mode & (1 << BIT_EVENT_AOD)) ? 1 : 0,
-				(info->lpm_mode & (1 << BIT_EVENT_SINGLE_TAP)) ? 1 : 0,
-				(info->lpm_mode & (1 << BIT_EVENT_AOT)) ? 1 : 0,
-				info->fod_enable, info->fod_lp_mode);
+				(info->lpm_mode & (1 << BIT_EVENT_AOT)) ? 1 : 0);
 
 		write_cmd(info->client, 0x0A);
 		if (write_reg(info->client, ZT75XX_LPM_MODE_REG, info->lpm_mode) != I2C_SUCCESS)
 			input_info(true, &misc_info->client->dev, "%s, fail lpm mode set\n", __func__);
 
+		if (write_reg(info->client, ZT75XX_CALL_AOT_REG, info->prox_power_off) != I2C_SUCCESS)
+			input_info(true, &misc_info->client->dev, "%s, fail call aot set\n", __func__);
+
 		write_cmd(info->client, BT532_SLEEP_CMD);
 		info->sleep_mode = 1;
-
-		if (info->prox_power_off && info->aot_enable)
-			zinitix_bit_set(info->lpm_mode, BIT_EVENT_AOT);
 
 		/* clear garbage data */
 		for (i = 0; i < 2; i++) {
@@ -3174,7 +2839,7 @@ static void bt532_ts_close(struct input_dev *dev)
 		disable_irq(info->irq);
 		down(&info->work_lock);
 		if (info->work_state != NOTHING) {
-			input_info(true, &misc_info->client->dev, "invalid work proceedure (%d)\r\n",
+			zinitix_printk("invalid work proceedure (%d)\r\n",
 				info->work_state);
 			up(&info->work_lock);
 			enable_irq(info->irq);
@@ -3208,67 +2873,7 @@ static void bt532_ts_close(struct input_dev *dev)
 #endif	/* CONFIG_INPUT_ENABLED */
 
 #if defined(SEC_FACTORY_TEST) || defined(USE_MISC_DEVICE)
-static u16 ts_get_touch_reg(u16 addr)
-{
-	int ret = 1;
-	u16 reg_value;
-
-	disable_irq(misc_info->irq);
-
-	down(&misc_info->work_lock);
-	if (misc_info->work_state != NOTHING) {
-		input_info(true, &misc_info->client->dev, "other process occupied.. (%d)\n",
-			misc_info->work_state);
-		enable_irq(misc_info->irq);
-		up(&misc_info->work_lock);
-		return -1;
-	}
-	misc_info->work_state = SET_MODE;
-
-	write_reg(misc_info->client, 0x0A, 0x0A);
-	usleep_range(20 * 1000, 20 * 1000);
-	write_reg(misc_info->client, 0x0A, 0x0A);
-
-	ret = read_data(misc_info->client, addr, (u8 *)&reg_value, 2);
-	if (ret < 0) {
-		input_err(true, &misc_info->client->dev,"%s: fail read touch reg\n", __func__);
-	}
-
-	misc_info->work_state = NOTHING;
-	enable_irq(misc_info->irq);
-	up(&misc_info->work_lock);
-
-	return reg_value;
-}
-
-static void ts_set_touch_reg(u16 addr, u16 value)
-{
-	disable_irq(misc_info->irq);
-
-	down(&misc_info->work_lock);
-	if (misc_info->work_state != NOTHING) {
-		input_info(true, &misc_info->client->dev, "other process occupied.. (%d)\n",
-			misc_info->work_state);
-		enable_irq(misc_info->irq);
-		up(&misc_info->work_lock);
-		return;
-	}
-	misc_info->work_state = SET_MODE;
-
-	write_reg(misc_info->client, 0x0A, 0x0A);
-	usleep_range(20 * 1000, 20 * 1000);
-	write_reg(misc_info->client, 0x0A, 0x0A);
-
-	if (write_reg(misc_info->client, addr, value) != I2C_SUCCESS)
-		input_err(true, &misc_info->client->dev,"%s: fail write touch reg\n", __func__);
-
-	misc_info->work_state = NOTHING;
-	enable_irq(misc_info->irq);
-	up(&misc_info->work_lock);
-}
-
-static int ts_set_touchmode(u16 value)
-{
+static int ts_set_touchmode(u16 value){
 	int i, ret = 1;
 	int retry_cnt = 0;
 	struct capa_info *cap = &(misc_info->cap_info);
@@ -3305,7 +2910,7 @@ retry_ts_set_touchmode:
 		(misc_info->touch_mode == TOUCH_SENTIVITY_MEASUREMENT_MODE))) {
 		if (write_reg(misc_info->client, BT532_DELAY_RAW_FOR_HOST,
 			RAWDATA_DELAY_FOR_HOST) != I2C_SUCCESS)
-			input_info(true, &misc_info->client->dev, "Fail to set BT532_DELAY_RAW_FOR_HOST.\r\n");
+			zinitix_printk("Fail to set BT532_DELAY_RAW_FOR_HOST.\r\n");
 	}
 
 	if (write_reg(misc_info->client, BT532_TOUCH_MODE,
@@ -3321,8 +2926,8 @@ retry_ts_set_touchmode:
 		goto out;
 	}
 
-	if (cap->current_touch_mode != misc_info->touch_mode) {
-		if (retry_cnt < 1) {
+	if(cap->current_touch_mode != misc_info->touch_mode) {
+		if(retry_cnt < 1) {
 			retry_cnt++;
 			goto retry_ts_set_touchmode;
 		}
@@ -3379,7 +2984,7 @@ static int ts_set_touchmode3(u16 value)
 	}
 	misc_info->work_state = SET_MODE;
 
-	if (value == TOUCH_RXSHORT_MODE) {
+	if(value == TOUCH_RXSHORT_MODE) {
 		if (write_reg(misc_info->client, ZT75XX_SY_AMP_V_SEL,
 						SEC_SY_AMP_V_SEL)!=I2C_SUCCESS)
 			input_info(true, &misc_info->client->dev, "[zinitix_touch] TEST Mode : "
@@ -3397,7 +3002,7 @@ static int ts_set_touchmode3(u16 value)
 			input_info(true, &misc_info->client->dev, "[zinitix_touch] TEST Mode : "
 					"Fail to set SEC_SHORT_U_COUNT %d.\n", SEC_SHORT_U_COUNT);
 	}
-	else if (value == TOUCH_TXSHORT_MODE) {
+	else if(value == TOUCH_TXSHORT_MODE) {
 		if (write_reg(misc_info->client, ZT75XX_SX_AMP_V_SEL,
 						SEC_SX_AMP_V_SEL)!=I2C_SUCCESS)
 			input_info(true, &misc_info->client->dev, "[zinitix_touch] TEST Mode : "
@@ -3415,7 +3020,7 @@ static int ts_set_touchmode3(u16 value)
 			input_info(true, &misc_info->client->dev, "[zinitix_touch] TEST Mode : "
 					"Fail to set SEC_SHORT_U_COUNT %d.\n", SEC_SHORT_U_COUNT);
 	}
-	else if (misc_info->touch_mode == TOUCH_RXSHORT_MODE || misc_info->touch_mode == TOUCH_TXSHORT_MODE ) {
+	else if(misc_info->touch_mode == TOUCH_RXSHORT_MODE || misc_info->touch_mode == TOUCH_TXSHORT_MODE ) {
 		if (write_reg(misc_info->client, ZT75XX_MUTUAL_AMP_V_SEL,
 						misc_info->cap_info.mutual_amp_v_sel) != I2C_SUCCESS)
 			input_info(true, &misc_info->client->dev, "[zinitix_touch] TEST Mode : "
@@ -3463,7 +3068,7 @@ static int ts_set_touchmode3(u16 value)
 	if (misc_info->touch_mode != TOUCH_POINT_MODE) {
 			if (write_reg(misc_info->client, BT532_DELAY_RAW_FOR_HOST,
 				RAWDATA_DELAY_FOR_HOST) != I2C_SUCCESS)
-				input_info(true, &misc_info->client->dev, "Fail to set BT532_DELAY_RAW_FOR_HOST.\r\n");
+				zinitix_printk("Fail to set BT532_DELAY_RAW_FOR_HOST.\r\n");
 	}
 
 	if (write_reg(misc_info->client, BT532_TOUCH_MODE,
@@ -3503,7 +3108,7 @@ static int ts_set_self_sat_touchmode(u16 value)
 	write_cmd(misc_info->client, 0x0A);
 	usleep_range(20 * 1000, 20 * 1000);
 
-	if (value == TOUCH_SELF_DND_MODE) {
+	if(value == TOUCH_SELF_DND_MODE) {
 		if (write_reg(misc_info->client, ZT75XX_SY_SAT_FREQUENCY,
 						SEC_SY_SAT_FREQUENCY)!=I2C_SUCCESS)
 			input_info(true, &misc_info->client->dev, "[zinitix_touch] TEST Mode : "
@@ -3576,7 +3181,7 @@ static int ts_set_self_sat_touchmode(u16 value)
 	if (misc_info->touch_mode != TOUCH_POINT_MODE) {
 			if (write_reg(misc_info->client, BT532_DELAY_RAW_FOR_HOST,
 				RAWDATA_DELAY_FOR_HOST) != I2C_SUCCESS)
-				input_info(true, &misc_info->client->dev, "Fail to set BT532_DELAY_RAW_FOR_HOST.\r\n");
+				zinitix_printk("Fail to set BT532_DELAY_RAW_FOR_HOST.\r\n");
 	}
 
 	if (write_reg(misc_info->client, BT532_TOUCH_MODE,
@@ -3672,32 +3277,11 @@ static void fw_update(void *device_data)
 	unsigned char *fw_data = NULL;
 	int restore_cal;
 	int ret;
-	u8 update_type = 0;
 
 	sec_cmd_set_default_result(sec);
 
 	switch (sec->cmd_param[0]) {
 	case BUILT_IN:
-		update_type = TSP_TYPE_BUILTIN_FW;
-		break;
-	case UMS:
-#ifdef CONFIG_SAMSUNG_PRODUCT_SHIP
-		update_type = TSP_TYPE_EXTERNAL_FW_SIGNED;
-#else
-		update_type = TSP_TYPE_EXTERNAL_FW;
-#endif
-		break;
-	case SPU:
-		update_type = TSP_TYPE_SPU_FW_SIGNED;
-		break;
-	default:
-		goto fw_update_out;
-	}
-
-	sec->cmd_state = SEC_CMD_STATUS_FAIL;
-
-	if (update_type == TSP_TYPE_BUILTIN_FW) {
-		/* firmware update builtin binary */
 		snprintf(fw_path, MAX_FW_PATH, "%s", pdata->firmware_name);
 
 		ret = request_firmware(&tsp_fw, fw_path, &(client->dev));
@@ -3707,11 +3291,10 @@ static void fw_update(void *device_data)
 				fw_path);
 			if (tsp_fw)
 				release_firmware(tsp_fw);
-
-			goto fw_update_out;
-		} else {
-			fw_data = (unsigned char *)tsp_fw->data;
+			return;
 		}
+		else
+			fw_data = (unsigned char *)tsp_fw->data;
 
 #ifdef TCLM_CONCEPT
 		sec_tclm_root_of_cal(info->tdata, CALPOSITION_TESTMODE);
@@ -3719,113 +3302,88 @@ static void fw_update(void *device_data)
 #endif
 		ret = ts_upgrade_sequence(info, (u8*)fw_data, restore_cal);
 		release_firmware(tsp_fw);
-		if (ret < 0)
-			goto fw_update_out;
+		if (ret < 0) {
+			sec->cmd_state = 3;
+			return;
+		}
+		break;
 
-		sec->cmd_state = SEC_CMD_STATUS_OK;
-	} else {
-		/* firmware update ums or spu */
-		if (update_type == TSP_TYPE_EXTERNAL_FW)
-			snprintf(fw_path, MAX_FW_PATH, TSP_PATH_EXTERNAL_FW);				
-		else if (update_type == TSP_TYPE_EXTERNAL_FW_SIGNED)
-			snprintf(fw_path, MAX_FW_PATH, TSP_PATH_EXTERNAL_FW_SIGNED);	
-		else if (update_type == TSP_TYPE_SPU_FW_SIGNED)
-			snprintf(fw_path, MAX_FW_PATH, TSP_PATH_SPU_FW_SIGNED);
-		else
-			goto fw_update_out;
-
+	case UMS:
 		old_fs = get_fs();
 		set_fs(get_ds());
 
+		snprintf(fw_path, MAX_FW_PATH, "/sdcard/Firmware/TSP/%s", TSP_FW_FILENAME);
 		fp = filp_open(fw_path, O_RDONLY, 0);
 		if (IS_ERR(fp)) {
-			input_err(true, &client->dev, "file %s open error\n", fw_path);
-			set_fs(old_fs);
-			goto fw_update_out;
+			input_err(true, &client->dev,
+				"file %s open error\n", fw_path);
+			sec->cmd_state = 3;
+			goto err_open;
 		}
 
 		fsize = fp->f_path.dentry->d_inode->i_size;
 
-		/* signed firmware is not equal with fw.buf_size: add tag and signature */
-		if (update_type == TSP_TYPE_EXTERNAL_FW) {
-			if (fsize != info->cap_info.ic_fw_size) {
-				input_err(true, &client->dev, "invalid fw size!!\n");
-				filp_close(fp, NULL);
-				set_fs(old_fs);
-				goto fw_update_out;
-			}
-		} else {
-			input_info(true, &client->dev, "%s: signed firmware\n", __func__);
+		if(fsize != info->cap_info.ic_fw_size) {
+			input_err(true, &client->dev, "invalid fw size!!\n");
+			sec->cmd_state = 3;
+			goto err_open;
 		}
 
-		buff = vzalloc(fsize);
+		buff = kzalloc((size_t)fsize, GFP_KERNEL);
 		if (!buff) {
 			input_err(true, &client->dev, "failed to alloc buffer for fw\n");
-			filp_close(fp, NULL);
-			set_fs(old_fs);
-			goto fw_update_out;
+			sec->cmd_state = 3;
+			goto err_alloc;
 		}
 
 		nread = vfs_read(fp, (char __user *)buff, fsize, &fp->f_pos);
 		if (nread != fsize) {
-			filp_close(fp, NULL);
-			set_fs(old_fs);
-			goto fw_update_out;
+			sec->cmd_state = 3;
+			goto err_fw_size;
 		}
 
 		filp_close(fp, current->files);
 		set_fs(old_fs);
 		input_info(true, &client->dev, "ums fw is loaded!!\n");
 
-#ifdef SPU_FW_SIGNED
-		info->fw_data = (unsigned char *)buff;
-		if (!(ts_check_need_upgrade(info, info->cap_info.fw_version, info->cap_info.fw_minor_version,
-			info->cap_info.reg_data_version, info->cap_info.hw_id)) &&
-			(update_type == TSP_TYPE_SPU_FW_SIGNED)) {
-			sec->cmd_state = SEC_CMD_STATUS_OK;
-			input_info(true, &client->dev, "%s: skip ffu update\n", __func__);
-			goto fw_update_out;
-		}
-
-		if (update_type == TSP_TYPE_EXTERNAL_FW_SIGNED || update_type == TSP_TYPE_SPU_FW_SIGNED) {
-			int ori_size;
-			int spu_ret;
-
-			ori_size = fsize - SPU_METADATA_SIZE(TSP);
-
-			spu_ret = spu_firmware_signature_verify("TSP", buff, fsize);
-			if (ori_size != spu_ret) {
-				input_err(true, &client->dev, "%s: signature verify failed, ori:%ld, fsize:%d\n",
-						__func__, ori_size, fsize);				
-
-				goto fw_update_out;
-			}
-		}
-#endif
-
 #ifdef TCLM_CONCEPT
 		sec_tclm_root_of_cal(info->tdata, CALPOSITION_TESTMODE);
 		restore_cal = 1;
 #endif
 		ret = ts_upgrade_sequence(info, (u8*)buff, restore_cal);
-		if (ret < 0)
-			goto fw_update_out;
+		if(ret<0) {
+			kfree(buff);
+			sec->cmd_state = 3;
+			return;
+		}
+		break;
 
-		sec->cmd_state = SEC_CMD_STATUS_OK;
+	default:
+		input_err(true, &client->dev, "invalid fw file type!!\n");
+		goto not_support;
 	}
 
-fw_update_out:
 #ifdef TCLM_CONCEPT
-	sec_tclm_root_of_cal(info->tdata, CALPOSITION_NONE);
+		sec_tclm_root_of_cal(info->tdata, CALPOSITION_NONE);
 #endif
-	if (!buff)
-		kfree(buff);
 
-	if (sec->cmd_state == SEC_CMD_STATUS_OK)
-		snprintf(result, sizeof(result), "OK");
-	else
-		snprintf(result, sizeof(result), "NG");
+	sec->cmd_state = 2;
+	snprintf(result, sizeof(result) , "%s", "OK");
+	sec_cmd_set_cmd_result(sec, result,
+				strnlen(result, sizeof(result)));
 
+	if (fp != NULL) {
+		err_fw_size:
+			kfree(buff);
+		err_alloc:
+			filp_close(fp, NULL);
+		err_open:
+			set_fs(old_fs);
+	}
+	return;
+
+not_support:
+	snprintf(result, sizeof(result) , "%s", "NG");
 	sec_cmd_set_cmd_result(sec, result, strnlen(result, sizeof(result)));
 	return;
 }
@@ -3970,7 +3528,7 @@ static void get_checksum_data(void *device_data)
 	read_data(client, ZT75XX_CHECKSUM, (u8 *)&checksum, 2);
 
 	snprintf(buff, sizeof(buff), "0x%X", checksum);
-	input_info(true, &client->dev, "%s %d %x\n",__func__,checksum,checksum);
+	printk("%s %d %x\n",__func__,checksum,checksum);
 
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 
@@ -4074,7 +3632,7 @@ static void get_chip_name(void *device_data)
 
 	sec_cmd_set_default_result(sec);
 
-	if (pdata->chip_name)
+	if(pdata->chip_name)
 		name_buff = pdata->chip_name;
 	else
 		name_buff = BT532_CHIP_NAME;
@@ -4144,15 +3702,17 @@ static void not_support_cmd(void *device_data)
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
 	struct bt532_ts_info *info = container_of(sec, struct bt532_ts_info, sec);
 	struct i2c_client *client = info->client;
-	char buff[SEC_CMD_STR_LEN] = { 0 };
+	char buff[2] = { 0 };
 
 	sec_cmd_set_default_result(sec);
 
-	snprintf(buff, sizeof(buff), "%s", "NA");
+	sprintf(sec->cmd_result, "%s", "NA");
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 	sec->cmd_state = SEC_CMD_STATUS_NOT_APPLICABLE;
 
-	sec_cmd_set_cmd_exit(sec);
+	mutex_lock(&sec->cmd_lock);
+	sec->cmd_is_running = false;
+	mutex_unlock(&sec->cmd_lock);
 
 	input_info(true, &client->dev, "%s: \"%s(%d)\"\n", __func__, sec->cmd_result,
 				(int)strnlen(sec->cmd_result, sizeof(sec->cmd_result)));
@@ -4171,7 +3731,7 @@ static bool get_channel_test_result(struct bt532_ts_info *info, int skip_cnt)
 	struct i2c_client *client = info->client;
 	struct bt532_ts_platform_data *pdata = info->pdata;
 	int i;
-	int retry = 150;
+	int retry = 100;
 
 	disable_irq(info->irq);
 
@@ -4186,18 +3746,14 @@ static bool get_channel_test_result(struct bt532_ts_info *info, int skip_cnt)
 
 	info->work_state = RAW_DATA;
 
-	for (i = 0; i < skip_cnt; i++) {
-		while (gpio_get_value(pdata->gpio_int)) {
-			usleep_range(7 * 1000, 7 * 1000);
-			if (--retry < 0)
-				break;
-		}
+	for(i = 0; i < skip_cnt; i++) {
+		while (gpio_get_value(pdata->gpio_int))
+			usleep_range(1 * 1000, 1 * 1000);
 
 		write_cmd(client, BT532_CLEAR_INT_STATUS_CMD);
 		usleep_range(1 * 1000, 1 * 1000);
 	}
 
-	retry = 100;
 	input_info(true, &client->dev, "%s: channel_test_result read\n", __func__);
 
 	while (gpio_get_value(pdata->gpio_int)) {
@@ -4293,7 +3849,6 @@ static void run_trx_short_test(void *device_data)
 	struct tsp_raw_data *raw_data = info->raw_data;
 	char buff[SEC_CMD_STR_LEN] = { 0 };
 	u8 temp[10];
-	char test[32];
 
 	sec_cmd_set_default_result(sec);
 
@@ -4304,11 +3859,6 @@ static void run_trx_short_test(void *device_data)
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
 		return;
 	}
-
-	if (sec->cmd_param[1])
-		snprintf(test, sizeof(test), "TEST=%d,%d", sec->cmd_param[0], sec->cmd_param[1]);
-	else
-		snprintf(test, sizeof(test), "TEST=%d", sec->cmd_param[0]);
 
 	/*
 	 * run_test_open_short() need to be fix for separate by test item(open, short, pattern open)
@@ -4327,6 +3877,7 @@ static void run_trx_short_test(void *device_data)
 
 		check_trx_channel_test(info, buff);
 		input_info(true, &client->dev, "%s\n", buff);
+
 	} else if (sec->cmd_param[0] == 1 && sec->cmd_param[1] == 2) {
 		/* 1,2 : short  */
 		if (raw_data->channel_test_data[0] != TEST_SHORT)
@@ -4338,6 +3889,7 @@ static void run_trx_short_test(void *device_data)
 
 		check_trx_channel_test(info, buff);
 		input_info(true, &client->dev, "%s\n", buff);
+
 	} else if (sec->cmd_param[0] == 2) {
 		/* 2 : micro open(pattern open)  */
 		if (raw_data->channel_test_data[0] != TEST_PATTERN_OPEN)
@@ -4349,13 +3901,12 @@ static void run_trx_short_test(void *device_data)
 
 		check_trx_channel_test(info, buff);
 		input_info(true, &client->dev, "%s\n", buff);
+
 	} else if (sec->cmd_param[0] == 3) {
 		/* 3 : bridge short  */
 		snprintf(buff, sizeof(buff), "NA");
 		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 		sec->cmd_state = SEC_CMD_STATUS_NOT_APPLICABLE;
-
-		sec_cmd_send_event_to_user(sec, test, "RESULT=FAIL");
 
 		input_info(true, &client->dev, "%s: \"%s\"(%d)\n", __func__, sec->cmd_result,
 				(int)strlen(sec->cmd_result));
@@ -4370,8 +3921,6 @@ static void run_trx_short_test(void *device_data)
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 	sec->cmd_state = SEC_CMD_STATUS_FAIL;
 
-	sec_cmd_send_event_to_user(sec, test, "RESULT=FAIL");
-
 	input_info(true, &client->dev, "%s: \"%s\"(%d)\n", __func__, sec->cmd_result,
 				(int)strlen(sec->cmd_result));
 	return;
@@ -4382,132 +3931,10 @@ OK:
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 	sec->cmd_state = SEC_CMD_STATUS_OK;
 
-	sec_cmd_send_event_to_user(sec, test, "RESULT=PASS");
-
 	input_info(true, &client->dev, "%s: \"%s\"(%d)\n", __func__, sec->cmd_result,
 				(int)strlen(sec->cmd_result));
 	return;
 
-}
-
-static void run_cnd_read(void *device_data)
-{
-	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
-	struct bt532_ts_info *info = container_of(sec, struct bt532_ts_info, sec);
-	struct i2c_client *client = info->client;
-	struct tsp_raw_data *raw_data = info->raw_data;
-	char buff[SEC_CMD_STR_LEN] = { 0 };
-	u16 min, max;
-	s32 i, j;
-	int ret;
-
-#if ESD_TIMER_INTERVAL
-	esd_timer_stop(misc_info);
-	write_reg(client, BT532_PERIODICAL_INTERRUPT_INTERVAL, 0);
-	write_cmd(client, BT532_CLEAR_INT_STATUS_CMD);
-#endif
-	sec_cmd_set_default_result(sec);
-
-	ret = ts_set_touchmode(TOUCH_RAW_MODE);
-	if (ret < 0) {
-		ts_set_touchmode(TOUCH_POINT_MODE);
-		goto out;
-	}
-	get_raw_data(info, (u8 *)raw_data->cnd_data, 1);
-	ts_set_touchmode(TOUCH_POINT_MODE);
-
-	input_info(true,&client->dev, "CND start\n");
-
-	min = 0xFFFF;
-	max = 0x0000;
-
-	for (i = 0; i < info->cap_info.y_node_num; i++) {
-		for (j = 0; j < info->cap_info.x_node_num; j++) {
-			if (raw_data->cnd_data[i * info->cap_info.x_node_num + j] < min &&
-				raw_data->cnd_data[i * info->cap_info.x_node_num + j] != 0)
-				min = raw_data->cnd_data[i * info->cap_info.x_node_num + j];
-
-			if (raw_data->cnd_data[i * info->cap_info.x_node_num + j] > max)
-				max = raw_data->cnd_data[i * info->cap_info.x_node_num + j];
-		}
-	}
-	snprintf(buff, sizeof(buff), "%d,%d", min, max);
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	if (sec->cmd_all_factory_state == SEC_CMD_STATUS_RUNNING)
-		sec_cmd_set_cmd_result_all(sec, buff, strnlen(buff, sizeof(buff)), "CND");
-	sec->cmd_state = SEC_CMD_STATUS_OK;
-
-	zinitix_display_rawdata(info, raw_data, TOUCH_RAW_MODE, 0);
-out:
-	if (ret < 0) {
-		snprintf(buff, sizeof(buff), "%s", "NG");
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		if (sec->cmd_all_factory_state == SEC_CMD_STATUS_RUNNING)
-			sec_cmd_set_cmd_result_all(sec, buff, strnlen(buff, sizeof(buff)), "CND");
-		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-	}
-	input_info(true, &client->dev, "%s: \"%s\"(%d)\n", __func__, sec->cmd_result,
-				(int)strlen(sec->cmd_result));
-
-#if ESD_TIMER_INTERVAL
-	esd_timer_start(CHECK_ESD_TIMER, misc_info);
-	write_reg(client, BT532_PERIODICAL_INTERRUPT_INTERVAL,
-		SCAN_RATE_HZ * ESD_TIMER_INTERVAL);
-#endif
-	return;
-}
-
-static void run_cnd_read_all(void *device_data)
-{
-	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
-	struct bt532_ts_info *info = container_of(sec, struct bt532_ts_info, sec);
-	struct tsp_raw_data *raw_data = info->raw_data;
-	char buff[16] = { 0 };
-	char all_cmdbuff[info->cap_info.x_node_num * info->cap_info.y_node_num * 6];
-	s32 i, j;
-	int ret;
-
-#if ESD_TIMER_INTERVAL
-	esd_timer_stop(misc_info);
-	write_reg(misc_info->client, BT532_PERIODICAL_INTERRUPT_INTERVAL, 0);
-	write_cmd(misc_info->client, BT532_CLEAR_INT_STATUS_CMD);
-#endif
-	sec_cmd_set_default_result(sec);
-
-	ret = ts_set_touchmode(TOUCH_RAW_MODE);
-	if (ret < 0) {
-		ts_set_touchmode(TOUCH_POINT_MODE);
-		goto out;
-	}
-	get_raw_data(info, (u8 *)raw_data->cnd_data, 1);
-	ts_set_touchmode(TOUCH_POINT_MODE);
-
-	memset(all_cmdbuff, 0, sizeof(char) * (info->cap_info.x_node_num * info->cap_info.y_node_num * 6));	//size 6  ex(12000,)
-
-	for (i = 0; i < info->cap_info.y_node_num; i++) {
-		for (j = 0; j < info->cap_info.x_node_num; j++) {
-			sprintf(buff, "%u,", raw_data->cnd_data[i * info->cap_info.x_node_num + j]);
-			strcat(all_cmdbuff, buff);
-		}
-	}
-
-	sec_cmd_set_cmd_result(sec, all_cmdbuff,
-			strnlen(all_cmdbuff, sizeof(all_cmdbuff)));
-	sec->cmd_state = SEC_CMD_STATUS_OK;
-
-out:
-	if (ret < 0) {
-		snprintf(buff, sizeof(buff), "%s", "NG");
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-	}
-
-#if ESD_TIMER_INTERVAL
-	esd_timer_start(CHECK_ESD_TIMER, misc_info);
-	write_reg(misc_info->client, BT532_PERIODICAL_INTERRUPT_INTERVAL,
-		SCAN_RATE_HZ * ESD_TIMER_INTERVAL);
-#endif
-	return;
 }
 
 static void run_dnd_read(void *device_data)
@@ -4539,15 +3966,19 @@ static void run_dnd_read(void *device_data)
 	min = 0xFFFF;
 	max = 0x0000;
 
-	for (i = 0; i < info->cap_info.y_node_num; i++) {
-		for (j = 0; j < info->cap_info.x_node_num; j++) {
-			if (raw_data->dnd_data[i * info->cap_info.x_node_num + j] < min &&
-				raw_data->dnd_data[i * info->cap_info.x_node_num + j] != 0)
-				min = raw_data->dnd_data[i * info->cap_info.x_node_num + j];
+	for(i = 0; i < info->cap_info.x_node_num; i++) {
+		for(j = 0; j < info->cap_info.y_node_num; j++) {
+			printk("%d ",
+					raw_data->dnd_data[i * info->cap_info.y_node_num + j]);
 
-			if (raw_data->dnd_data[i * info->cap_info.x_node_num + j] > max)
-				max = raw_data->dnd_data[i * info->cap_info.x_node_num + j];
+			if (raw_data->dnd_data[i * info->cap_info.y_node_num + j] < min &&
+				raw_data->dnd_data[i * info->cap_info.y_node_num + j] != 0)
+				min = raw_data->dnd_data[i * info->cap_info.y_node_num + j];
+
+			if(raw_data->dnd_data[i * info->cap_info.y_node_num + j] > max)
+				max = raw_data->dnd_data[i * info->cap_info.y_node_num + j];
 		}
+		printk("\n");
 	}
 	snprintf(buff, sizeof(buff), "%d,%d", min, max);
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
@@ -4555,7 +3986,6 @@ static void run_dnd_read(void *device_data)
 		sec_cmd_set_cmd_result_all(sec, buff, strnlen(buff, sizeof(buff)), "DND");
 	sec->cmd_state = SEC_CMD_STATUS_OK;
 
-	zinitix_display_rawdata(info, raw_data, TOUCH_DND_MODE, 0);
 out:
 	if (ret < 0) {
 		snprintf(buff, sizeof(buff), "%s", "NG");
@@ -4572,7 +4002,6 @@ out:
 	write_reg(client, BT532_PERIODICAL_INTERRUPT_INTERVAL,
 		SCAN_RATE_HZ * ESD_TIMER_INTERVAL);
 #endif
-
 	return;
 }
 
@@ -4600,7 +4029,7 @@ static void get_dnd(void *device_data)
 		return;
 	}
 
-	node_num = y_node * info->cap_info.x_node_num + x_node;
+	node_num = x_node * info->cap_info.y_node_num + y_node;
 
 	val = raw_data->dnd_data[node_num];
 	snprintf(buff, sizeof(buff), "%u", val);
@@ -4633,10 +4062,10 @@ static void get_dnd_all(void *device_data)
 		return;
 	}
 
-	for (i = 0; i < info->cap_info.y_node_num; i++) {
-		for (j = 0; j < info->cap_info.x_node_num; j++) {
+	for(i = 0; i < info->cap_info.x_node_num; i++) {
+		for(j = 0; j < info->cap_info.y_node_num; j++) {
 			snprintf(buff, sizeof(buff), "%u,",
-				raw_data->dnd_data[i * info->cap_info.x_node_num + j]);
+				raw_data->dnd_data[i * info->cap_info.y_node_num + j]);
 			strlcat(all_cmdbuff, buff, buff_size);
 		}
 	}
@@ -4653,7 +4082,7 @@ static void run_dnd_read_all(void *device_data)
 	struct bt532_ts_info *info = container_of(sec, struct bt532_ts_info, sec);
 	struct tsp_raw_data *raw_data = info->raw_data;
 	char buff[16] = { 0 };
-	char all_cmdbuff[info->cap_info.x_node_num * info->cap_info.y_node_num * 6];
+	char all_cmdbuff[info->cap_info.x_node_num*info->cap_info.y_node_num*6];
 	s32 i, j;
 	int ret;
 
@@ -4672,11 +4101,11 @@ static void run_dnd_read_all(void *device_data)
 	get_raw_data(info, (u8 *)raw_data->dnd_data, 1);
 	ts_set_touchmode(TOUCH_POINT_MODE);
 
-	memset(all_cmdbuff, 0, sizeof(char) * (info->cap_info.x_node_num * info->cap_info.y_node_num * 6));	//size 6  ex(12000,)
+	memset(all_cmdbuff,0,sizeof(char)*(info->cap_info.x_node_num*info->cap_info.y_node_num*6));	//size 6  ex(12000,)
 
-	for (i = 0; i < info->cap_info.y_node_num; i++) {
-		for (j = 0; j < info->cap_info.x_node_num; j++) {
-			sprintf(buff, "%u,", raw_data->dnd_data[i * info->cap_info.x_node_num + j]);
+	for(i = 0; i < info->cap_info.x_node_num; i++) {
+		for(j = 0; j < info->cap_info.y_node_num; j++) {
+			sprintf(buff, "%u,", raw_data->dnd_data[i * info->cap_info.y_node_num + j]);
 			strcat(all_cmdbuff, buff);
 		}
 	}
@@ -4719,15 +4148,15 @@ static void run_dnd_v_gap_read(void *device_data)
 
 	memset(raw_data->vgap_data, 0x00, TSP_CMD_NODE_NUM);
 
-	input_info(true, &client->dev, "DND V Gap start\n");
+	printk("DND V Gap start\n");
 
-	input_info(true, &client->dev, "%s : ++++++ DND SPEC +++++++++\n",__func__);
-	for (i = 0; i < y_num - 1; i++) {
-		for (j = 0; j < x_num; j++) {
-			offset = (i * x_num) + j;
+	printk("%s : ++++++ DND SPEC +++++++++\n",__func__);
+	for (i = 0; i < x_num - 1; i++) {
+		for (j = 0; j < y_num; j++) {
+			offset = (i * y_num) + j;
 
 			cur_val = raw_data->dnd_data[offset];
-			next_val = raw_data->dnd_data[offset + x_num];
+			next_val = raw_data->dnd_data[offset + y_num];
 			if (!next_val) {
 				raw_data->vgap_data[offset] = next_val;
 				continue;
@@ -4738,25 +4167,27 @@ static void run_dnd_v_gap_read(void *device_data)
 			else
 				val = 100 - ((next_val * 100) / cur_val);
 
+			printk("%d ", val);
+
 			raw_data->vgap_data[offset] = val;
 
-			if (pdata->support_touchkey){
-				if (i < y_num - 2){
-					if (raw_data->vgap_data[i * x_num + j] > screen_max)
-						screen_max = raw_data->vgap_data[i * x_num + j];
+			if(pdata->support_touchkey){
+				if(i < x_num - 2){
+					if(raw_data->vgap_data[i * y_num + j] > screen_max)
+						screen_max = raw_data->vgap_data[i * y_num + j];
 				}
 				else{
-					if (raw_data->vgap_data[i * x_num + j] > touchkey_max)
-						touchkey_max = raw_data->vgap_data[i * x_num + j];
+					if(raw_data->vgap_data[i * y_num + j] > touchkey_max)
+						touchkey_max = raw_data->vgap_data[i * y_num + j];
 				}
 			}
 			else{
-				if (raw_data->vgap_data[i * x_num + j] > screen_max)
-						screen_max = raw_data->vgap_data[i * x_num + j];
+				if(raw_data->vgap_data[i * y_num + j] > screen_max)
+						screen_max = raw_data->vgap_data[i * y_num + j];
 			}
 		}
+		printk("\n");
 	}
-
 	if (pdata->support_touchkey) {
 		input_info(true, &client->dev, "DND V Gap screen_max %d touchkey_max %d\n", screen_max, touchkey_max);
 		snprintf(buff, sizeof(buff), "%d,%d", screen_max, touchkey_max);
@@ -4778,8 +4209,6 @@ static void run_dnd_v_gap_read(void *device_data)
 		}
 	}
 	sec->cmd_state = SEC_CMD_STATUS_OK;
-
-	zinitix_display_rawdata(info, raw_data, TOUCH_DND_MODE, 1);
 
 	return;
 }
@@ -4803,11 +4232,11 @@ static void run_dnd_h_gap_read(void *device_data)
 
 	memset(raw_data->hgap_data, 0x00, TSP_CMD_NODE_NUM);
 
-	input_info(true, &client->dev, "DND H Gap start\n");
+	printk("DND H Gap start\n");
 
-	for (i = 0; i < y_num; i++) {
-		for (j = 0; j < x_num - 1; j++) {
-			offset = (i * x_num) + j;
+	for (i = 0; i < x_num ; i++) {
+		for (j = 0; j < y_num-1; j++) {
+			offset = (i * y_num) + j;
 
 			cur_val = raw_data->dnd_data[offset];
 			if (!cur_val) {
@@ -4818,8 +4247,8 @@ static void run_dnd_h_gap_read(void *device_data)
 			next_val = raw_data->dnd_data[offset + 1];
 			if (!next_val) {
 				raw_data->hgap_data[offset] = next_val;
-				for (++j; j < x_num - 1; j++) {
-					offset = (i * x_num) + j;
+				for (++j; j < y_num - 1; j++) {
+					offset = (i * y_num) + j;
 
 					next_val = raw_data->dnd_data[offset];
 					if (!next_val) {
@@ -4835,25 +4264,27 @@ static void run_dnd_h_gap_read(void *device_data)
 			else
 				val = 100 - ((next_val * 100) / cur_val);
 
+			printk("%d ", val);
+
 			raw_data->hgap_data[offset] = val;
 
-			if (pdata->support_touchkey){
-				if (i < y_num - 1){
-					if (raw_data->hgap_data[i * x_num + j] > screen_max)
-						screen_max = raw_data->hgap_data[i * x_num + j];
+			if(pdata->support_touchkey){
+				if(i < x_num-1){
+					if(raw_data->hgap_data[i * y_num + j] > screen_max)
+						screen_max = raw_data->hgap_data[i * y_num + j];
 				}
 				else{
-					if (raw_data->hgap_data[i * x_num + j] > touchkey_max)
-						touchkey_max = raw_data->hgap_data[i * x_num + j];
+					if(raw_data->hgap_data[i * y_num + j] > touchkey_max)
+						touchkey_max = raw_data->hgap_data[i * y_num + j];
 				}
 			}
 			else{
-				if (raw_data->hgap_data[i * x_num + j] > screen_max)
-						screen_max = raw_data->hgap_data[i * x_num + j];
+				if(raw_data->hgap_data[i * y_num + j] > screen_max)
+						screen_max = raw_data->hgap_data[i * y_num + j];
 			}
 		}
+		printk("\n");
 	}
-
 	if (pdata->support_touchkey) {
 		input_info(true, &client->dev, "DND H Gap screen_max %d, touchkey_max %d\n", screen_max, touchkey_max);
 		snprintf(buff, sizeof(buff), "%d,%d", screen_max, touchkey_max);
@@ -4876,8 +4307,6 @@ static void run_dnd_h_gap_read(void *device_data)
 	}
 	sec->cmd_state = SEC_CMD_STATUS_OK;
 
-	zinitix_display_rawdata(info, raw_data, TOUCH_DND_MODE, 2);
-
 	return;
 }
 
@@ -4896,14 +4325,14 @@ static void get_dnd_h_gap(void *device_data)
 	x_node = sec->cmd_param[0];
 	y_node = sec->cmd_param[1];
 
-	if (x_node < 0 || x_node >= x_num - 1 || y_node < 0 || y_node >= y_num) {
+	if (x_node < 0 || x_node >= x_num || y_node < 0 || y_node >= y_num - 1) {
 		snprintf(buff, sizeof(buff), "%s", "NG");
 		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
 		return;
 	}
 
-	node_num = (y_node * x_num) + x_node;
+	node_num = (x_node * y_num) + y_node;
 
 	snprintf(buff, sizeof(buff), "%d", raw_data->hgap_data[node_num]);
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
@@ -4933,9 +4362,9 @@ static void run_dnd_h_gap_read_all(void *device_data)
 		return;
 	}
 
-	for (i = 0; i < info->cap_info.y_node_num; i++) {
-		for (j = 0; j < info->cap_info.x_node_num - 1; j++) {
-			offset = (i * info->cap_info.x_node_num) + j;
+	for (i = 0; i < info->cap_info.x_node_num ; i++) {
+		for (j = 0; j < info->cap_info.y_node_num-1; j++) {
+			offset = (i * info->cap_info.y_node_num) + j;
 
 			cur_val = raw_data->dnd_data[offset];
 			if (!cur_val) {
@@ -4946,8 +4375,8 @@ static void run_dnd_h_gap_read_all(void *device_data)
 			next_val = raw_data->dnd_data[offset + 1];
 			if (!next_val) {
 				raw_data->hgap_data[offset] = next_val;
-				for (++j; j < info->cap_info.x_node_num - 1; j++) {
-					offset = (i * info->cap_info.x_node_num) + j;
+				for (++j; j < info->cap_info.y_node_num - 1; j++) {
+					offset = (i * info->cap_info.y_node_num) + j;
 
 					next_val = raw_data->dnd_data[offset];
 					if (!next_val) {
@@ -4991,14 +4420,14 @@ static void get_dnd_v_gap(void *device_data)
 	x_node = sec->cmd_param[0];
 	y_node = sec->cmd_param[1];
 
-	if (x_node < 0 || x_node >= x_num || y_node < 0 || y_node >= y_num - 1) {
+	if (x_node < 0 || x_node >= x_num - 1 || y_node < 0 || y_node >= y_num) {
 		snprintf(buff, sizeof(buff), "%s", "NG");
 		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
 		return;
 	}
 
-	node_num = (y_node * x_num) + x_node;
+	node_num = (x_node * y_num) + y_node;
 
 	sprintf(buff, "%d", raw_data->vgap_data[node_num]);
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
@@ -5028,12 +4457,12 @@ static void run_dnd_v_gap_read_all(void *device_data)
 		return;
 	}
 
-	for (i = 0; i < info->cap_info.y_node_num - 1; i++) {
-		for (j = 0; j < info->cap_info.x_node_num; j++) {
-			offset = (i * info->cap_info.x_node_num) + j;
+	for (i = 0; i < info->cap_info.x_node_num - 1; i++) {
+		for (j = 0; j < info->cap_info.y_node_num; j++) {
+			offset = (i * info->cap_info.y_node_num) + j;
 
 			cur_val = raw_data->dnd_data[offset];
-			next_val = raw_data->dnd_data[offset + info->cap_info.x_node_num];
+			next_val = raw_data->dnd_data[offset + info->cap_info.y_node_num];
 			if (!next_val) {
 				raw_data->vgap_data[offset] = next_val;
 				continue;
@@ -5086,23 +4515,25 @@ static void run_delta_read(void *device_data)
 	min = (s16)0x7FFF;
 	max = (s16)0x8000;
 
-	for (i = 0; i < info->cap_info.y_node_num; i++) {
-		for (j = 0; j < info->cap_info.x_node_num; j++) {
-			if (raw_data->delta_data[i * info->cap_info.x_node_num + j] < min &&
-				raw_data->delta_data[i * info->cap_info.x_node_num + j] != 0)
-				min = raw_data->delta_data[i * info->cap_info.x_node_num + j];
+	for (i = 0; i < info->cap_info.x_node_num; i++) {
+		for (j = 0; j < info->cap_info.y_node_num; j++) {
+			/*printk("delta_data : %d \n", raw_data->delta_data[j+i]);*/
 
-			if (raw_data->delta_data[i * info->cap_info.x_node_num + j] > max)
-				max = raw_data->delta_data[i * info->cap_info.x_node_num + j];
+			if(raw_data->delta_data[i * info->cap_info.y_node_num + j] < min &&
+				raw_data->delta_data[i * info->cap_info.y_node_num + j] != 0)
+				min = raw_data->delta_data[i * info->cap_info.y_node_num + j];
+
+			if(raw_data->delta_data[i * info->cap_info.y_node_num + j] > max)
+				max = raw_data->delta_data[i * info->cap_info.y_node_num + j];
 
 		}
+		/*printk("\n");*/
 	}
 
 	snprintf(buff, sizeof(buff), "%d,%d\n", min, max);
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 	sec->cmd_state = SEC_CMD_STATUS_OK;
 
-	zinitix_display_rawdata(info, raw_data, TOUCH_DELTA_MODE, 0);
 out:
 	if (ret < 0) {
 		snprintf(buff, sizeof(buff), "%s", "NG");
@@ -5144,7 +4575,7 @@ static void get_delta(void *device_data)
 		return;
 	}
 
-	node_num = y_node * info->cap_info.x_node_num + x_node;
+	node_num = x_node * info->cap_info.y_node_num + y_node;
 
 	val = raw_data->delta_data[node_num];
 	snprintf(buff, sizeof(buff), "%u", val);
@@ -5186,16 +4617,16 @@ static void run_hfdnd_read(void *device_data)
 
 	input_info(true,&client->dev, "HF DND start\n");
 
-	for (i = 0; i < y_num; i++) {
-		for (j = 0; j < x_num; j++) {
-			offset = (i * x_num) + j;
-			input_info(true, &client->dev, "%d ", raw_data->hfdnd_data[offset]);
-			if (raw_data->hfdnd_data[offset] < min && raw_data->hfdnd_data[offset] != 0)
+	for (i = 0; i < x_num; i++) {
+		for (j = 0; j < y_num; j++) {
+			offset = (i * y_num) + j;
+			printk("%d ", raw_data->hfdnd_data[offset]);
+			if(raw_data->hfdnd_data[offset]<min && raw_data->hfdnd_data[offset]!=0)
 				min = raw_data->hfdnd_data[offset];
-			if (raw_data->hfdnd_data[offset] > max)
+			if(raw_data->hfdnd_data[offset]>max)
 				max = raw_data->hfdnd_data[offset];
 		}
-		input_info(true, &client->dev, "\n");
+		printk("\n");
 	}
 
 	input_info(true, &client->dev, "HF DND Pass\n");
@@ -5203,9 +4634,10 @@ static void run_hfdnd_read(void *device_data)
 	snprintf(buff, sizeof(buff), "%d,%d", min, max);
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 
-	if (sec->cmd_all_factory_state == SEC_CMD_STATUS_RUNNING)
-		sec_cmd_set_cmd_result_all(sec, buff, strnlen(buff, sizeof(buff)), "HF_DND");
-
+	if (info->pdata->item_version >= 5) {
+		if (sec->cmd_all_factory_state == SEC_CMD_STATUS_RUNNING)
+			sec_cmd_set_cmd_result_all(sec, buff, strnlen(buff, sizeof(buff)), "HF_DND");
+	}
 	sec->cmd_state = SEC_CMD_STATUS_OK;
 
 out:
@@ -5247,7 +4679,7 @@ static void get_hfdnd(void *device_data)
 		return;
 	}
 
-	node_num = y_node * info->cap_info.x_node_num + x_node;
+	node_num = x_node * info->cap_info.y_node_num + y_node;
 
 	val = raw_data->hfdnd_data[node_num];
 	snprintf(buff, sizeof(buff), "%u", val);
@@ -5280,10 +4712,10 @@ static void get_hfdnd_all(void *device_data)
 		return;
 	}
 
-	for (i = 0; i < info->cap_info.y_node_num; i++) {
-		for (j = 0; j < info->cap_info.x_node_num; j++) {
+	for(i = 0; i < info->cap_info.x_node_num; i++) {
+		for(j = 0; j < info->cap_info.y_node_num; j++) {
 			snprintf(buff, sizeof(buff), "%u,",
-				raw_data->hfdnd_data[i * info->cap_info.x_node_num + j]);
+				raw_data->hfdnd_data[i * info->cap_info.y_node_num + j]);
 			strlcat(all_cmdbuff, buff, buff_size);
 		}
 	}
@@ -5314,12 +4746,12 @@ static void run_hfdnd_v_gap_read(void *device_data)
 
 	input_info(true, &info->client->dev, "HF DND V Gap start\n");
 
-	for (i = 0; i < y_num - 1; i++) {
-		for (j = 0; j < x_num; j++) {
-			offset = (i * x_num) + j;
+	for (i = 0; i < x_num - 1; i++) {
+		for (j = 0; j < y_num; j++) {
+			offset = (i * y_num) + j;
 
 			cur_val = raw_data->hfdnd_data[offset];
-			next_val = raw_data->hfdnd_data[offset + x_num];
+			next_val = raw_data->hfdnd_data[offset + y_num];
 			if (!next_val) {
 				raw_data->vgap_data[offset] = next_val;
 				continue;
@@ -5330,46 +4762,50 @@ static void run_hfdnd_v_gap_read(void *device_data)
 			else
 				val = 100 - ((next_val * 100) / cur_val);
 
-			input_info(true, &info->client->dev, "%d ", val);
+			printk("%d ", val);
 			raw_data->vgap_data[offset] = val;
 
-			if (pdata->support_touchkey){
-				if (i < y_num - 2){
-					if (raw_data->vgap_data[i * x_num + j] > screen_max)
-						screen_max = raw_data->vgap_data[i * x_num + j];
+			if(pdata->support_touchkey){
+				if(i < x_num-1){
+					if(raw_data->vgap_data[i * y_num + j] > screen_max)
+						screen_max = raw_data->vgap_data[i * y_num + j];
 				}
 				else{
-					if (raw_data->vgap_data[i * x_num + j] > touchkey_max)
-						touchkey_max = raw_data->vgap_data[i * x_num + j];
+					if(raw_data->vgap_data[i * y_num + j] > touchkey_max)
+						touchkey_max = raw_data->vgap_data[i * y_num + j];
 				}
 			}
 			else{
-				if (raw_data->vgap_data[i * x_num + j] > screen_max)
-						screen_max = raw_data->vgap_data[i * x_num + j];
+				if(raw_data->vgap_data[i * y_num + j] > screen_max)
+						screen_max = raw_data->vgap_data[i * y_num + j];
 			}
 		}
-		input_info(true, &info->client->dev, "\n");
+		printk("\n");
 	}
 
 	input_info(true, &info->client->dev, "HFDND V Gap screen_max %d, touchkey_max %d\n", screen_max, touchkey_max);
 	snprintf(buff, sizeof(buff), "%d,%d\n", screen_max, touchkey_max);
 
-	if (pdata->support_touchkey) {
-		snprintf(buff_onecmd_1, sizeof(buff_onecmd_1), "%d,%d", 0, screen_max);
-		snprintf(buff_onecmd_2, sizeof(buff_onecmd_2), "%d,%d", 0, touchkey_max);
-	} else {
-		input_info(true, &info->client->dev, "HFDND V Gap screen_max %d\n", screen_max);
-		snprintf(buff, sizeof(buff), "%d", screen_max);
-		snprintf(buff_onecmd_1, sizeof(buff_onecmd_1), "%d,%d", 0, screen_max);
+	if (pdata->item_version >= 5) {
+		if (pdata->support_touchkey) {
+			snprintf(buff_onecmd_1, sizeof(buff_onecmd_1), "%d,%d", 0, screen_max);
+			snprintf(buff_onecmd_2, sizeof(buff_onecmd_2), "%d,%d", 0, touchkey_max);
+		} else {
+			input_info(true, &info->client->dev, "HFDND V Gap screen_max %d\n", screen_max);
+			snprintf(buff, sizeof(buff), "%d", screen_max);
+			snprintf(buff_onecmd_1, sizeof(buff_onecmd_1), "%d,%d", 0, screen_max);
+		}
 	}
 
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	if (sec->cmd_all_factory_state == SEC_CMD_STATUS_RUNNING) {
-		if (pdata->support_touchkey) {
-			sec_cmd_set_cmd_result_all(sec, buff_onecmd_1, strnlen(buff_onecmd_1, sizeof(buff_onecmd_1)), "HF_DND_V_GAP_SCREEN");
-			sec_cmd_set_cmd_result_all(sec, buff_onecmd_2, strnlen(buff_onecmd_2, sizeof(buff_onecmd_2)), "HF_DND_V_GAP_TOUCHKEY");
-		} else {
-			sec_cmd_set_cmd_result_all(sec, buff_onecmd_1, strnlen(buff_onecmd_1, sizeof(buff_onecmd_1)), "HF_DND_V_GAP");
+	if (pdata->item_version >= 5) {
+		if (sec->cmd_all_factory_state == SEC_CMD_STATUS_RUNNING) {
+			if (pdata->support_touchkey) {
+				sec_cmd_set_cmd_result_all(sec, buff_onecmd_1, strnlen(buff_onecmd_1, sizeof(buff_onecmd_1)), "HF_DND_V_GAP_SCREEN");
+				sec_cmd_set_cmd_result_all(sec, buff_onecmd_2, strnlen(buff_onecmd_2, sizeof(buff_onecmd_2)), "HF_DND_V_GAP_TOUCHKEY");
+			} else {
+				sec_cmd_set_cmd_result_all(sec, buff_onecmd_1, strnlen(buff_onecmd_1, sizeof(buff_onecmd_1)), "HF_DND_V_GAP");
+			}
 		}
 	}
 
@@ -5398,9 +4834,9 @@ static void run_hfdnd_h_gap_read(void *device_data)
 
 	input_info(true, &info->client->dev, "HF DND H Gap start\n");
 
-	for (i = 0; i < y_num ; i++) {
-		for (j = 0; j < x_num - 1; j++) {
-			offset = (i * x_num) + j;
+	for (i = 0; i < x_num ; i++) {
+		for (j = 0; j < y_num-1; j++) {
+			offset = (i * y_num) + j;
 
 			cur_val = raw_data->hfdnd_data[offset];
 			if (!cur_val) {
@@ -5411,67 +4847,72 @@ static void run_hfdnd_h_gap_read(void *device_data)
 			next_val = raw_data->hfdnd_data[offset + 1];
 			if (!next_val) {
 				raw_data->hgap_data[offset] = next_val;
-				for (++j; j < x_num - 1; j++) {
-					offset = (i * x_num) + j;
+				for (++j; j < y_num - 1; j++) {
+					offset = (i * y_num) + j;
 
 					next_val = raw_data->hfdnd_data[offset];
 					if (!next_val) {
-						raw_data->hgap_data[offset]	= next_val;
+						raw_data->hgap_data[offset]
+							= next_val;
 						continue;
-					}
-					break;
-				}
 			}
+
+					break;
+		}
+	}
 
 			if (next_val > cur_val)
 				val = 100 - ((cur_val * 100) / next_val);
-		   else
+	   else
 				val = 100 - ((next_val * 100) / cur_val);
 
-			input_info(true, &info->client->dev, "%d ", val);
+			printk("%d ", val);
 			raw_data->hgap_data[offset] = val;
 
-			if (pdata->support_touchkey){
-				if (i < y_num - 1){
-					if (raw_data->hgap_data[i * x_num + j] > screen_max)
-						screen_max = raw_data->hgap_data[i * x_num + j];
+			if(pdata->support_touchkey){
+				if(i < x_num-1){
+					if(raw_data->hgap_data[i * y_num + j] > screen_max)
+						screen_max = raw_data->hgap_data[i * y_num + j];
 				}
 				else{
-					if (raw_data->hgap_data[i * x_num + j] > touchkey_max)
-						touchkey_max = raw_data->hgap_data[i * x_num + j];
+					if(raw_data->hgap_data[i * y_num + j] > touchkey_max)
+						touchkey_max = raw_data->hgap_data[i * y_num + j];
 				}
 			}
 			else{
-				if (raw_data->hgap_data[i * x_num + j] > screen_max)
-						screen_max = raw_data->hgap_data[i * x_num + j];
+				if(raw_data->hgap_data[i * y_num + j] > screen_max)
+						screen_max = raw_data->hgap_data[i * y_num + j];
 			}
 		}
-		input_info(true, &info->client->dev, "\n");
+		printk("\n");
 	}
 
 	input_info(true, &info->client->dev, "HFDND H Gap screen_max %d, touchkey_max %d\n", screen_max, touchkey_max);
 	snprintf(buff, sizeof(buff), "%d,%d", screen_max, touchkey_max);
 
-	if (pdata->support_touchkey) {
-		snprintf(buff_onecmd_1, sizeof(buff_onecmd_1), "%d,%d", 0, screen_max);
-		snprintf(buff_onecmd_2, sizeof(buff_onecmd_2), "%d,%d", 0, touchkey_max);
-	} else {
-		input_info(true, &info->client->dev, "HFDND H Gap screen_max %d\n", screen_max);
-		snprintf(buff, sizeof(buff), "%d", screen_max);
-		snprintf(buff_onecmd_1, sizeof(buff_onecmd_1), "%d,%d", 0, screen_max);
+	if (pdata->item_version >= 5) {
+		if (pdata->support_touchkey) {
+			snprintf(buff_onecmd_1, sizeof(buff_onecmd_1), "%d,%d", 0, screen_max);
+			snprintf(buff_onecmd_2, sizeof(buff_onecmd_2), "%d,%d", 0, touchkey_max);
+		} else {
+			input_info(true, &info->client->dev, "HFDND H Gap screen_max %d\n", screen_max);
+			snprintf(buff, sizeof(buff), "%d", screen_max);
+			snprintf(buff_onecmd_1, sizeof(buff_onecmd_1), "%d,%d", 0, screen_max);
+		}
 	}
 
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 	
-	if (sec->cmd_all_factory_state == SEC_CMD_STATUS_RUNNING) {
-		if (pdata->support_touchkey) {
-			sec_cmd_set_cmd_result_all(sec, buff_onecmd_1, strnlen(buff_onecmd_1, sizeof(buff_onecmd_1)), "HF_DND_H_GAP_SCREEN");
-			sec_cmd_set_cmd_result_all(sec, buff_onecmd_2, strnlen(buff_onecmd_2, sizeof(buff_onecmd_2)), "HF_DND_H_GAP_TOUCHKEY");
-		} else {
-			sec_cmd_set_cmd_result_all(sec, buff_onecmd_1, strnlen(buff_onecmd_1, sizeof(buff_onecmd_1)), "HF_DND_H_GAP");
+	if (pdata->item_version >= 5) {
+		if (sec->cmd_all_factory_state == SEC_CMD_STATUS_RUNNING) {
+			if (pdata->support_touchkey) {
+				sec_cmd_set_cmd_result_all(sec, buff_onecmd_1, strnlen(buff_onecmd_1, sizeof(buff_onecmd_1)), "HF_DND_H_GAP_SCREEN");
+				sec_cmd_set_cmd_result_all(sec, buff_onecmd_2, strnlen(buff_onecmd_2, sizeof(buff_onecmd_2)), "HF_DND_H_GAP_TOUCHKEY");
+			} else {
+				sec_cmd_set_cmd_result_all(sec, buff_onecmd_1, strnlen(buff_onecmd_1, sizeof(buff_onecmd_1)), "HF_DND_H_GAP");
+			}
 		}
 	}
-
 	sec->cmd_state = SEC_CMD_STATUS_OK;
 
 	return;
@@ -5492,14 +4933,14 @@ static void get_hfdnd_h_gap(void *device_data)
 	x_node = sec->cmd_param[0];
 	y_node = sec->cmd_param[1];
 
-	if (x_node < 0 || x_node >= x_num - 1 || y_node < 0 || y_node >= y_num) {
+	if (x_node < 0 || x_node >= x_num || y_node < 0 || y_node >= y_num - 1) {
 		snprintf(buff, sizeof(buff), "%s", "abnormal");
 		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
 		return;
 	}
 
-	node_num = (y_node * x_num) + x_node;
+	node_num = (x_node * y_num) + y_node;
 
 	snprintf(buff, sizeof(buff), "%d", raw_data->hgap_data[node_num]);
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
@@ -5529,10 +4970,10 @@ static void get_hfdnd_h_gap_all(void *device_data)
 		return;
 	}
 
-	for (i = 0; i < info->cap_info.y_node_num; i++) {
-		for (j = 0; j < info->cap_info.x_node_num - 1; j++) {
+	for(i = 0; i < info->cap_info.x_node_num; i++) {
+		for(j = 0; j < info->cap_info.y_node_num - 1; j++) {
 			snprintf(buff, sizeof(buff), "%u,",
-				raw_data->hgap_data[i * info->cap_info.x_node_num + j]);
+				raw_data->hgap_data[i * info->cap_info.y_node_num + j]);
 			strlcat(all_cmdbuff, buff, buff_size);
 		}
 	}
@@ -5558,14 +4999,14 @@ static void get_hfdnd_v_gap(void *device_data)
 	x_node = sec->cmd_param[0];
 	y_node = sec->cmd_param[1];
 
-	if (x_node < 0 || x_node >= x_num || y_node < 0 || y_node >= y_num - 1) {
+	if (x_node < 0 || x_node >= x_num - 1 || y_node < 0 || y_node >= y_num) {
 		snprintf(buff, sizeof(buff), "%s", "abnormal");
 		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
 		return;
 	}
 
-	node_num = (y_node * x_num) + x_node;
+	node_num = (x_node * y_num) + y_node;
 
 	snprintf(buff, sizeof(buff), "%d", raw_data->vgap_data[node_num]);
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
@@ -5595,10 +5036,10 @@ static void get_hfdnd_v_gap_all(void *device_data)
 		return;
 	}
 
-	for (i = 0; i < info->cap_info.y_node_num - 1; i++) {
-		for (j = 0; j < info->cap_info.x_node_num; j++) {
+	for(i = 0; i < info->cap_info.x_node_num - 1; i++) {
+		for(j = 0; j < info->cap_info.y_node_num; j++) {
 			snprintf(buff, sizeof(buff), "%u,",
-				raw_data->vgap_data[i * info->cap_info.x_node_num + j]);
+				raw_data->vgap_data[i * info->cap_info.y_node_num + j]);
 			strlcat(all_cmdbuff, buff, buff_size);
 		}
 	}
@@ -5616,6 +5057,7 @@ static void run_rxshort_read(void *device_data)
 	struct i2c_client *client = info->client;
 	struct tsp_raw_data *raw_data = info->raw_data;
 	char buff[SEC_CMD_STR_LEN] = { 0 };
+	int y_num = info->cap_info.y_node_num;
 	int i, touchkey_node = 2;
 	u16 screen_max = 0x0000, touchkey_max = 0x0000;
 
@@ -5632,14 +5074,15 @@ static void run_rxshort_read(void *device_data)
 
 	input_info(true,&client->dev, "RX SHORT start\n");
 
-	for (i = 0; i < info->cap_info.x_node_num; i++) {
+	for (i = 0; i < y_num; i++) {
 		input_info(true,&client->dev, "%d ", raw_data->rxshort_data[i]);
 
-		if ((i == touchkey_node) || (i == (info->cap_info.x_node_num - 1) - touchkey_node)){
-			if (raw_data->rxshort_data[i] > touchkey_max)
+		if((i==touchkey_node)||(i==(y_num-1)-touchkey_node)){
+			if(raw_data->rxshort_data[i]> touchkey_max)
 				touchkey_max = raw_data->rxshort_data[i];
-		} else {
-			if (raw_data->rxshort_data[i] > screen_max)
+		}
+		else{
+			if(raw_data->rxshort_data[i]> screen_max)
 				screen_max = raw_data->rxshort_data[i];
 		}
 	}
@@ -5682,7 +5125,7 @@ static void get_rxshort(void *device_data)
 		return;
 	}
 
-	node_num = y_node * info->cap_info.x_node_num + x_node;
+	node_num = x_node * info->cap_info.y_node_num + y_node;
 
 	val = raw_data->rxshort_data[node_num];
 	snprintf(buff, sizeof(buff), "%u", val);
@@ -5702,6 +5145,7 @@ static void run_txshort_read(void *device_data)
 	struct i2c_client *client = info->client;
 	struct tsp_raw_data *raw_data = info->raw_data;
 	char buff[SEC_CMD_STR_LEN] = { 0 };
+	int x_num = info->cap_info.x_node_num;
 	int i;
 	u16 screen_max = 0x0000, touchkey_max = 0x0000;
 
@@ -5718,14 +5162,14 @@ static void run_txshort_read(void *device_data)
 
 	input_info(true,&client->dev, "TX SHORT start\n");
 
-	for (i = 0; i < info->cap_info.y_node_num - 1; i++) {
+	for (i = 0; i < x_num-1; i++) {
 		input_info(true,&client->dev, "%d ", raw_data->txshort_data[i]);
 
-		if (raw_data->txshort_data[i]>screen_max)
+		if(raw_data->txshort_data[i]>screen_max)
 			screen_max = raw_data->txshort_data[i];
 	}
-	input_info(true,&client->dev, "%d ", raw_data->txshort_data[info->cap_info.y_node_num - 1]);
-	touchkey_max = raw_data->txshort_data[info->cap_info.y_node_num - 1];
+	input_info(true,&client->dev, "%d ", raw_data->txshort_data[x_num-1]);
+	touchkey_max = raw_data->txshort_data[x_num-1];
 
 	input_info(true, &client->dev, "TX SHORT end\n");
 
@@ -5765,7 +5209,7 @@ static void get_txshort(void *device_data)
 		return;
 	}
 
-	node_num = y_node * info->cap_info.x_node_num + x_node;
+	node_num = x_node * info->cap_info.y_node_num + y_node;
 
 	val = raw_data->txshort_data[node_num];
 	snprintf(buff, sizeof(buff), "%u", val);
@@ -5777,7 +5221,7 @@ static void get_txshort(void *device_data)
 
 	return;
 }
-/*
+
 static void run_trxshort_read(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
@@ -5802,34 +5246,34 @@ static void run_trxshort_read(void *device_data)
 	get_raw_data(info, (u8 *)raw_data->txshort_data, 2);
 	ts_set_touchmode(TOUCH_POINT_MODE);
 
-	input_info(true, &client->dev, "TRX SHORT start\n");
+	input_info(true,&client->dev, "TRX SHORT start\n");
 
-	for (i = 0; i < y_num; i++) {
-		for (j = 0; j < x_num; j++) {
-			input_info(true, &client->dev, "%d\t", raw_data->txshort_data[i * x_num + j]);
+	for (i = 0; i < x_num; i++) {
+		for (j = 0; j < y_num; j++) {
+			input_info(true,&client->dev, "%d\t", raw_data->txshort_data[i*y_num + j]);
 		}
-		input_info(true, &client->dev, "\n", raw_data->txshort_data[i * x_num + j]);
+		input_info(true,&client->dev, "\n", raw_data->txshort_data[i*y_num + j]);
 	}
 
 	input_info(true,&client->dev, "RX SHORT :\n");
-	for (i = 0; i < x_num; i++) {
-		input_info(true, &client->dev, "%d ", raw_data->txshort_data[i]);
-		if (raw_data->txshort_data[i] > rx_max)
+	for (i = 0; i < y_num; i++) {
+		input_info(true,&client->dev, "%d ", raw_data->txshort_data[i]);
+		if(raw_data->txshort_data[i]>rx_max)
 			rx_max = raw_data->txshort_data[i];
 	}
-	input_info(true, &client->dev, "\n");
+	input_info(true,&client->dev, "\n");
 
-	input_info(true, &client->dev, "TX SHORT :\n");
-	for (i = x_num; i < x_num + y_num; i++) {
-		input_info(true, &client->dev, "%d ", raw_data->txshort_data[i]);
-		if (raw_data->txshort_data[i] > tx_max)
+	input_info(true,&client->dev, "TX SHORT :\n");
+	for (i = y_num; i < x_num+y_num; i++) {
+		input_info(true,&client->dev, "%d ", raw_data->txshort_data[i]);
+		if(raw_data->txshort_data[i]>tx_max)
 			tx_max = raw_data->txshort_data[i];
 	}
-	input_info(true, &client->dev, "\n");
+	input_info(true,&client->dev, "\n");
 
 	input_info(true, &client->dev, "TRX SHORT end\n");
 
-	if (rx_max == 100 && tx_max == 200)
+	if(rx_max == 100 && tx_max == 200)
 		snprintf(buff, sizeof(buff), "%d", short_pass);
 	else 
 		snprintf(buff, sizeof(buff), "%d", short_fail);
@@ -5846,11 +5290,12 @@ static void run_trxshort_read(void *device_data)
 #endif
 	return;
 }
-*/
+
 static void run_selfdnd_read(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
 	struct bt532_ts_info *info = container_of(sec, struct bt532_ts_info, sec);
+	struct bt532_ts_platform_data *pdata = info->pdata;
 	struct i2c_client *client = info->client;
 	struct tsp_raw_data *raw_data = info->raw_data;
 	int total_node = info->cap_info.x_node_num + info->cap_info.y_node_num;
@@ -5882,21 +5327,27 @@ static void run_selfdnd_read(void *device_data)
 	rx_min = 0xFFFF;
 	rx_max = 0x0000;
 
-	for (j = 0; j < info->cap_info.x_node_num; j++) {
-		if (raw_data->selfdnd_data[j] < rx_min && raw_data->selfdnd_data[j] != 0)
-			rx_min = raw_data->selfdnd_data[j];
+	for(j = info->cap_info.y_node_num; j < total_node; j++) {
+		printk("%d ", raw_data->selfdnd_data[j]);
 
-		if (raw_data->selfdnd_data[j] > rx_max)
-			rx_max = raw_data->selfdnd_data[j];
-	}
-
-	for (j = info->cap_info.x_node_num; j < total_node; j++) {
 		if (raw_data->selfdnd_data[j] < tx_min && raw_data->selfdnd_data[j] != 0)
 			tx_min = raw_data->selfdnd_data[j];
 
-		if (raw_data->selfdnd_data[j] > tx_max)
+		if(raw_data->selfdnd_data[j] > tx_max)
 			tx_max = raw_data->selfdnd_data[j];
 	}
+	printk("\n");
+
+	for(j = 0; j < info->cap_info.y_node_num; j++) {
+		printk("%d ", raw_data->selfdnd_data[j]);
+
+		if (raw_data->selfdnd_data[j] < rx_min && raw_data->selfdnd_data[j] != 0)
+			rx_min = raw_data->selfdnd_data[j];
+
+		if(raw_data->selfdnd_data[j] > rx_max)
+			rx_max = raw_data->selfdnd_data[j];
+	}
+	printk("\n");
 
 	input_info(true, &client->dev, "SELF DND Pass\n");
 
@@ -5904,6 +5355,8 @@ static void run_selfdnd_read(void *device_data)
 	snprintf(rx_buff, sizeof(rx_buff), "%d,%d", rx_min, rx_max);
 	sec_cmd_set_cmd_result(sec, rx_buff, strnlen(rx_buff, sizeof(rx_buff)));
 	if (sec->cmd_all_factory_state == SEC_CMD_STATUS_RUNNING) {
+		if (pdata->item_version >= 6)
+			sec_cmd_set_cmd_result_all(sec, tx_buff, strnlen(tx_buff, sizeof(tx_buff)), "SELF_DND_TX");
 		sec_cmd_set_cmd_result_all(sec, rx_buff, strnlen(rx_buff, sizeof(rx_buff)), "SELF_DND_RX");
 	}
 	sec->cmd_state = SEC_CMD_STATUS_OK;
@@ -5913,57 +5366,10 @@ out:
 		snprintf(rx_buff, sizeof(rx_buff), "%s", "NG");
 		sec_cmd_set_cmd_result(sec, rx_buff, strnlen(rx_buff, sizeof(rx_buff)));
 		if (sec->cmd_all_factory_state == SEC_CMD_STATUS_RUNNING) {
+			if (pdata->item_version >= 6)
+				sec_cmd_set_cmd_result_all(sec, rx_buff, strnlen(rx_buff, sizeof(rx_buff)), "SELF_DND_TX");
 			sec_cmd_set_cmd_result_all(sec, rx_buff, strnlen(rx_buff, sizeof(rx_buff)), "SELF_DND_RX");
 		}
-		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-	}
-	input_info(true, &client->dev, "%s: \"%s\"(%d)\n", __func__, sec->cmd_result,
-				(int)strlen(sec->cmd_result));
-
-#if ESD_TIMER_INTERVAL
-	esd_timer_start(CHECK_ESD_TIMER, misc_info);
-	write_reg(client, BT532_PERIODICAL_INTERRUPT_INTERVAL,
-		SCAN_RATE_HZ * ESD_TIMER_INTERVAL);
-#endif
-	return;
-}
-
-static void run_charge_pump_read(void *device_data)
-{
-	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
-	struct bt532_ts_info *info = container_of(sec, struct bt532_ts_info, sec);
-	struct i2c_client *client = info->client;
-	struct tsp_raw_data *raw_data = info->raw_data;
-	char buff[SEC_CMD_STR_LEN] = { 0 };
-	int ret;
-
-#if ESD_TIMER_INTERVAL
-	esd_timer_stop(misc_info);
-	write_reg(client, BT532_PERIODICAL_INTERRUPT_INTERVAL, 0);
-	write_cmd(client, BT532_CLEAR_INT_STATUS_CMD);
-#endif
-	sec_cmd_set_default_result(sec);
-
-	ret = ts_set_touchmode(TOUCH_CHARGE_PUMP_MODE);
-	if (ret < 0) {
-		ts_set_touchmode(TOUCH_POINT_MODE);
-		goto out;
-	}
-	get_raw_data(info, (u8 *)raw_data->charge_pump_data, 1);
-	ts_set_touchmode(TOUCH_POINT_MODE);
-
-	snprintf(buff, sizeof(buff), "%d,%d", raw_data->charge_pump_data[0], raw_data->charge_pump_data[0]);
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	if (sec->cmd_all_factory_state == SEC_CMD_STATUS_RUNNING)
-		sec_cmd_set_cmd_result_all(sec, buff, strnlen(buff, sizeof(buff)), "CHARGE_PUMP");
-	sec->cmd_state = SEC_CMD_STATUS_OK;
-
-out:
-	if (ret < 0) {
-		snprintf(buff, sizeof(buff), "%s", "NG");
-		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-		if (sec->cmd_all_factory_state == SEC_CMD_STATUS_RUNNING)
-			sec_cmd_set_cmd_result_all(sec, buff, strnlen(buff, sizeof(buff)), "CHARGE_PUMP");
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
 	}
 	input_info(true, &client->dev, "%s: \"%s\"(%d)\n", __func__, sec->cmd_result,
@@ -6000,7 +5406,7 @@ static void get_selfdnd_rx(void *device_data)
 		return;
 	}
 
-	val = raw_data->selfdnd_data[x_node];
+	val = raw_data->selfdnd_data[y_node];
 	snprintf(buff, sizeof(buff), "%u", val);
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 	sec->cmd_state = SEC_CMD_STATUS_OK;
@@ -6034,7 +5440,7 @@ static void get_selfdnd_tx(void *device_data)
 		return;
 	}
 
-	val = raw_data->selfdnd_data[info->cap_info.x_node_num + y_node];
+	val = raw_data->selfdnd_data[info->cap_info.y_node_num + x_node];
 	snprintf(buff, sizeof(buff), "%u", val);
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 	sec->cmd_state = SEC_CMD_STATUS_OK;
@@ -6052,7 +5458,7 @@ static void run_selfdnd_read_all(void *device_data)
 	struct tsp_raw_data *raw_data = info->raw_data;
 	char temp[SEC_CMD_STR_LEN] = { 0 };
 	char *buff = NULL;
-	int total_node = info->cap_info.x_node_num + info->cap_info.y_node_num;
+	int total_node = info->cap_info.y_node_num;
 	s32 j;
 
 #if ESD_TIMER_INTERVAL
@@ -6071,7 +5477,7 @@ static void run_selfdnd_read_all(void *device_data)
 	if (!buff)
 		goto NG;
 
-	for (j = 0; j < total_node; j++) {
+	for(j = 0; j < info->cap_info.y_node_num; j++) {
 		snprintf(temp, CMD_RESULT_WORD_LEN, "%d,", raw_data->selfdnd_data[j]);
 		strncat(buff, temp, CMD_RESULT_WORD_LEN);
 		memset(temp, 0x00, SEC_CMD_STR_LEN);
@@ -6082,7 +5488,7 @@ static void run_selfdnd_read_all(void *device_data)
 	kfree(buff);
 
 NG:
-	if (sec->cmd_state != SEC_CMD_STATUS_OK) {
+	if(sec->cmd_state != SEC_CMD_STATUS_OK) {
 		snprintf(temp, SEC_CMD_STR_LEN, "NG");
 		sec_cmd_set_cmd_result(sec, temp, SEC_CMD_STR_LEN);
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
@@ -6098,6 +5504,7 @@ static void run_self_saturation_read(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
 	struct bt532_ts_info *info = container_of(sec, struct bt532_ts_info, sec);
+	struct bt532_ts_platform_data *pdata = info->pdata;
 	struct i2c_client *client = info->client;
 	struct tsp_raw_data *raw_data = info->raw_data;
 	int total_node = info->cap_info.x_node_num + info->cap_info.y_node_num;
@@ -6129,21 +5536,27 @@ static void run_self_saturation_read(void *device_data)
 	rx_min = 0xFFFF;
 	rx_max = 0x0000;
 
-	for (j = 0; j < info->cap_info.x_node_num; j++) {
-		if (raw_data->ssr_data[j] < rx_min && raw_data->ssr_data[j] != 0)
-			rx_min = raw_data->ssr_data[j];
+	for(j = info->cap_info.y_node_num; j < total_node; j++) {
+		printk("%d ", raw_data->ssr_data[j]);
 
-		if (raw_data->ssr_data[j] > rx_max)
-			rx_max = raw_data->ssr_data[j];
-	}
-
-	for (j = info->cap_info.x_node_num; j < total_node; j++) {
 		if (raw_data->ssr_data[j] < tx_min && raw_data->ssr_data[j] != 0)
 			tx_min = raw_data->ssr_data[j];
 
-		if (raw_data->ssr_data[j] > tx_max)
+		if(raw_data->ssr_data[j] > tx_max)
 			tx_max = raw_data->ssr_data[j];
 	}
+	printk("\n");
+
+	for(j = 0; j < info->cap_info.y_node_num; j++) {
+		printk("%d ", raw_data->ssr_data[j]);
+
+		if (raw_data->ssr_data[j] < rx_min && raw_data->ssr_data[j] != 0)
+			rx_min = raw_data->ssr_data[j];
+
+		if(raw_data->ssr_data[j] > rx_max)
+			rx_max = raw_data->ssr_data[j];
+	}
+	printk("\n");
 
 	input_info(true, &client->dev, "SELF SATURATION Pass\n");
 
@@ -6151,7 +5564,8 @@ static void run_self_saturation_read(void *device_data)
 	snprintf(rx_buff, sizeof(rx_buff), "%d,%d", rx_min, rx_max);
 	sec_cmd_set_cmd_result(sec, rx_buff, strnlen(rx_buff, sizeof(rx_buff)));
 	if (sec->cmd_all_factory_state == SEC_CMD_STATUS_RUNNING) {
-		sec_cmd_set_cmd_result_all(sec, tx_buff, strnlen(tx_buff, sizeof(tx_buff)), "SELF_SATURATION_TX");
+		if (pdata->item_version >= 6)
+			sec_cmd_set_cmd_result_all(sec, tx_buff, strnlen(tx_buff, sizeof(tx_buff)), "SELF_SATURATION_TX");
 		sec_cmd_set_cmd_result_all(sec, rx_buff, strnlen(rx_buff, sizeof(rx_buff)), "SELF_SATURATION_RX");
 	}
 	sec->cmd_state = SEC_CMD_STATUS_OK;
@@ -6161,7 +5575,8 @@ out:
 		snprintf(rx_buff, sizeof(rx_buff), "%s", "NG");
 		sec_cmd_set_cmd_result(sec, rx_buff, strnlen(rx_buff, sizeof(rx_buff)));
 		if (sec->cmd_all_factory_state == SEC_CMD_STATUS_RUNNING) {
-			sec_cmd_set_cmd_result_all(sec, rx_buff, strnlen(rx_buff, sizeof(rx_buff)), "SELF_SATURATION_TX");
+			if (pdata->item_version >= 6)
+				sec_cmd_set_cmd_result_all(sec, rx_buff, strnlen(rx_buff, sizeof(rx_buff)), "SELF_SATURATION_TX");
 			sec_cmd_set_cmd_result_all(sec, rx_buff, strnlen(rx_buff, sizeof(rx_buff)), "SELF_SATURATION_RX");
 		}
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
@@ -6200,7 +5615,7 @@ static void get_ssr_rx(void *device_data)
 		return;
 	}
 
-	val = raw_data->ssr_data[info->cap_info.y_node_num + x_node];
+	val = raw_data->ssr_data[y_node];
 	snprintf(buff, sizeof(buff), "%u", val);
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 	sec->cmd_state = SEC_CMD_STATUS_OK;
@@ -6234,7 +5649,7 @@ static void get_ssr_tx(void *device_data)
 		return;
 	}
 
-	val = raw_data->ssr_data[y_node];
+	val = raw_data->ssr_data[info->cap_info.y_node_num + x_node];
 	snprintf(buff, sizeof(buff), "%u", val);
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 	sec->cmd_state = SEC_CMD_STATUS_OK;
@@ -6253,7 +5668,7 @@ static void run_ssr_read_all(void *device_data)
 	struct tsp_raw_data *raw_data = info->raw_data;
 	char buff[16] = { 0 };
 	int total_node = info->cap_info.x_node_num + info->cap_info.y_node_num;
-	char all_cmdbuff[total_node * 6];
+	char all_cmdbuff[total_node*6];
 	s32 j;
 	int ret;
 
@@ -6272,7 +5687,7 @@ static void run_ssr_read_all(void *device_data)
 	get_raw_data(info, (u8 *)raw_data->ssr_data, 1);
 	ts_set_touchmode(TOUCH_POINT_MODE);
 
-	memset(all_cmdbuff, 0, sizeof(all_cmdbuff));
+	memset(all_cmdbuff,0,sizeof(char)*(info->cap_info.y_node_num*6));	//size 6  ex(12000,)
 
 	for (j = 0; j < total_node; j++) {
 		sprintf(buff, "%u,", raw_data->ssr_data[j]);
@@ -6306,6 +5721,7 @@ static void run_selfdnd_v_gap_read(void *device_data)
 	struct tsp_raw_data *raw_data = info->raw_data;
 	char buff[SEC_CMD_STR_LEN] = { 0 };
 	char buff_onecmd[SEC_CMD_STR_LEN] = { 0 };
+	int y_num = info->cap_info.y_node_num;
 	int total_node = info->cap_info.x_node_num + info->cap_info.y_node_num;
 	int j, offset, val, cur_val, next_val;
 	u16 screen_max = 0x0000;
@@ -6314,9 +5730,9 @@ static void run_selfdnd_v_gap_read(void *device_data)
 
 	memset(raw_data->self_vgap_data, 0x00, TSP_CMD_NODE_NUM);
 
-	input_info(true, &client->dev, "SELFDND V Gap start\n");
+	printk("SELFDND V Gap start\n");
 
-	for (j = info->cap_info.x_node_num; j < total_node - 1; j++) {
+	for (j = y_num; j < total_node-1; j++) {
 		offset = j;
 		cur_val = raw_data->selfdnd_data[offset];
 
@@ -6332,15 +5748,15 @@ static void run_selfdnd_v_gap_read(void *device_data)
 		else
 			val = 100 - ((next_val * 100) / cur_val);
 
-		input_info(true, &client->dev, "%d ", val);
+		printk("%d ", val);
 
 		raw_data->self_vgap_data[offset] = val;
 
-		if (raw_data->self_vgap_data[j] > screen_max)
+		if(raw_data->self_vgap_data[j] > screen_max)
 			screen_max = raw_data->self_vgap_data[j];
 
 	}
-	input_info(true, &client->dev, "\n");
+	printk("\n");
 
 	input_info(true, &client->dev, "SELFDND V Gap screen_max %d\n", screen_max);
 	snprintf(buff, sizeof(buff), "%d", screen_max);
@@ -6362,6 +5778,7 @@ static void run_selfdnd_h_gap_read(void *device_data)
 	struct tsp_raw_data *raw_data = info->raw_data;
 	char buff[SEC_CMD_STR_LEN] = { 0 };
 	char buff_onecmd[SEC_CMD_STR_LEN] = { 0 };
+	int y_num = info->cap_info.y_node_num;
 	int j, offset, val, cur_val, next_val;
 	u16 screen_max = 0x0000;
 
@@ -6369,9 +5786,9 @@ static void run_selfdnd_h_gap_read(void *device_data)
 
 	memset(raw_data->self_hgap_data, 0x00, TSP_CMD_NODE_NUM);
 
-	input_info(true, &client->dev, "SELFDND H Gap start\n");
+	printk("SELFDND H Gap start\n");
 
-	for (j = 0; j < info->cap_info.x_node_num - 1; j++) {
+	for (j = 0; j < y_num-1; j++) {
 		offset = j;
 		cur_val = raw_data->selfdnd_data[offset];
 
@@ -6387,12 +5804,15 @@ static void run_selfdnd_h_gap_read(void *device_data)
 		else
 			val = 100 - ((next_val * 100) / cur_val);
 
+		printk("%d ", val);
+
 		raw_data->self_hgap_data[offset] = val;
 
-		if (raw_data->self_hgap_data[j] > screen_max)
+		if(raw_data->self_hgap_data[j] > screen_max)
 			screen_max = raw_data->self_hgap_data[j];
 
 	}
+	printk("\n");
 
 	input_info(true, &client->dev, "SELFDND H Gap screen_max %d\n", screen_max);
 	snprintf(buff, sizeof(buff), "%d", screen_max);
@@ -6421,15 +5841,15 @@ static void get_selfdnd_h_gap(void *device_data)
 	x_node = sec->cmd_param[0];
 	y_node = sec->cmd_param[1];
 
-	if (x_node < 0 || x_node >= x_num - 1 ||
-		y_node < 0 || y_node >= y_num) {
+	if (x_node < 0 || x_node >= x_num ||
+		y_node < 0 || y_node >= y_num - 1) {
 		snprintf(buff, sizeof(buff), "%s", "NG");
 		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
 		return;
 	}
 
-	sprintf(buff, "%d", raw_data->self_hgap_data[x_node]);
+	sprintf(buff, "%d", raw_data->self_hgap_data[y_node]);
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 	sec->cmd_state = SEC_CMD_STATUS_OK;
 
@@ -6452,15 +5872,15 @@ static void get_selfdnd_v_gap(void *device_data)
 	x_node = sec->cmd_param[0];
 	y_node = sec->cmd_param[1];
 
-	if (x_node < 0 || x_node >= x_num ||
-		y_node < 0 || y_node >= y_num - 1) {
+	if (x_node < 0 || x_node >= x_num - 1 ||
+		y_node < 0 || y_node >= y_num) {
 		snprintf(buff, sizeof(buff), "%s", "NG");
 		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
 		return;
 	}
 
-	sprintf(buff, "%d", raw_data->self_vgap_data[y_node]);
+	sprintf(buff, "%d", raw_data->self_vgap_data[x_node]);
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 	sec->cmd_state = SEC_CMD_STATUS_OK;
 
@@ -6489,7 +5909,7 @@ static void run_selfdnd_h_gap_read_all(void *device_data)
 		return;
 	}
 
-	for (j = 0; j < info->cap_info.x_node_num - 1; j++) {
+	for (j = 0; j < info->cap_info.y_node_num-1; j++) {
 		offset = j;
 		cur_val = raw_data->selfdnd_data[offset];
 
@@ -6549,21 +5969,23 @@ static void run_jitter_read(void *device_data)
 	min = 0xFFFF;
 	max = 0x0000;
 
-	for (i = 0; i < info->cap_info.y_node_num; i++) {
-		for (j = 0; j < info->cap_info.x_node_num; j++) {
-			if (raw_data->jitter_data[i * info->cap_info.x_node_num + j] < min &&
-				raw_data->jitter_data[i * info->cap_info.x_node_num + j] != 0)
-				min = raw_data->jitter_data[i * info->cap_info.x_node_num + j];
+	for(i = 0; i < info->cap_info.x_node_num; i++) {
+		for(j = 0; j < info->cap_info.y_node_num; j++) {
+			printk("%4d ", raw_data->jitter_data[i * info->cap_info.y_node_num + j]);
 
-			if (raw_data->jitter_data[i * info->cap_info.x_node_num + j] > max)
-				max = raw_data->jitter_data[i * info->cap_info.x_node_num + j];
+			if (raw_data->jitter_data[i * info->cap_info.y_node_num + j] < min &&
+				raw_data->jitter_data[i * info->cap_info.y_node_num + j] != 0)
+				min = raw_data->jitter_data[i * info->cap_info.y_node_num + j];
+
+			if(raw_data->jitter_data[i * info->cap_info.y_node_num + j] > max)
+				max = raw_data->jitter_data[i * info->cap_info.y_node_num + j];
 		}
+		printk("\n");
 	}
 	snprintf(buff, sizeof(buff), "%d,%d\n", min, max);
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 	sec->cmd_state = SEC_CMD_STATUS_OK;
 
-	zinitix_display_rawdata(info, raw_data, TOUCH_JITTER_MODE, 0);
 out:
 	if (ret < 0) {
 		snprintf(buff, sizeof(buff), "%s", "NG");
@@ -6605,7 +6027,7 @@ static void get_jitter(void *device_data)
 		return;
 	}
 
-	node_num = y_node * info->cap_info.x_node_num + x_node;
+	node_num = x_node * info->cap_info.y_node_num + y_node;
 
 	val = raw_data->jitter_data[node_num];
 	snprintf(buff, sizeof(buff), "%u", val);
@@ -6646,9 +6068,9 @@ static void run_jitter_read_all(void *device_data)
 	if (!buff)
 		goto NG;
 
-	for (i = 0; i < info->cap_info.y_node_num; i++) {
-		for (j = 0; j < info->cap_info.x_node_num; j++) {
-			snprintf(temp, CMD_RESULT_WORD_LEN, "%d,", raw_data->jitter_data[i * info->cap_info.x_node_num + j]);
+	for(i = 0; i < info->cap_info.x_node_num; i++) {
+		for(j = 0; j < info->cap_info.y_node_num; j++) {
+			snprintf(temp, CMD_RESULT_WORD_LEN, "%d,", raw_data->jitter_data[i * info->cap_info.y_node_num + j]);
 			strncat(buff, temp, CMD_RESULT_WORD_LEN);
 			memset(temp, 0x00, SEC_CMD_STR_LEN);
 		}
@@ -6659,7 +6081,7 @@ static void run_jitter_read_all(void *device_data)
 	kfree(buff);
 
 NG:
-	if (sec->cmd_state != SEC_CMD_STATUS_OK) {
+	if(sec->cmd_state != SEC_CMD_STATUS_OK) {
 		snprintf(temp, SEC_CMD_STR_LEN, "NG");
 		sec_cmd_set_cmd_result(sec, temp, SEC_CMD_STR_LEN);
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
@@ -6737,6 +6159,7 @@ static void run_reference_read(void *device_data)
 	char buff[SEC_CMD_STR_LEN] = { 0 };
 	int min = 0xFFFF, max = 0x0000;
 	s32 i, j, touchkey_node = 2;
+	int buffer_offset;
 	int ret;
 
 #if ESD_TIMER_INTERVAL
@@ -6751,39 +6174,51 @@ static void run_reference_read(void *device_data)
 		ts_set_touchmode(TOUCH_POINT_MODE);
 		goto out;
 	}
-	get_raw_data_size(info, (u8 *)raw_data->reference_data, 2,
-		info->cap_info.total_node_num * 2 + info->cap_info.y_node_num + info->cap_info.x_node_num);
+	get_raw_data_size(info, (u8 *)raw_data->reference_data, 2, info->cap_info.total_node_num*2 + info->cap_info.y_node_num + info->cap_info.x_node_num);
 	ts_set_touchmode(TOUCH_POINT_MODE);
 
-	input_info(true, &client->dev, "%s start\n",__func__);
+	input_info(true,&client->dev, "%s start\n",__func__);
 
-	for (i = 0; i < info->cap_info.y_node_num; i++) {
-		for (j = 0; j < info->cap_info.x_node_num; j++) {
-			if (i == (info->cap_info.x_node_num-1) && info->pdata->support_touchkey){
-				if ((j == touchkey_node) || (j == (info->cap_info.x_node_num - 1) - touchkey_node)) {
-					if (raw_data->reference_data[(i * info->cap_info.x_node_num) + j] < min &&
-						raw_data->reference_data[(i * info->cap_info.x_node_num) + j] >= 0)
-						min = raw_data->reference_data[(i * info->cap_info.x_node_num) + j];
+	for (i = 0; i < info->cap_info.x_node_num; i++) {
+		for (j = 0; j < info->cap_info.y_node_num; j++) {
+			printk("%d ", raw_data->reference_data[(i * info->cap_info.y_node_num) + j]);
 
-					if (raw_data->reference_data[(i * info->cap_info.x_node_num) + j] > max)
-						max = raw_data->reference_data[(i * info->cap_info.x_node_num) + j];
+			if(i == (info->cap_info.x_node_num-1) && info->pdata->support_touchkey){
+				if((j==touchkey_node)||(j==(info->cap_info.y_node_num-1)-touchkey_node)){
+					if(raw_data->reference_data[(i * info->cap_info.y_node_num) + j] < min &&
+						raw_data->reference_data[(i * info->cap_info.y_node_num) + j] >= 0)
+						min = raw_data->reference_data[(i * info->cap_info.y_node_num) + j];
+
+					if(raw_data->reference_data[(i * info->cap_info.y_node_num) + j] > max)
+						max = raw_data->reference_data[(i * info->cap_info.y_node_num) + j];
 				}
-			} else {
-				if (raw_data->reference_data[(i * info->cap_info.x_node_num) + j] < min &&
-					raw_data->reference_data[(i * info->cap_info.x_node_num) + j] >= 0)
-					min = raw_data->reference_data[(i * info->cap_info.x_node_num) + j];
+			}
+			else{
+				if(raw_data->reference_data[(i * info->cap_info.y_node_num) + j] < min &&
+					raw_data->reference_data[(i * info->cap_info.y_node_num) + j] >= 0)
+					min = raw_data->reference_data[(i * info->cap_info.y_node_num) + j];
 
-				if (raw_data->reference_data[(i * info->cap_info.x_node_num) + j] > max)
-					max = raw_data->reference_data[(i * info->cap_info.x_node_num) + j];
+				if(raw_data->reference_data[(i * info->cap_info.y_node_num) + j] > max)
+					max = raw_data->reference_data[(i * info->cap_info.y_node_num) + j];
 			}
 		}
+		printk("\n");
 	}
 
 	snprintf(buff, sizeof(buff), "%d,%d\n", min, max);
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
+
+	buffer_offset = info->cap_info.total_node_num;
+	for (i = 0; i < info->cap_info.x_node_num; i++) {
+		input_info(true, &info->client->dev, "%s: ref_data(mode1)[%2d] : ", client->name, i);
+		for (j = 0; j < info->cap_info.y_node_num; j++) {
+			printk(" %5d", raw_data->reference_data[buffer_offset + i * info->cap_info.y_node_num + j]);
+		}
+		printk("\n");
+	}
+
 	sec->cmd_state = SEC_CMD_STATUS_OK;
 
-	zinitix_display_rawdata(info, raw_data, TOUCH_REFERENCE_MODE, 0);
 out:
 	if (ret < 0) {
 		snprintf(buff, sizeof(buff), "%s", "NG");
@@ -6825,7 +6260,7 @@ static void get_reference(void *device_data)
 		return;
 	}
 
-	node_num = y_node * info->cap_info.x_node_num + x_node;
+	node_num = x_node * info->cap_info.y_node_num + y_node;
 
 	val = raw_data->reference_data[node_num];
 	snprintf(buff, sizeof(buff), "%u", val);
@@ -6868,16 +6303,16 @@ static void run_self_sat_dnd_read(void *device_data)
 	min = 0xFFFF;
 	max = 0x0000;
 
-	for (j = 0; j < info->cap_info.y_node_num; j++) {
-		input_info(true, &client->dev, "%d ", raw_data->self_sat_dnd_data[j]);
+	for(j = 0; j < info->cap_info.y_node_num; j++) {
+		printk("%d ", raw_data->self_sat_dnd_data[j]);
 
 		if (raw_data->self_sat_dnd_data[j] < min && raw_data->self_sat_dnd_data[j] != 0)
 			min = raw_data->self_sat_dnd_data[j];
 
-		if (raw_data->self_sat_dnd_data[j] > max)
+		if(raw_data->self_sat_dnd_data[j] > max)
 			max = raw_data->self_sat_dnd_data[j];
 	}
-	input_info(true, &client->dev, "\n");
+	printk("\n");
 
 	input_info(true, &client->dev, "SELF SAT DND Pass\n");
 
@@ -6953,12 +6388,12 @@ static void run_tsp_rawdata_read(void *device_data, u16 rawdata_mode, s16* buff)
 
 	input_info(true, &info->client->dev, "touch rawdata %d start\n", rawdata_mode);
 
-	for (i = 0; i < y_num; i++) {
-		input_info(true, &info->client->dev, "[%5d] :", i);
-		for (j = 0; j < x_num; j++) {
-			input_info(true, &info->client->dev, "%06d ", buff[(i * x_num) + j]);
+	for (i = 0; i < x_num; i++) {
+		printk("[%5d] :", i);
+		for (j = 0; j < y_num; j++) {
+			printk("%06d ", buff[(i * y_num) + j]);
 		}
-		input_info(true, &info->client->dev, "\n");
+		printk("\n");
 	}
 out:
 #if ESD_TIMER_INTERVAL
@@ -6988,6 +6423,8 @@ static void run_mis_cal_read(void * device_data)
 	struct i2c_client *client = info->client;
 	struct tsp_raw_data *raw_data = info->raw_data;
 	char buff[SEC_CMD_STR_LEN] = { 0 };
+	char buff_all[SEC_CMD_STR_LEN] = { 0 };
+
 	int x_num = info->cap_info.x_node_num, y_num = info->cap_info.y_node_num;
 	int i, j, offset;
 	char mis_cal_data = 0xF0;
@@ -7046,24 +6483,40 @@ static void run_mis_cal_read(void * device_data)
 	input_info(true, &info->client->dev, "%s start\n", __func__);
 
 	ret = 1;
-	for (i = 0; i < y_num; i++) {
-		for (j = 0; j < x_num; j++) {
-			offset = (i * x_num) + j;
+	for (i = 0; i < x_num; i++) {
+		for (j = 0; j < y_num; j++) {
+			offset = (i * y_num) + j;
+			printk("%5d ", raw_data->reference_data_abnormal[offset]);
 
-			if (raw_data->reference_data_abnormal[offset] < min)
-				min = raw_data->reference_data_abnormal[offset];
+			if(pdata->item_version >= 4) {
+				if(raw_data->reference_data_abnormal[offset] < min)
+					min = raw_data->reference_data_abnormal[offset];
 
-			if (raw_data->reference_data_abnormal[offset] > max)
-				max = raw_data->reference_data_abnormal[offset];
+				if (raw_data->reference_data_abnormal[offset] > max)
+					max = raw_data->reference_data_abnormal[offset];
+			} else {
+				if( ret && (raw_data->reference_data_abnormal[offset] > DEF_MIS_CAL_SPEC_MAX
+					||raw_data->reference_data_abnormal[offset] < DEF_MIS_CAL_SPEC_MIN)) {
+					mis_cal_data = 0xFD;
+					ret = 0;
+				}
+			}
 		}
+		printk("\n");
 	}
-	if (!ret)
+	if(!ret)
 		goto NG;
 
 	mis_cal_data = 0x00;
-	snprintf(buff, sizeof(buff), "%d,%d", min, max);
+	if(pdata->item_version >= 4) {
+		snprintf(buff, sizeof(buff), "%d,%d", min, max);
+	} else {
+		snprintf(buff, sizeof(buff), "%d", mis_cal_data);
+		snprintf(buff_all, sizeof(buff_all), "%d,%d,%d,%d", mis_cal_data, raw_data->reference_data_abnormal[0],
+				raw_data->reference_data_abnormal[1], raw_data->reference_data_abnormal[2]);
+	}
 
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
+	sec_cmd_set_cmd_result(sec, buff_all, strnlen(buff_all, sizeof(buff_all)));
 	if (sec->cmd_all_factory_state == SEC_CMD_STATUS_RUNNING)
 		sec_cmd_set_cmd_result_all(sec, buff, strnlen(buff, sizeof(buff)), "MIS_CAL");
 	sec->cmd_state = SEC_CMD_STATUS_OK;
@@ -7075,18 +6528,21 @@ static void run_mis_cal_read(void * device_data)
 	write_reg(client, BT532_PERIODICAL_INTERRUPT_INTERVAL,
 		SCAN_RATE_HZ * ESD_TIMER_INTERVAL);
 #endif
-
-	zinitix_display_rawdata(info, raw_data, TOUCH_REF_ABNORMAL_TEST_MODE, 0);
-
 	return;
 NG:
-	snprintf(buff, sizeof(buff), "%s_%d", "NG", mis_cal_data);
+	if(pdata->item_version >= 4) {
+		snprintf(buff, sizeof(buff), "%s_%d", "NG", mis_cal_data);
+	} else {
+		snprintf(buff, sizeof(buff), "%d", mis_cal_data);
+		snprintf(buff_all, sizeof(buff_all), "%d,%d,%d,%d", mis_cal_data, 0, 0, 0);
+	}
 
-	if (mis_cal_data == 0xFD) {
+	if(mis_cal_data == 0xFD)
+	{
 		run_tsp_rawdata_read(device_data, 7, raw_data_buff);
 		run_tsp_rawdata_read(device_data, TOUCH_REFERENCE_MODE, raw_data_buff);
 	}
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
+	sec_cmd_set_cmd_result(sec, buff_all, strnlen(buff_all, sizeof(buff_all)));
 	if (sec->cmd_all_factory_state == SEC_CMD_STATUS_RUNNING)
 		sec_cmd_set_cmd_result_all(sec, buff, strnlen(buff, sizeof(buff)), "MIS_CAL");
 	sec->cmd_state = SEC_CMD_STATUS_FAIL;
@@ -7137,7 +6593,7 @@ static void get_mis_cal(void *device_data)
 		return;
 	}
 
-	node_num = y_node * info->cap_info.x_node_num + x_node;
+	node_num = x_node * info->cap_info.y_node_num + y_node;
 
 	val = raw_data->reference_data_abnormal[node_num];
 	snprintf(buff, sizeof(buff), "%u", val);
@@ -7181,9 +6637,9 @@ static void run_mis_cal_read_all(void * device_data)
 	if (!buff)
 		goto NG;
 
-	for (i = 0; i < info->cap_info.y_node_num ; i++) {
-		for (j = 0; j < info->cap_info.x_node_num ; j++) {
-			offset = (i * info->cap_info.x_node_num) + j;
+	for (i = 0; i < info->cap_info.x_node_num ; i++) {
+		for (j = 0; j < info->cap_info.y_node_num ; j++) {
+			offset = (i * info->cap_info.y_node_num) + j;
 			snprintf(temp, CMD_RESULT_WORD_LEN, "%d,", raw_data->reference_data_abnormal[offset]);
 			strncat(buff, temp, CMD_RESULT_WORD_LEN);
 			memset(temp, 0x00, SEC_CMD_STR_LEN);
@@ -7195,7 +6651,7 @@ static void run_mis_cal_read_all(void * device_data)
 	kfree(buff);
 	
 NG:
-	if (sec->cmd_state != SEC_CMD_STATUS_OK) {
+	if(sec->cmd_state != SEC_CMD_STATUS_OK) {
 		snprintf(temp, SEC_CMD_STR_LEN, "NG");
 		sec_cmd_set_cmd_result(sec, temp, SEC_CMD_STR_LEN);
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
@@ -7208,7 +6664,6 @@ NG:
 #endif
 }
 
-#ifdef TCLM_CONCEPT
 static void get_pat_information(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
@@ -7405,9 +6860,9 @@ int get_zt_tsp_nvm_data(struct bt532_ts_info *info, u8 addr, u8 *values, u16 len
 
 	buff_start = addr;	//custom setting address(0~62, 0,2,4,6)
 	//length = 2;		// custom setting(max 64)
-	if (length > TC_NVM_SECTOR_SZ)
+	if(length > TC_NVM_SECTOR_SZ)
 		length = TC_NVM_SECTOR_SZ;
-	if (length < 2){
+	if(length < 2){
 		length = 2;	//read 2byte
 	}
 
@@ -7469,9 +6924,9 @@ int set_zt_tsp_nvm_data(struct bt532_ts_info *info, u8 addr, u8 *values, u16 len
 	memcpy((u8 *)&buff[buff_start], values, length);
 
 	/* data write start */
-	if (length > TC_NVM_SECTOR_SZ)
+	if(length > TC_NVM_SECTOR_SZ)
 		length = TC_NVM_SECTOR_SZ;
-	if (length < 2){
+	if(length < 2){
 		length = 2;	//write 2byte
 		buff[buff_start+1] = 0;
 	}
@@ -7610,7 +7065,6 @@ int bt532_tclm_data_write(struct i2c_client *client, int address)
 
 	return ret;
 }
-#endif
 
 #ifndef CONFIG_SAMSUNG_PRODUCT_SHIP
 static void ium_random_write(struct bt532_ts_info *info, u8 data)
@@ -7633,13 +7087,13 @@ static void ium_random_write(struct bt532_ts_info *info, u8 data)
 		goto fail_ium_random_write;
 	}
 
-	//for ( i=0 ; i<64 ; i++)
+	//for( i=0 ; i<64 ; i++)
 		buff[data] = data;
 		buff[data+1] = data;
 
 	buff_start = data;	//custom setting address(0~62)
 	length = 2;		// custom odd number setting(max 64)
-	if (length > TC_SECTOR_SZ)
+	if(length > TC_SECTOR_SZ)
 		length = TC_SECTOR_SZ;
 	if (write_data(client, buff_start + DEF_IUM_ADDR_OFFSET,
 			(u8 *)&buff[buff_start], length) < 0) {
@@ -7702,7 +7156,7 @@ static void ium_random_read(struct bt532_ts_info *info, u8 data)
 
 	buff_start = 8;	//custom setting address(0~62)
 	length = 2;		// custom setting(max 64)
-	if (length > TC_SECTOR_SZ)
+	if(length > TC_SECTOR_SZ)
 		length = TC_SECTOR_SZ;
 
 	if (read_raw_data(client, data + DEF_IUM_ADDR_OFFSET,
@@ -7775,7 +7229,7 @@ static void ium_write(void *device_data)
 	u8 buff[64]; // custom data buffer
 	u8 val = sec->cmd_param[0];
 
-	for (i = 0 ; i < 64 ; i++)
+	for( i=0 ; i<64 ; i++)
 		buff[i] = val;
 
 	bt532_power_control(info, POWER_OFF);
@@ -7784,7 +7238,8 @@ static void ium_write(void *device_data)
 	write_reg(client, 0xC000, 0x0001);
 	write_reg(client, 0xC004, 0x0001);
 
-	for (i = 0 ; i < 16 ; i++) {
+	for( i=0 ; i<16 ; i++)
+	{
 		temp[0] = i;
 		temp[1] = 0x00;
 		temp[2] = buff[i*4];
@@ -7856,7 +7311,8 @@ static void ium_read(void *device_data)
 	temp[7] = 0x00;
 	write_data(client, 0xCC02, temp, 8);
 
-	for (i = 0 ; i < 16 ; i++) {
+	for( i=0 ; i<16 ; i++)
+	{
 		temp[0] = i*4;
 		temp[1] = 0x00;
 		temp[2] = 0x00;
@@ -7879,7 +7335,7 @@ static void ium_read(void *device_data)
 	bt532_power_control(info, POWER_ON_SEQUENCE);
 	mini_init_touch(info);
 
-	for (i = 63 ; i > 0 ; i -= 4) {
+	for( i=63 ; i>0 ; i-=4) {
 		input_info(true, &client->dev, "%s: [%2d]:%02X %02X %02X %02X\n",
 							__func__, i, buff[i], buff[i-1], buff[i-2], buff[i-3]);
 	}
@@ -7897,260 +7353,52 @@ static void ium_read(void *device_data)
 #endif
 
 /*
- *	flag     1  :  set edge handler
- *		2  :  set (portrait, normal) edge zone data
- *		4  :  set (portrait, normal) dead zone data
- *		8  :  set landscape mode data
- *		16 :  mode clear
- *	data
- *		0xAA, FFF (y start), FFF (y end),  FF(direction)
- *		0xAB, FFFF (edge zone)
- *		0xAC, FF (up x), FF (down x), FFFF (y)
- *		0xAD, FF (mode), FFF (edge), FFF (dead zone x), FF (dead zone top y), FF (dead zone bottom y)
- *	case
- *		edge handler set :  0xAA....
- *		booting time :  0xAA...  + 0xAB...
- *		normal mode : 0xAC...  (+0xAB...)
- *		landscape mode : 0xAD...
- *		landscape -> normal (if same with old data) : 0xAD, 0
- *		landscape -> normal (etc) : 0xAC....  + 0xAD, 0
+ * only support top bottom for letter box
  */
-
-void set_grip_data_to_ic(struct bt532_ts_info *ts, u8 flag)
-{
-	struct i2c_client *client = ts->client;
-
-	input_info(true, &ts->client->dev, "%s: flag: %02X (clr,lan,nor,edg,han)\n", __func__, flag);
-
-	write_cmd(client, 0x0A);
-
-	if (flag & G_SET_EDGE_HANDLER) {
-		if (ts->grip_edgehandler_direction == 0) {
-			ts->grip_edgehandler_start_y = 0x0;
-			ts->grip_edgehandler_end_y = 0x0;
-		}
-
-		if (write_reg(client, ZT75XX_EDGE_REJECT_PORT_EDGE_EXCEPT_START,
-			ts->grip_edgehandler_start_y) != I2C_SUCCESS) {
-			input_err(true, &client->dev, "set except start y error\n");
-		}
-
-		if (write_reg(client, ZT75XX_EDGE_REJECT_PORT_EDGE_EXCEPT_END,
-			ts->grip_edgehandler_end_y) != I2C_SUCCESS) {
-			input_err(true, &client->dev, "set except end y error\n");
-		}
-	
-		if (write_reg(client, ZT75XX_EDGE_REJECT_PORT_EDGE_EXCEPT_SEL,
-			(ts->grip_edgehandler_direction) & 0x0003) != I2C_SUCCESS) {
-			input_err(true, &client->dev, "set except direct error\n");
-		}
-
-		input_info(true, &ts->client->dev, "%s: 0x%02X %02X, 0x%02X %02X, 0x%02X %02X\n", __func__,
-				ZT75XX_EDGE_REJECT_PORT_EDGE_EXCEPT_SEL, ts->grip_edgehandler_direction,
-				ZT75XX_EDGE_REJECT_PORT_EDGE_EXCEPT_START, ts->grip_edgehandler_start_y,
-				ZT75XX_EDGE_REJECT_PORT_EDGE_EXCEPT_END, ts->grip_edgehandler_end_y);
-	}
-
-	if (flag & G_SET_EDGE_ZONE) {
-		if (write_reg(client, ZT75XX_EDGE_GRIP_PORT_SIDE_WIDTH, ts->grip_edge_range) != I2C_SUCCESS) {
-			input_err(true, &client->dev, "set grip side width error\n");
-		}
-
-		input_info(true, &ts->client->dev, "%s: 0x%02X %02X\n", __func__,
-				ZT75XX_EDGE_GRIP_PORT_SIDE_WIDTH, ts->grip_edge_range);
-	}
-
-	if (flag & G_SET_NORMAL_MODE) {
-		if (write_reg(client, ZT75XX_EDGE_REJECT_PORT_SIDE_UP_WIDTH, ts->grip_deadzone_up_x) != I2C_SUCCESS) {
-			input_err(true, &client->dev, "set dead zone up x error\n");
-		}
-
-		if (write_reg(client, ZT75XX_EDGE_REJECT_PORT_SIDE_DOWN_WIDTH, ts->grip_deadzone_dn_x) != I2C_SUCCESS) {
-			input_err(true, &client->dev, "set dead zone down x error\n");
-		}
-
-		if (write_reg(client, ZT75XX_EDGE_REJECT_PORT_SIDE_UP_DOWN_DIV, ts->grip_deadzone_y) != I2C_SUCCESS) {
-			input_err(true, &client->dev, "set dead zone up/down div location error\n");
-		}		
-
-		input_info(true, &ts->client->dev, "%s: 0x%02X %02X, 0x%02X %02X, 0x%02X %02X\n", __func__,
-				ZT75XX_EDGE_REJECT_PORT_SIDE_UP_WIDTH, ts->grip_deadzone_up_x,
-				ZT75XX_EDGE_REJECT_PORT_SIDE_DOWN_WIDTH, ts->grip_deadzone_dn_x,
-				ZT75XX_EDGE_REJECT_PORT_SIDE_UP_DOWN_DIV, ts->grip_deadzone_y);
-	}
-
-	if (flag & G_SET_LANDSCAPE_MODE) {
-		if (write_reg(client, ZT75XX_EDGE_LANDSCAPE_MODE, ts->grip_landscape_mode & 0x1) != I2C_SUCCESS) {
-			input_err(true, &client->dev, "set landscape mode error\n");
-		}
-
-		if (write_reg(client, ZT75XX_EDGE_GRIP_LAND_SIDE_WIDTH, ts->grip_landscape_edge) != I2C_SUCCESS) {
-			input_err(true, &client->dev, "set landscape side edge error\n");
-		}
-
-		if (write_reg(client, ZT75XX_EDGE_REJECT_LAND_SIDE_WIDTH, ts->grip_landscape_deadzone) != I2C_SUCCESS) {
-			input_err(true, &client->dev, "set landscape side deadzone error\n");
-		}
-
-		if (write_reg(client, ZT75XX_EDGE_REJECT_LAND_TOP_BOT_WIDTH,
-			(((ts->grip_landscape_top_deadzone << 8) & 0xFF00) | (ts->grip_landscape_bottom_deadzone & 0x00FF)))
-			!= I2C_SUCCESS) {
-			input_err(true, &client->dev, "set landscape top bot deazone error\n");
-		}
-
-		if (write_reg(client, ZT75XX_EDGE_GRIP_LAND_TOP_BOT_WIDTH,
-			(((ts->grip_landscape_top_gripzone << 8) & 0xFF00) | (ts->grip_landscape_bottom_gripzone & 0x00FF)))
-			!= I2C_SUCCESS) {
-			input_err(true, &client->dev, "set landscape top bot gripzone error\n");
-		}
-
-		input_info(true, &ts->client->dev,
-				"%s: 0x%02X %02X, 0x%02X %02X, 0x%02X %02X, 0x%02X %02X, 0x%02X %02X\n", __func__,
-				ZT75XX_EDGE_LANDSCAPE_MODE, ts->grip_landscape_mode & 0x1,
-				ZT75XX_EDGE_GRIP_LAND_SIDE_WIDTH, ts->grip_landscape_edge,
-				ZT75XX_EDGE_REJECT_LAND_SIDE_WIDTH, ts->grip_landscape_deadzone,
-				ZT75XX_EDGE_REJECT_LAND_TOP_BOT_WIDTH,
-				((ts->grip_landscape_top_deadzone << 8) & 0xFF00) | (ts->grip_landscape_bottom_deadzone & 0x00FF),
-				ZT75XX_EDGE_GRIP_LAND_TOP_BOT_WIDTH,
-				((ts->grip_landscape_top_gripzone << 8) & 0xFF00) | (ts->grip_landscape_bottom_gripzone & 0x00FF));
-	}
-
-	if (flag & G_CLR_LANDSCAPE_MODE) {
-		if (write_reg(client, ZT75XX_EDGE_LANDSCAPE_MODE, ts->grip_landscape_mode) != I2C_SUCCESS) { 
-			input_err(true, &client->dev, "clr landscape mode error\n");
-		}
-
-		input_info(true, &ts->client->dev, "%s: 0x%02X %02X\n", __func__,
-				ZT75XX_EDGE_LANDSCAPE_MODE, ts->grip_landscape_mode);
-	}
-
-	write_cmd(client, 0x0B);
-}
-
-/*
- *	index  0 :  set edge handler
- *		1 :  portrait (normal) mode
- *		2 :  landscape mode
- *
- *	data
- *		0, X (direction), X (y start), X (y end)
- *		direction : 0 (off), 1 (left), 2 (right)
- *			ex) echo set_grip_data,0,2,600,900 > cmd
- *
- *		1, X (edge zone), X (dead zone up x), X (dead zone down x), X (dead zone y)
- *			ex) echo set_grip_data,1,200,10,50,1500 > cmd
- *
- *		2, 1 (landscape mode), X (edge zone), X (dead zone x), X (dead zone top y), X (dead zone bottom y), X (edge zone top y), X (edge zone bottom y)
- *			ex) echo set_grip_data,2,1,200,100,120,0 > cmd
- *
- *		2, 0 (portrait mode)
- *			ex) echo set_grip_data,2,0  > cmd
- */
-
 static void set_grip_data(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
-	struct bt532_ts_info *ts = container_of(sec, struct bt532_ts_info, sec);
+	struct bt532_ts_info *info = container_of(sec, struct bt532_ts_info, sec);
 	char buff[SEC_CMD_STR_LEN] = { 0 };
-	u8 mode = G_NONE;
+	u16 reject_zone;
 
 	sec_cmd_set_default_result(sec);
 
-	memset(buff, 0, sizeof(buff));
-
-	if (sec->cmd_param[0] == 0) {	// edge handler
-		if (sec->cmd_param[1] == 0) {	// clear
-			ts->grip_edgehandler_direction = 0;
-		} else if (sec->cmd_param[1] < 3) {
-			ts->grip_edgehandler_direction = sec->cmd_param[1];
-			ts->grip_edgehandler_start_y = sec->cmd_param[2];
-			ts->grip_edgehandler_end_y = sec->cmd_param[3];
-		} else {
-			input_err(true, &ts->client->dev, "%s: cmd1 is abnormal, %d (%d)\n",
-					__func__, sec->cmd_param[1], __LINE__);
-			goto err_grip_data;
-		}
-
-		mode = mode | G_SET_EDGE_HANDLER;
-		set_grip_data_to_ic(ts, mode);
-	} else if (sec->cmd_param[0] == 1) {	// normal mode
-		if (ts->grip_edge_range != sec->cmd_param[1])
-			mode = mode | G_SET_EDGE_ZONE;
-
-		ts->grip_edge_range = sec->cmd_param[1];
-		ts->grip_deadzone_up_x = sec->cmd_param[2];
-		ts->grip_deadzone_dn_x = sec->cmd_param[3];
-		ts->grip_deadzone_y = sec->cmd_param[4];
-		mode = mode | G_SET_NORMAL_MODE;
-
-		if (ts->grip_landscape_mode == 1) {
-			ts->grip_landscape_mode = 0;
-			mode = mode | G_CLR_LANDSCAPE_MODE;
-		}
-		set_grip_data_to_ic(ts, mode);
-	} else if (sec->cmd_param[0] == 2) {	// landscape mode
+	if (sec->cmd_param[0] == 2) {	// landscape mode
 		if (sec->cmd_param[1] == 0) {	// normal mode
-			ts->grip_landscape_mode = 0;
-			mode = mode | G_CLR_LANDSCAPE_MODE;
+			zinitix_bit_clr(m_optional_mode.select_mode.flag, DEF_OPTIONAL_MODE_REJECT_ZONE);
 		} else if (sec->cmd_param[1] == 1) {
-			ts->grip_landscape_mode = 1;
-			ts->grip_landscape_edge = sec->cmd_param[2];
-			ts->grip_landscape_deadzone	= sec->cmd_param[3];
-			ts->grip_landscape_top_deadzone = sec->cmd_param[4];
-			ts->grip_landscape_bottom_deadzone = sec->cmd_param[5];
-			ts->grip_landscape_top_gripzone = sec->cmd_param[6];
-			ts->grip_landscape_bottom_gripzone = sec->cmd_param[7];
-			mode = mode | G_SET_LANDSCAPE_MODE;
+			reject_zone = ((sec->cmd_param[4] << 8) | sec->cmd_param[5]);
+
+			input_info(true, &info->client->dev, "%s: %x.\n", __func__, reject_zone);
+
+			if (write_reg(info->client, ZT75XX_REJECT_ZONE_AREA, reject_zone)) {
+				input_info(true, &info->client->dev, "%s: failed to set reject zone.\n", __func__);
+				goto err_grip_data;
+			}
+			zinitix_bit_set(m_optional_mode.select_mode.flag, DEF_OPTIONAL_MODE_REJECT_ZONE);
 		} else {
-			input_err(true, &ts->client->dev, "%s: cmd1 is abnormal, %d (%d)\n",
-					__func__, sec->cmd_param[1], __LINE__);
+			input_err(true, &info->client->dev, "%s: cmd1 is abnormal, %d\n",
+					__func__, sec->cmd_param[1]);
 			goto err_grip_data;
 		}
-		set_grip_data_to_ic(ts, mode);
 	} else {
-		input_err(true, &ts->client->dev, "%s: cmd0 is abnormal, %d", __func__, sec->cmd_param[0]);
+		input_err(true, &info->client->dev, "%s: cmd0 is abnormal, %d\n",
+					__func__, sec->cmd_param[0]);
 		goto err_grip_data;
 	}
 
-	snprintf(buff, sizeof(buff), "OK");
+	snprintf(buff, sizeof(buff), "%s", "OK");
 	sec->cmd_state = SEC_CMD_STATUS_OK;
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 	sec_cmd_set_cmd_exit(sec);
 	return;
 
 err_grip_data:
-
-	snprintf(buff, sizeof(buff), "NG");
+	snprintf(buff, sizeof(buff), "%s", "NG");
 	sec->cmd_state = SEC_CMD_STATUS_FAIL;
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 	sec_cmd_set_cmd_exit(sec);
-}
-
-void zinitix_set_grip_type(struct bt532_ts_info *ts, u8 set_type)
-{
-	u8 mode = G_NONE;
-
-	input_info(true, &ts->client->dev, "%s: re-init grip(%d), edh:%d, edg:%d, lan:%d\n", __func__,
-			set_type, ts->grip_edgehandler_direction, ts->grip_edge_range, ts->grip_landscape_mode);
-
-	/* edge handler */
-	if (ts->grip_edgehandler_direction != 0)
-		mode |= G_SET_EDGE_HANDLER;
-
-	if (set_type == GRIP_ALL_DATA) {
-		/* edge */
-		if (ts->grip_edge_range != 60)
-			mode |= G_SET_EDGE_ZONE;
-
-		/* dead zone */
-		if (ts->grip_landscape_mode == 1)	/* default 0 mode, 32 */
-			mode |= G_SET_LANDSCAPE_MODE;
-		else
-			mode |= G_SET_NORMAL_MODE;
-	}
-
-	if (mode)
-		set_grip_data_to_ic(ts, mode);
 }
 
 static void set_touchable_area(void *device_data)
@@ -8203,11 +7451,11 @@ static void clear_cover_mode(void *device_data)
 			info->flip_enable = true;
 			info->cover_type = sec->cmd_param[1];
 #ifdef CONFIG_TRUSTONIC_TRUSTED_UI
-			msleep(100);
-			if (TRUSTEDUI_MODE_TUI_SESSION & trustedui_get_current_mode()){
-				tui_force_close(1);
+			if(TRUSTEDUI_MODE_TUI_SESSION & trustedui_get_current_mode()){
 				msleep(100);
-				if (TRUSTEDUI_MODE_TUI_SESSION & trustedui_get_current_mode()){
+				tui_force_close(1);
+				msleep(200);
+				if(TRUSTEDUI_MODE_TUI_SESSION & trustedui_get_current_mode()){
 					trustedui_clear_mask(TRUSTEDUI_MODE_VIDEO_SECURED|TRUSTEDUI_MODE_INPUT_SECURED);
 					trustedui_set_mode(TRUSTEDUI_MODE_OFF);
 				}
@@ -8223,10 +7471,13 @@ static void clear_cover_mode(void *device_data)
 		set_cover_type(info, info->flip_enable);
 
 		snprintf(buff, sizeof(buff), "%s", "OK");
-		sec->cmd_state = SEC_CMD_STATUS_OK;
 	}
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
+	mutex_lock(&sec->cmd_lock);
+	sec->cmd_is_running = false;
+	mutex_unlock(&sec->cmd_lock);
+
+	sec->cmd_state = SEC_CMD_STATUS_OK;
 
 	return;
 }
@@ -8279,10 +7530,8 @@ int zt_tclm_execute_force_calibration(struct i2c_client *client, int cal_mode)
 {
 	struct bt532_ts_info *info = i2c_get_clientdata(client);
 
-	if (ts_hw_calibration(info) == false)
+	if(ts_hw_calibration(info) == false)
 		return -1;
-
-	mini_init_touch(info);
 
 	return 0;
 }
@@ -8290,14 +7539,8 @@ int zt_tclm_execute_force_calibration(struct i2c_client *client, int cal_mode)
 static void ts_enter_strength_mode(struct bt532_ts_info *info, int testnum)
 {
 	struct i2c_client *client = info->client;
-	u8 i;
 
 	down(&info->work_lock);
-	if (info->work_state != NOTHING) {
-		input_info(true, &info->client->dev, "other process occupied.. (%d)\n", info->work_state);
-		up(&info->work_lock);
-		return;
-	}
 
 	info->touch_mode = testnum;
 
@@ -8305,15 +7548,6 @@ static void ts_enter_strength_mode(struct bt532_ts_info *info, int testnum)
 	usleep_range(20 * 1000, 20 * 1000);
 	write_cmd(client, 0x0A);
 	usleep_range(20 * 1000, 20 * 1000);
-
-	if (testnum == TOUCH_DELTA_MODE) {
-		input_info(true, &info->client->dev, "%s: shorten delay raw for host\n", __func__);
-		if (write_reg(client, BT532_DELAY_RAW_FOR_HOST, RAWDATA_DELAY_FOR_HOST / 5) != I2C_SUCCESS) {
-			input_info(true, &client->dev, "%s: Fail to delay_raw_for_host enter\n", __func__);
-			up(&info->work_lock);
-			return;
-		}
-	}
 
 	if (write_reg(client, 0x007E, 1) != I2C_SUCCESS) {
 		input_info(true, &client->dev, "%s: Fail to set report_rate 1\n", __func__);
@@ -8327,12 +7561,6 @@ static void ts_enter_strength_mode(struct bt532_ts_info *info, int testnum)
 		return;
 	}
 
-	/* clear garbage data */
-	for (i = 0; i < 10; i++) {
-		usleep_range(20 * 1000, 20 * 1000);
-		write_cmd(client, BT532_CLEAR_INT_STATUS_CMD);
-	}
-
 	clear_report_data(info);
 
 	input_info(true, &client->dev, "%s: Enter_strength_mode\n", __func__);
@@ -8343,14 +7571,8 @@ static void ts_enter_strength_mode(struct bt532_ts_info *info, int testnum)
 static void ts_exit_strength_mode(struct bt532_ts_info *info)
 {
 	struct i2c_client *client = info->client;
-	u8 i;
 
 	down(&info->work_lock);
-	if (info->work_state != NOTHING) {
-		input_info(true, &info->client->dev, "other process occupied.. (%d)\n", info->work_state);
-		up(&info->work_lock);
-		return;
-	}
 
 	if (write_reg(client, BT532_TOUCH_MODE, TOUCH_POINT_MODE) != I2C_SUCCESS) {
 		input_info(true, &client->dev, "[zinitix_touch] TEST Mode : "
@@ -8364,22 +7586,6 @@ static void ts_exit_strength_mode(struct bt532_ts_info *info)
 		up(&info->work_lock);
 		return;
 	}
-
-	if (info->touch_mode == TOUCH_DELTA_MODE) {
-		input_info(true, &info->client->dev, "%s: restore delay raw for host\n", __func__);
-		if (write_reg(client, BT532_DELAY_RAW_FOR_HOST, RAWDATA_DELAY_FOR_HOST) != I2C_SUCCESS) {
-			input_info(true, &client->dev, "%s: Fail to delay_raw_for_host exit\n", __func__);
-			up(&info->work_lock);
-			return;
-		}
-	}
-
-	/* clear garbage data */
-	for (i = 0; i < 10; i++) {
-		usleep_range(20 * 1000, 20 * 1000);
-		write_cmd(client, BT532_CLEAR_INT_STATUS_CMD);
-	}
-
 	clear_report_data(info);
 	input_info(true, &client->dev, "[zinitix_touch] Exit_strength_mode\r\n");
 
@@ -8399,9 +7605,9 @@ static void ts_get_strength_data(struct bt532_ts_info *info)
 	input_info(true, &client->dev, "reference max: %X %X\n", ref_max[0], ref_max[1]);
 
 	n = 0;
-	for (i = 0 ; i < info->cap_info.y_node_num; i++) {
+	for(i = 0 ; i < info->cap_info.x_node_num; i++) {
 		pr_info("[sec_input] %d |", i);
-		for (j = 0 ; j < info->cap_info.x_node_num; j++, n++) {
+		for(j = 0 ; j < info->cap_info.y_node_num; j++, n++) {
 			pr_cont(" %d", info->cur_data[n]);
 		}
 		pr_cont("\n");
@@ -8416,7 +7622,7 @@ static void run_cs_raw_read_all(void *device_data)
 	struct i2c_client *client = info->client;
 	char buff[SEC_CMD_STR_LEN] = { 0 };
 	int retry = 0;
-	char all_cmdbuff[info->cap_info.x_node_num * info->cap_info.y_node_num * 6];
+	char all_cmdbuff[info->cap_info.x_node_num*info->cap_info.y_node_num * 6];
 	s32 i, j;
 
 	sec_cmd_set_default_result(sec);
@@ -8444,9 +7650,9 @@ static void run_cs_raw_read_all(void *device_data)
 	ts_get_strength_data(info);
 	memset(all_cmdbuff, 0, sizeof(all_cmdbuff));	//size 6  ex(12000,)
 
-	for (i = 0; i < info->cap_info.y_node_num; i++) {
-		for (j = 0; j < info->cap_info.x_node_num; j++) {
-			sprintf(buff, "%d,", info->cur_data[i * info->cap_info.x_node_num + j]);
+	for (i = 0; i < info->cap_info.x_node_num; i++) {
+		for (j = 0; j < info->cap_info.y_node_num; j++) {
+			sprintf(buff, "%d,", info->cur_data[i * info->cap_info.y_node_num + j]);
 			strcat(all_cmdbuff, buff);
 		}
 	}
@@ -8461,7 +7667,6 @@ static void run_cs_raw_read_all(void *device_data)
 	return;
 
 out:
-	enable_irq(info->irq);
 	snprintf(buff, sizeof(buff), "%s", "NG");
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 	sec->cmd_state = SEC_CMD_STATUS_FAIL;
@@ -8478,16 +7683,10 @@ static void run_cs_delta_read_all(void *device_data)
 	struct i2c_client *client = info->client;
 	char buff[SEC_CMD_STR_LEN] = { 0 };
 	int retry = 0;
-	char all_cmdbuff[info->cap_info.x_node_num * info->cap_info.y_node_num * 6];
+	char all_cmdbuff[info->cap_info.x_node_num*info->cap_info.y_node_num * 6];
 	s32 i, j;
 
 	sec_cmd_set_default_result(sec);
-
-#if ESD_TIMER_INTERVAL
-	esd_timer_stop(info);
-	write_reg(client, BT532_PERIODICAL_INTERRUPT_INTERVAL, 0);
-	write_cmd(client, BT532_CLEAR_INT_STATUS_CMD);
-#endif
 
 	disable_irq(info->irq);
 
@@ -8509,18 +7708,12 @@ static void run_cs_delta_read_all(void *device_data)
 	
 	enable_irq(info->irq);
 
-#if ESD_TIMER_INTERVAL
-	esd_timer_start(CHECK_ESD_TIMER, info);
-	write_reg(client, BT532_PERIODICAL_INTERRUPT_INTERVAL,
-			SCAN_RATE_HZ * ESD_TIMER_INTERVAL);
-#endif
-
 	ts_get_strength_data(info);
 	memset(all_cmdbuff, 0, sizeof(all_cmdbuff));	//size 6  ex(12000,)
 
-	for (i = 0; i < info->cap_info.y_node_num; i++) {
-		for (j = 0; j < info->cap_info.x_node_num; j++) {
-			sprintf(buff, "%d,", info->cur_data[i * info->cap_info.x_node_num + j]);
+	for (i = 0; i < info->cap_info.x_node_num; i++) {
+		for (j = 0; j < info->cap_info.y_node_num; j++) {
+			sprintf(buff, "%d,", info->cur_data[i * info->cap_info.y_node_num + j]);
 			strcat(all_cmdbuff, buff);
 		}
 	}
@@ -8535,13 +7728,13 @@ static void run_cs_delta_read_all(void *device_data)
 	return;
 
 out:
-	enable_irq(info->irq);
 	snprintf(buff, sizeof(buff), "%s", "NG");
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 	sec->cmd_state = SEC_CMD_STATUS_FAIL;
 
 	input_info(true, &client->dev, "%s: %s(%d)\n", __func__,
 			sec->cmd_result, (int)strnlen(sec->cmd_result, sizeof(sec->cmd_result)));
+
 }
 
 static void run_ref_calibration(void *device_data)
@@ -8556,7 +7749,7 @@ static void run_ref_calibration(void *device_data)
 #endif
 	sec_cmd_set_default_result(sec);
 
-	if (info->finger_cnt1 != 0){
+	if(info->finger_cnt1 != 0){
 		input_info(true, &client->dev, "%s: return (finger cnt %d)\n", __func__, info->finger_cnt1);
 		snprintf(buff, sizeof(buff), "%s", "NG");
 		sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
@@ -8632,12 +7825,12 @@ static void dead_zone_enable(void *device_data)
 
 	sec_cmd_set_default_result(sec);
 
-	if (val) //normal
+	if(val) //normal
 		zinitix_bit_clr(m_optional_mode.select_mode.flag, DEF_OPTIONAL_MODE_EDGE_SELECT);
 	else //factory
 		zinitix_bit_set(m_optional_mode.select_mode.flag, DEF_OPTIONAL_MODE_EDGE_SELECT);
 
-	snprintf(buff, sizeof(buff), "%s", "OK");
+	snprintf(buff, sizeof(buff), "dead_zone %s", val ? "disable" : "enable");
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 	sec->cmd_state = SEC_CMD_STATUS_OK;
 
@@ -8656,7 +7849,7 @@ static void spay_enable(void *device_data)
 
 	sec_cmd_set_default_result(sec);
 
-	if (val) {
+	if(val) {
 		info->spay_enable = 1;
 		zinitix_bit_set(info->lpm_mode, BIT_EVENT_SPAY);
 	}else {
@@ -8664,103 +7857,12 @@ static void spay_enable(void *device_data)
 		zinitix_bit_clr(info->lpm_mode, BIT_EVENT_SPAY);
 	}
 
-	snprintf(buff, sizeof(buff), "%s", "OK");
+	snprintf(buff, sizeof(buff), "spay_enable %s", val ? "enable" : "disable");
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
 
-	sec->cmd_state = SEC_CMD_STATUS_OK;
-
-	input_info(true, &client->dev, "%s, %s\n", __func__, sec->cmd_result);
-
-	return;
-}
-
-static void fod_enable(void *device_data)
-{
-	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
-	struct bt532_ts_info *info = container_of(sec, struct bt532_ts_info, sec);
-	struct i2c_client *client = info->client;
-	char buff[SEC_CMD_STR_LEN] = { 0 };
-	u16 val = (u16)sec->cmd_param[0];
-
-	sec_cmd_set_default_result(sec);
-
-	input_info(true, &info->client->dev, "%s: fod_enable:%d, short_mode:%d, strict mode:%d\n",
-			__func__, sec->cmd_param[0], sec->cmd_param[1],	sec->cmd_param[2]);
-
-	info->fod_mode_set = (u16)(((sec->cmd_param[2] << 8) & 0xFF00) |
-		((sec->cmd_param[1] << 4) & 0x00F0) | (sec->cmd_param[0] & 0x000F));
-
-	if (val) {
-		info->fod_enable = 1;
-	} else {
-		info->fod_enable = 0;
-	}
-
-	write_cmd(info->client, 0x0A);
-	if (write_reg(client, REG_FOD_MODE_SET, info->fod_mode_set) != I2C_SUCCESS)
-		input_info(true, &client->dev, "%s, fail fod mode set\n", __func__);
-	write_cmd(info->client, 0x0B);
-
-	snprintf(buff, sizeof(buff), "%s", "OK");
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
-
-	sec->cmd_state = SEC_CMD_STATUS_OK;
-
-	input_info(true, &client->dev, "%s, %s\n", __func__, sec->cmd_result);
-
-	return;
-}
-
-static void fod_lp_mode(void *device_data)
-{
-	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
-	struct bt532_ts_info *info = container_of(sec, struct bt532_ts_info, sec);
-	struct i2c_client *client = info->client;
-	char buff[SEC_CMD_STR_LEN] = { 0 };
-	int val = sec->cmd_param[0];
-
-	sec_cmd_set_default_result(sec);
-
-	if (val) {
-		info->fod_lp_mode = 1;
-	} else {
-		info->fod_lp_mode = 0;
-	}
-
-	snprintf(buff, sizeof(buff), "%s", "OK");
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
-
-	sec->cmd_state = SEC_CMD_STATUS_OK;
-
-	input_info(true, &client->dev, "%s, %s\n", __func__, sec->cmd_result);
-
-	return;
-}
-
-static void singletap_enable(void *device_data)
-{
-	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
-	struct bt532_ts_info *info = container_of(sec, struct bt532_ts_info, sec);
-	struct i2c_client *client = info->client;
-	char buff[SEC_CMD_STR_LEN] = { 0 };
-	int val = sec->cmd_param[0];
-
-	sec_cmd_set_default_result(sec);
-
-	if (val) {
-		info->singletap_enable = 1;
-		zinitix_bit_set(info->lpm_mode, BIT_EVENT_SINGLE_TAP);
-	} else {
-		info->singletap_enable = 0;
-		zinitix_bit_clr(info->lpm_mode, BIT_EVENT_SINGLE_TAP);
-	}
-
-	snprintf(buff, sizeof(buff), "%s", "OK");
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
+	mutex_lock(&sec->cmd_lock);
+	sec->cmd_is_running = false;
+	mutex_unlock(&sec->cmd_lock);
 
 	sec->cmd_state = SEC_CMD_STATUS_OK;
 
@@ -8787,9 +7889,13 @@ static void aot_enable(void *device_data)
 		zinitix_bit_clr(info->lpm_mode, BIT_EVENT_AOT);
 	}
 
-	snprintf(buff, sizeof(buff), "%s", "OK");
+	snprintf(buff, sizeof(buff),
+			"aot_enable %s", val ? "enable" : "disable");
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
+
+	mutex_lock(&sec->cmd_lock);
+	sec->cmd_is_running = false;
+	mutex_unlock(&sec->cmd_lock);
 
 	sec->cmd_state = SEC_CMD_STATUS_OK;
 
@@ -8808,7 +7914,7 @@ static void aod_enable(void *device_data)
 
 	sec_cmd_set_default_result(sec);
 
-	if (val) {
+	if(val) {
 		info->aod_enable = 1;
 		zinitix_bit_set(info->lpm_mode, BIT_EVENT_AOD);
 	}else {
@@ -8816,9 +7922,13 @@ static void aod_enable(void *device_data)
 		zinitix_bit_clr(info->lpm_mode, BIT_EVENT_AOD);
 	}
 
-	snprintf(buff, sizeof(buff), "%s", "OK");
+	snprintf(buff, sizeof(buff),
+			"aod_enable %s", val ? "enable" : "disable");
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
+
+	mutex_lock(&sec->cmd_lock);
+	sec->cmd_is_running = false;
+	mutex_unlock(&sec->cmd_lock);
 
 	sec->cmd_state = SEC_CMD_STATUS_OK;
 
@@ -8826,37 +7936,6 @@ static void aod_enable(void *device_data)
 
 	return;
 }
-static void set_fod_rect(void *device_data)
-{
-	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
-	struct bt532_ts_info *info = container_of(sec, struct bt532_ts_info, sec);
-	struct i2c_client *client = info->client;
-	char buff[SEC_CMD_STR_LEN] = { 0 };
-
-	sec_cmd_set_default_result(sec);
-
-	input_info(true, &info->client->dev, "%s: start x:%d, start y:%d, end x:%d, end y:%d\n",
-			__func__, sec->cmd_param[0], sec->cmd_param[1],
-			sec->cmd_param[2], sec->cmd_param[3]);
-
-	write_cmd(info->client, 0x0A);
-	write_reg(info->client, REG_FOD_AREA_STR_X, (u16)sec->cmd_param[0]);
-	write_reg(info->client, REG_FOD_AREA_STR_Y, (u16)sec->cmd_param[1]);
-	write_reg(info->client, REG_FOD_AREA_END_X, (u16)sec->cmd_param[2]);
-	write_reg(info->client, REG_FOD_AREA_END_Y, (u16)sec->cmd_param[3]);
-	write_cmd(info->client, 0x0B);
-
-	snprintf(buff, sizeof(buff), "%s", "OK");
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
-
-	sec->cmd_state = SEC_CMD_STATUS_OK;
-
-	input_info(true, &client->dev, "%s, %s\n", __func__, sec->cmd_result);
-
-	return;
-}
-
 
 static void set_aod_rect(void *device_data)
 {
@@ -8880,7 +7959,10 @@ static void set_aod_rect(void *device_data)
 
 	snprintf(buff, sizeof(buff), "%s", "OK");
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
+
+	mutex_lock(&sec->cmd_lock);
+	sec->cmd_is_running = false;
+	mutex_unlock(&sec->cmd_lock);
 
 	sec->cmd_state = SEC_CMD_STATUS_OK;
 
@@ -8905,7 +7987,7 @@ static void get_wet_mode(void *device_data)
 
 	input_info(true, &client->dev, "%s, %x\n", __func__, temp);
 
-	if (zinitix_bit_test(temp, DEF_DEVICE_STATUS_WATER_MODE))
+	if(zinitix_bit_test(temp, DEF_DEVICE_STATUS_WATER_MODE))
 		temp = true;
 	else
 		temp = false;
@@ -8946,8 +8028,12 @@ static void glove_mode(void *device_data)
 	}
 
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
 
+	mutex_lock(&sec->cmd_lock);
+	sec->cmd_is_running = false;
+	mutex_unlock(&sec->cmd_lock);
+
+	sec->cmd_state = SEC_CMD_STATUS_WAITING;
 	input_info(true, &client->dev, "%s: %s(%d)\n", __func__, sec->cmd_result,
 				(int)strnlen(sec->cmd_result, sizeof(sec->cmd_result)));
 
@@ -8961,7 +8047,7 @@ static void pocket_mode_enable(void *device_data)
 	struct bt532_ts_info *info = container_of(sec, struct bt532_ts_info, sec);
 	struct i2c_client *client = info->client;
 	char buff[SEC_CMD_STR_LEN] = { 0 };
-	int value = sec->cmd_param[0];
+	u16 reg_val = 1;
 
 	sec_cmd_set_default_result(sec);
 
@@ -8969,27 +8055,37 @@ static void pocket_mode_enable(void *device_data)
 		snprintf(buff, sizeof(buff), "%s", "NG");
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
 	} else {
-		info->pocket_enable = value;
-
-		if (value)
-			zinitix_bit_set(m_optional_mode.select_mode.flag, DEF_OPTIONAL_MODE_POCKET_MODE);
+		info->pocket_enable = sec->cmd_param[0];
+		if (sec->cmd_param[0])
+			reg_val = reg_val << DEF_OPTIONAL_MODE_POCKET_MODE;
 		else
-			zinitix_bit_clr(m_optional_mode.select_mode.flag, DEF_OPTIONAL_MODE_POCKET_MODE);
-
-		bt532_set_optional_mode(info, false);
+			reg_val = ~(reg_val << DEF_OPTIONAL_MODE_POCKET_MODE);
 
 		snprintf(buff, sizeof(buff), "%s", "OK");
 		sec->cmd_state = SEC_CMD_STATUS_OK;
 	}
 
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
+	//bt532_set_optional_mode(info, false);
 
-	input_info(true, &client->dev, "%s, %s\n", __func__, sec->cmd_result);
+	input_info(true, &info->client->dev, "%s: 0x%02X\n", __func__, reg_val);
+	
+	if (write_reg(info->client, BT532_OPTIONAL_SETTING, reg_val) != I2C_SUCCESS) {
+		snprintf(buff, sizeof(buff), "%s", "NG");
+		sec->cmd_state = SEC_CMD_STATUS_FAIL;
+	}
+
+	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
+
+	mutex_lock(&sec->cmd_lock);
+	sec->cmd_is_running = false;
+	mutex_unlock(&sec->cmd_lock);
+
+	sec->cmd_state = SEC_CMD_STATUS_WAITING;
+	input_info(true, &client->dev, "%s: %s(%d)\n", __func__, sec->cmd_result,
+				(int)strnlen(sec->cmd_result, sizeof(sec->cmd_result)));
 
 	return;
 }
-
 static void get_crc_check(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
@@ -9028,7 +8124,9 @@ static void factory_cmd_result_all(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
 	struct bt532_ts_info *info = container_of(sec, struct bt532_ts_info, sec);
+	struct bt532_ts_platform_data *pdata = info->pdata;
 	struct i2c_client *client = info->client;
+	char buff[SEC_CMD_STR_LEN] = { 0 };
 
 	sec->item_count = 0;
 	memset(sec->cmd_result_all, 0x00, SEC_CMD_RESULT_STR_LEN);
@@ -9041,23 +8139,61 @@ static void factory_cmd_result_all(void *device_data)
 
 	sec->cmd_all_factory_state = SEC_CMD_STATUS_RUNNING;
 
+	snprintf(buff, sizeof(buff), "%d", pdata->item_version);
+	sec_cmd_set_cmd_result_all(sec, buff, sizeof(buff), "ITEM_VERSION");
+
 	get_chip_vendor(sec);
 	get_chip_name(sec);
 	get_fw_ver_bin(sec);
 	get_fw_ver_ic(sec);
 
 	run_dnd_read(sec);
-	run_dnd_v_gap_read(sec);
-	run_dnd_h_gap_read(sec);
-	run_cnd_read(sec);
-	run_selfdnd_read(sec);
-	run_selfdnd_h_gap_read(sec);
-	run_self_saturation_read(sec);
-	run_charge_pump_read(sec);
 
+	switch (pdata->item_version) {
+	case 2:
+		run_dnd_v_gap_read(sec);
+		run_dnd_h_gap_read(sec);
+		run_selfdnd_read(sec);
+		run_selfdnd_h_gap_read(sec);
+		run_self_saturation_read(sec);
+		get_wet_mode(sec);
 #ifdef TCLM_CONCEPT
-	run_mis_cal_read(sec);
+		run_mis_cal_read(sec);
 #endif
+		break;
+	case 4:
+		run_dnd_v_gap_read(sec);
+		run_dnd_h_gap_read(sec);
+		run_selfdnd_read(sec);
+		run_selfdnd_h_gap_read(sec);
+		run_self_saturation_read(sec);
+#ifdef TCLM_CONCEPT
+		run_mis_cal_read(sec);
+#endif
+		get_wet_mode(sec);
+		break;
+	case 5:
+		run_hfdnd_read(sec);
+		run_hfdnd_v_gap_read(sec);
+		run_hfdnd_h_gap_read(sec);
+		run_selfdnd_read(sec);
+		run_selfdnd_h_gap_read(sec);
+		run_self_saturation_read(sec);
+		run_trxshort_read(sec);
+		break;
+	case 6:
+		run_dnd_v_gap_read(sec);
+		run_dnd_h_gap_read(sec);
+		run_selfdnd_read(sec);
+		run_selfdnd_v_gap_read(sec);
+		run_selfdnd_h_gap_read(sec);
+		run_self_saturation_read(sec);
+#ifdef TCLM_CONCEPT
+		run_mis_cal_read(sec);
+#endif
+		get_wet_mode(sec);
+		break;
+	}
 
 	sec->cmd_all_factory_state = SEC_CMD_STATUS_OK;
 
@@ -9146,7 +8282,7 @@ static void run_prox_intensity_read_all(void *device_data)
 			SCAN_RATE_HZ * ESD_TIMER_INTERVAL);
 #endif
 
-	snprintf(buff, sizeof(buff), "SUM_X:%d SUM_Y:%d THD_X:%d THD_Y:%d", prox_data >> 8, prox_data & 0xFF, threshold_x, threshold_y);
+	snprintf(buff, sizeof(buff), "%d,%d,%d,%d", prox_data & 0xFF, prox_data >> 8, threshold_x, threshold_y);
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 	sec->cmd_state = SEC_CMD_STATUS_OK;
 	input_info(true, &info->client->dev, "%s: %s\n", __func__, buff);
@@ -9168,56 +8304,14 @@ READ_FAIL:
 	return;
 }
 
-static void ear_detect_enable(void *device_data)
-{
-	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
-	struct bt532_ts_info *info = container_of(sec, struct bt532_ts_info, sec);
-	struct i2c_client *client = info->client;
-	char buff[SEC_CMD_STR_LEN] = { 0 };
-	int value = sec->cmd_param[0];
-
-	sec_cmd_set_default_result(sec);
-
-	if (sec->cmd_param[0] < 0 || sec->cmd_param[0] > 3) {
-		snprintf(buff, sizeof(buff), "%s", "NG");
-		sec->cmd_state = SEC_CMD_STATUS_FAIL;
-	} else {
-		info->ed_enable = value;
-
-		if (value == 3) {
-			/* Self_Proximity */
-			zinitix_bit_set(m_optional_mode.select_mode.flag, DEF_OPTIONAL_MODE_EAR_DETECT);
-			zinitix_bit_clr(m_optional_mode.select_mode.flag, DEF_OPTIONAL_MODE_EAR_DETECT_MUTUAL);
-		} else if (value == 1) {
-			/* Mutual_Proximity */
-			zinitix_bit_clr(m_optional_mode.select_mode.flag, DEF_OPTIONAL_MODE_EAR_DETECT);
-			zinitix_bit_set(m_optional_mode.select_mode.flag, DEF_OPTIONAL_MODE_EAR_DETECT_MUTUAL);
-		} else {
-			zinitix_bit_clr(m_optional_mode.select_mode.flag, DEF_OPTIONAL_MODE_EAR_DETECT);
-			zinitix_bit_clr(m_optional_mode.select_mode.flag, DEF_OPTIONAL_MODE_EAR_DETECT_MUTUAL);
-		}
-
-		bt532_set_optional_mode(info, false);
-
-		snprintf(buff, sizeof(buff), "%s", "OK");
-		sec->cmd_state = SEC_CMD_STATUS_OK;
-	}
-
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
-
-	input_info(true, &client->dev, "%s, %s\n", __func__, sec->cmd_result);
-
-	return;
-}
-
 static ssize_t scrub_position_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
 	struct sec_cmd_data *sec = dev_get_drvdata(dev);
 	struct bt532_ts_info *info = container_of(sec, struct bt532_ts_info, sec);
 	struct i2c_client *client = info->client;
-	char buff[SEC_CMD_STR_LEN] = { 0 };
+
+	char buff[256] = { 0 };
 
 	input_info(true, &client->dev, "%s: scrub_id: %d, X:%d, Y:%d \n", __func__,
 				info->scrub_id, info->scrub_x, info->scrub_y);
@@ -9233,20 +8327,16 @@ static ssize_t sensitivity_mode_show(struct device *dev,
 {
 	struct sec_cmd_data *sec = dev_get_drvdata(dev);
 	struct bt532_ts_info *info = container_of(sec, struct bt532_ts_info, sec);
-	s16 i, value[TOUCH_SENTIVITY_MEASUREMENT_COUNT];
-	char buff[SEC_CMD_STR_LEN] = { 0 };
 
-	for (i = 0; i < TOUCH_SENTIVITY_MEASUREMENT_COUNT; i++) {
-		value[i] = info->sensitivity_data[i];
-	}
+	s16 value[5];
 
-	input_info(true, &info->client->dev, "%s: sensitivity mode,%d,%d,%d,%d,%d,%d,%d,%d,%d\n", __func__,
-		value[0], value[1], value[2], value[3], value[4], value[5], value[6], value[7], value[8]);
+	get_raw_data_size(info, (u8*) value, 2, 10);
 
-	snprintf(buff, sizeof(buff),"%d,%d,%d,%d,%d,%d,%d,%d,%d",
-				value[0], value[1], value[2], value[3], value[4], value[5], value[6], value[7], value[8]);
+	input_info(true, &info->client->dev, "%s: sensitivity mode,%d,%d,%d,%d,%d\n", __func__,
+		value[0], value[1], value[2], value[3], value[4]);
 
-	return snprintf(buf, SEC_CMD_BUF_SIZE, "%s", buff);
+	return snprintf(buf, SEC_CMD_BUF_SIZE,"%d,%d,%d,%d,%d",
+			value[0], value[1], value[2], value[3], value[4]);
 }
 
 static ssize_t sensitivity_mode_store(struct device *dev,
@@ -9296,82 +8386,6 @@ static ssize_t sensitivity_mode_store(struct device *dev,
 
 	input_info(true, &info->client->dev, "%s: done\n", __func__);
 	return count;
-}
-
-static ssize_t fod_info_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	struct sec_cmd_data *sec = dev_get_drvdata(dev);
-	struct bt532_ts_info *info = container_of(sec, struct bt532_ts_info, sec);
-	int ret;
-	char buff[SEC_CMD_STR_LEN] = { 0 };
-
-	//info->fod_info_vi_trx[0] : TX CH width. ( = 10)
-	//info->fod_info_vi_trx[1] : RX CH width. ( = 13)
-
-	/* get fod information */
-	if (!info->fod_info_vi_trx[0] || !info->fod_info_vi_trx[1] || !info->fod_info_vi_data_len) {
-		write_cmd(info->client, 0x0A);
-		ret = read_data(info->client, REG_FOD_MODE_VI_DATA_CH, info->fod_info_vi_trx, 2);
-		if (ret < 0) {
-			input_err(true, &info->client->dev,"%s: fail fod channel info.\n", __func__);
-			write_cmd(info->client, 0x0B);
-			return ret;
-		}
-
-		ret = read_data(info->client, REG_FOD_MODE_VI_DATA_LEN, (u8 *)&info->fod_info_vi_data_len, 2);
-		if (ret < 0) {
-			input_err(true, &info->client->dev, "%s: fail fod data len.\n", __func__);
-			write_cmd(info->client, 0x0B);
-			return ret;
-		}
-		write_cmd(info->client, 0x0B);
-	}
-
-	input_info(true, &info->client->dev, "%s: %d,%d,%d\n", __func__,
-		info->fod_info_vi_trx[1], info->fod_info_vi_trx[0], info->fod_info_vi_data_len);
-
-	snprintf(buff, sizeof(buff), "%d,%d,%d,%d,%d",
-				info->fod_info_vi_trx[1], info->fod_info_vi_trx[0], info->fod_info_vi_data_len,
-				info->cap_info.x_node_num, info->cap_info.y_node_num);
-
-	return snprintf(buf, SEC_CMD_BUF_SIZE, "%s", buff);
-}
-
-static ssize_t fod_pos_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	struct sec_cmd_data *sec = dev_get_drvdata(dev);
-	struct bt532_ts_info *info = container_of(sec, struct bt532_ts_info, sec);
-	int i, ret = -1;
-	u8 fod_info_vi_data[FOD_VI_DATA_LENGTH];
-	char buff[SEC_CMD_STR_LEN] = { 0 };
-
-	write_cmd(info->client, 0x0A);
-
-	if (FOD_VI_DATA_LENGTH != info->fod_info_vi_data_len) {
-		input_err(true, &info->client->dev,
-			"%s: fod vi data length mismatch. fod vi len (%d)\n",
-			__func__, info->fod_info_vi_data_len);
-		write_cmd(info->client, 0x0B);
-		return ret;
-	}	
-	
-	ret = read_data(info->client, REG_FOD_MODE_VI_DATA, fod_info_vi_data, info->fod_info_vi_data_len);
-	if (ret < 0) {
-		input_err(true, &info->client->dev, "%s: fail fod data read error.\n", __func__);
-		write_cmd(info->client, 0x0B);
-		return ret;
-	}
-	write_cmd(info->client, 0x0B);
-
-	for (i = 0; i < info->fod_info_vi_data_len; i++) {
-		input_dbg(true, &info->client->dev, "%s: %02X", __func__, fod_info_vi_data[i]);
-		snprintf(buff, 3, "%02X", fod_info_vi_data[i]);
-		strlcat(buf, buff, SEC_CMD_BUF_SIZE);
-	}
-
-	return strlen(buf);
 }
 
 static ssize_t read_ito_check_show(struct device *dev,
@@ -9566,9 +8580,7 @@ static ssize_t read_support_feature(struct device *dev,
 	u32 feature = 0;
 
 	if (info->pdata->support_aot)
-		feature |= INPUT_FEATURE_ENABLE_SETTINGS_AOT;
-	if (info->pdata->support_open_short_test)
-		feature |= INPUT_FEATURE_SUPPORT_OPEN_SHORT_TEST;
+		feature |= INPUT_FEATURE_SUPPORT_AOT;
 
 	snprintf(buff, sizeof(buff), "%d", feature);
 	input_info(true, &client->dev, "%s: %s\n", __func__, buff);
@@ -9576,169 +8588,41 @@ static ssize_t read_support_feature(struct device *dev,
 	return snprintf(buf, SEC_CMD_BUF_SIZE, "%s\n", buff);
 }
 
-/** for protos **/
-static ssize_t protos_event_show(struct device *dev,
+static ssize_t ear_detect_enable_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
 	struct sec_cmd_data *sec = dev_get_drvdata(dev);
 	struct bt532_ts_info *info = container_of(sec, struct bt532_ts_info, sec);
 
 	input_info(true, &info->client->dev, "%s: %d\n", __func__,
-			info->hover_event);
+			info->ed_enable);
 
-	return snprintf(buf, SEC_CMD_BUF_SIZE, "%d", info->hover_event != 3 ? 0 : 3);
+	return snprintf(buf, SEC_CMD_BUF_SIZE, "%d", info->ed_enable);
 }
 
-static ssize_t protos_event_store(struct device *dev,
+static ssize_t ear_detect_enable_store(struct device *dev,
 		struct device_attribute *attr,
 		const char *buf, size_t count)
 {
 	struct sec_cmd_data *sec = dev_get_drvdata(dev);
 	struct bt532_ts_info *info = container_of(sec, struct bt532_ts_info, sec);
-	u8 data;
 	int ret;
+	unsigned long value = 0;
 
-	ret = kstrtou8(buf, 10, &data);
-	if (ret < 0)
+	ret = kstrtoul(buf, 10, &value);
+	if (ret != 0)
 		return ret;
 
-	input_info(true, &info->client->dev, "%s: %d\n", __func__, data);
+	input_info(true, &info->client->dev, "%s: enable:%d\n", __func__, value);
+	info->ed_enable = value;
 
-	if (data < 0 || data > 3) {
-		input_err(true, &info->client->dev, "%s: incorrect data\n", __func__);
-		return -EINVAL;
-	}
-
-	info->ed_enable = data;
-	
-	if (data == 3) {
-		/* Self_Proximity */
+	if (value)
 		zinitix_bit_set(m_optional_mode.select_mode.flag, DEF_OPTIONAL_MODE_EAR_DETECT);
-		zinitix_bit_clr(m_optional_mode.select_mode.flag, DEF_OPTIONAL_MODE_EAR_DETECT_MUTUAL);
-	} else if (data == 1) {
-		/* Mutual_Proximity */
+	else
 		zinitix_bit_clr(m_optional_mode.select_mode.flag, DEF_OPTIONAL_MODE_EAR_DETECT);
-		zinitix_bit_set(m_optional_mode.select_mode.flag, DEF_OPTIONAL_MODE_EAR_DETECT_MUTUAL);
-	} else {
-		zinitix_bit_clr(m_optional_mode.select_mode.flag, DEF_OPTIONAL_MODE_EAR_DETECT);
-		zinitix_bit_clr(m_optional_mode.select_mode.flag, DEF_OPTIONAL_MODE_EAR_DETECT_MUTUAL);
-	}
 
 	bt532_set_optional_mode(info, false);
 
-	return count;
-}
-
-static ssize_t read_reg_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	struct sec_cmd_data *sec = dev_get_drvdata(dev);
-	struct bt532_ts_info *info = container_of(sec, struct bt532_ts_info, sec);
-
-	input_info(true, &info->client->dev, "%s: 0x%x\n", __func__,
-			info->store_reg_data);
-
-	return snprintf(buf, SEC_CMD_BUF_SIZE, "0x%x", info->store_reg_data);
-}
-
-static ssize_t store_read_reg(struct device *dev,
-					  struct device_attribute *attr,
-					  const char *buf, size_t size)
-{
-	struct sec_cmd_data *sec = dev_get_drvdata(dev);
-	struct bt532_ts_info *info = container_of(sec, struct bt532_ts_info, sec);
-	u32 buff[2] = {0, }; //addr, size
-	int ret;
-
-	ret = sscanf(buf, "0x%x,0x%x", &buff[0], &buff[1]);
-	if (ret != 2) {
-		input_err(true, &info->client->dev,
-				"%s: failed read params[0x%x]\n", __func__, ret);
-		return -EINVAL;
-	}
-
-	if (buff[1] != 1 && buff[1] != 2) {
-		input_err(true, &info->client->dev,
-				"%s: incorrect byte length [0x%x]\n", __func__, buff[1]);
-		return -EINVAL;
-	} 
-
-	info->store_reg_data = ts_get_touch_reg((u16)buff[0]);
-
-	if (buff[1] == 1)
-		info->store_reg_data = info->store_reg_data & 0x00FF;
-
-	input_info(true, &info->client->dev,
-			"%s: read touch reg [addr:0x%x][data:0x%x]\n",
-			__func__, buff[0], info->store_reg_data);
-
-	return size;
-}
-
-static ssize_t store_write_reg(struct device *dev,
-					  struct device_attribute *attr,
-					  const char *buf, size_t size)
-{
-	struct sec_cmd_data *sec = dev_get_drvdata(dev);
-	struct bt532_ts_info *info = container_of(sec, struct bt532_ts_info, sec);
-	int buff[3];
-	int ret;
-
-	ret = sscanf(buf, "0x%x,0x%x,0x%x", &buff[0], &buff[1], &buff[2]);
-	if (ret != 3) {
-		input_err(true, &info->client->dev,
-				"%s: failed read params[0x%x]\n", __func__, ret);
-		return -EINVAL;
-	}
-
-	if (buff[1] != 1 && buff[1] != 2) {
-		input_err(true, &info->client->dev,
-				"%s: incorrect byte length [0x%x]\n", __func__, buff[1]);
-		return -EINVAL;
-	} 
-
-	if (buff[1] == 1)
-		buff[2] = buff[2] & 0x00FF;
-
-	ts_set_touch_reg((u16)buff[0], (u16)buff[2]);
-	input_info(true, &info->client->dev,
-			"%s: write touch reg [addr:0x%x][byte:0x%x][data:0x%x]\n",
-			__func__, buff[0], buff[1], buff[2]);
-
-	return size;
-}
-
-static ssize_t enabled_show(struct device *dev,
-					  struct device_attribute *attr, char *buf)
-{
-	struct bt532_ts_info *info = dev_get_drvdata(dev);
-
-	input_info(true, &info->client->dev, "%s: %d\n", __func__, info->enabled);
-	return scnprintf(buf, PAGE_SIZE, "%d", info->enabled);
-}
-
-static ssize_t enabled_store(struct device *dev,
-					  struct device_attribute *attr,
-					  const char *buf, size_t count)
-{
-	struct bt532_ts_info *info = dev_get_drvdata(dev);
-	int value;
-	int err;
-
-	err = kstrtoint(buf, 10, &value);
-
-	if (info->enabled == value) {
-		input_info(true, &info->client->dev, "%s: already %s\n",
-				__func__, value ? "enabled" : "disabled");
-		return count;
-	}
-
-	if (value > 0)
-		bt532_ts_open(info->input_dev);
-	else
-		bt532_ts_close(info->input_dev);
-
-	info->enabled = value;
 	return count;
 }
 
@@ -9752,17 +8636,8 @@ static DEVICE_ATTR(module_id, S_IRUGO, read_module_id_show, NULL);
 static DEVICE_ATTR(ta_mode, S_IWUSR | S_IWGRP, NULL, set_ta_mode_store);
 static DEVICE_ATTR(prox_power_off, S_IRUGO | S_IWUSR | S_IWGRP, prox_power_off_show, prox_power_off_store);
 static DEVICE_ATTR(support_feature, S_IRUGO, read_support_feature, NULL);
-static DEVICE_ATTR(virtual_prox, S_IRUGO | S_IWUSR | S_IWGRP, protos_event_show, protos_event_store);
-static DEVICE_ATTR(fod_info, S_IRUGO, fod_info_show, NULL);
-static DEVICE_ATTR(fod_pos, S_IRUGO, fod_pos_show, NULL);
-static DEVICE_ATTR(read_reg_data, S_IRUGO | S_IWUSR | S_IWGRP, read_reg_show, store_read_reg);
-static DEVICE_ATTR(write_reg_data, S_IWUSR | S_IWGRP, NULL, store_write_reg);
-static DEVICE_ATTR(enabled, 0664, enabled_show, enabled_store);
+static DEVICE_ATTR(ear_detect_enable, S_IRUGO | S_IWUSR | S_IWGRP, ear_detect_enable_show, ear_detect_enable_store);
 
-static struct attribute *input_attributes[] = {
-	&dev_attr_enabled.attr,
-	NULL,
-};
 static struct attribute *touchscreen_attributes[] = {
 	&dev_attr_scrub_pos.attr,
 	&dev_attr_sensitivity_mode.attr,
@@ -9774,17 +8649,10 @@ static struct attribute *touchscreen_attributes[] = {
 	&dev_attr_ta_mode.attr,
 	&dev_attr_prox_power_off.attr,
 	&dev_attr_support_feature.attr,
-	&dev_attr_virtual_prox.attr,
-	&dev_attr_fod_info.attr,
-	&dev_attr_fod_pos.attr,
-	&dev_attr_read_reg_data.attr,
-	&dev_attr_write_reg_data.attr,
+	&dev_attr_ear_detect_enable.attr,
 	NULL,
 };
 
-static struct attribute_group input_attr_group = {
-	.attrs = input_attributes,
-};
 static struct attribute_group touchscreen_attr_group = {
 	.attrs = touchscreen_attributes,
 };
@@ -9894,7 +8762,7 @@ static ssize_t touch_led_control(struct device *dev, struct device_attribute *at
 
 	sscanf(buf, "%hhu", &data);
 
-	if (pdata->regulator_tkled){
+	if(pdata->regulator_tkled){
 		regulator_led = regulator_get(NULL, pdata->regulator_tkled);
 		if (IS_ERR(regulator_led)) {
 			input_err(true, dev, "%s: Failed to get regulator_led.\n", __func__);
@@ -9977,8 +8845,6 @@ static struct sec_cmd sec_cmds[] = {
 	/* vendor dependant command */
 	{SEC_CMD("run_delta_read", run_delta_read),},
 	{SEC_CMD("get_delta_all_data", get_delta),},
-	{SEC_CMD("run_cnd_read", run_cnd_read),},
-	{SEC_CMD("run_cnd_read_all", run_cnd_read_all),},
 	{SEC_CMD("run_dnd_read", run_dnd_read),},
 	{SEC_CMD("get_dnd", get_dnd),},
 	{SEC_CMD("get_dnd_all", get_dnd_all),},
@@ -10046,27 +8912,21 @@ static struct sec_cmd sec_cmds[] = {
 	{SEC_CMD("run_ref_calibration", run_ref_calibration),},
 	{SEC_CMD("dead_zone_enable", dead_zone_enable),},
 	{SEC_CMD("set_grip_data", set_grip_data),},
-	{SEC_CMD_H("set_touchable_area", set_touchable_area),},
-	{SEC_CMD_H("clear_cover_mode", clear_cover_mode),},
-	{SEC_CMD_H("spay_enable", spay_enable),},
-	{SEC_CMD("fod_enable", fod_enable),},
-	{SEC_CMD_H("fod_lp_mode", fod_lp_mode),},
-	{SEC_CMD("set_fod_rect", set_fod_rect),},
-	{SEC_CMD_H("singletap_enable", singletap_enable),},
-	{SEC_CMD_H("aot_enable", aot_enable),},
-	{SEC_CMD_H("aod_enable", aod_enable),},
+	{SEC_CMD("set_touchable_area", set_touchable_area),},
+	{SEC_CMD("clear_cover_mode", clear_cover_mode),},
+	{SEC_CMD("spay_enable", spay_enable),},
+	{SEC_CMD("aot_enable", aot_enable),},
+	{SEC_CMD("aod_enable", aod_enable),},
 	{SEC_CMD("set_aod_rect", set_aod_rect),},
 	{SEC_CMD("get_wet_mode", get_wet_mode),},
 #ifdef GLOVE_MODE
-	{SEC_CMD_H("glove_mode", glove_mode),},
+	{SEC_CMD("glove_mode", glove_mode),},
 #endif
-	{SEC_CMD_H("pocket_mode_enable", pocket_mode_enable),},
+	{SEC_CMD("pocket_mode_enable", pocket_mode_enable),},
 	{SEC_CMD("get_crc_check", get_crc_check),},
 	{SEC_CMD("factory_cmd_result_all", factory_cmd_result_all),},
 	{SEC_CMD("check_connection", check_connection),},
 	{SEC_CMD("run_prox_intensity_read_all", run_prox_intensity_read_all),},
-	{SEC_CMD("run_charge_pump_read", run_charge_pump_read),},
-	{SEC_CMD_H("ear_detect_enable", ear_detect_enable),},
 	{SEC_CMD("not_support_cmd", not_support_cmd),},
 };
 
@@ -10086,7 +8946,7 @@ static int init_sec_factory(struct bt532_ts_info *info)
 		goto err_alloc;
 	}
 
-/*	if (pdata->support_touchkey){
+/*	if(pdata->support_touchkey){
 		factory_tk_dev = sec_device_create( info, "sec_touchkey");
 		if (IS_ERR(factory_tk_dev)) {
 			input_err(true, &info->client->dev, "Failed to create factory dev\n");
@@ -10118,7 +8978,7 @@ static int init_sec_factory(struct bt532_ts_info *info)
 		goto err_create_sysfs;
 	}
 
-	if (pdata->support_touchkey){
+	if(pdata->support_touchkey){
 		ret = sysfs_create_group(&factory_tk_dev->kobj, &touchkey_attr_group);
 		if (unlikely(ret)) {
 			input_err(true, &info->client->dev, "Failed to create touchkey sysfs group\n");
@@ -10160,14 +9020,11 @@ static long ts_misc_fops_ioctl(struct file *filp,
 	size_t sz = 0;
 	//u16 version;
 	u16 mode;
+
 	struct reg_ioctl reg_ioctl;
 	u16 val;
 	int nval = 0;
-#ifdef CONFIG_COMPAT
 	void __user *argp = compat_ptr(arg);
-#else
-	void __user *argp = (void __user *)arg;
-#endif
 
 	if (misc_info == NULL)
 	{
@@ -10184,14 +9041,16 @@ static long ts_misc_fops_ioctl(struct file *filp,
 		break;
 
 	case TOUCH_IOCTL_SET_DEBUGMSG_STATE:
-		if (copy_from_user(&nval, argp, sizeof(nval))) {
+		if (copy_from_user(&nval, argp, 4)) {
 			input_info(true, &misc_info->client->dev, "[zinitix_touch] error : copy_from_user\n");
 			return -1;
 		}
 		if (nval)
-			input_info(true, &misc_info->client->dev, "[zinitix_touch] on debug mode (%d)\n", nval);
+			input_info(true, &misc_info->client->dev, "[zinitix_touch] on debug mode (%d)\n",
+				nval);
 		else
-			input_info(true, &misc_info->client->dev, "[zinitix_touch] off debug mode (%d)\n", nval);
+			input_info(true, &misc_info->client->dev, "[zinitix_touch] off debug mode (%d)\n",
+				nval);
 		m_ts_debug_mode = nval;
 		break;
 
@@ -10284,7 +9143,7 @@ static long ts_misc_fops_ioctl(struct file *filp,
 		msleep(100);
 
 		/* h/w calibration */
-		if (ts_hw_calibration(misc_info) == true) {
+		if(ts_hw_calibration(misc_info) == true) {
 			ret = 0;
 #ifdef TCLM_CONCEPT
 			sec_tclm_root_of_cal(misc_info->tdata, CALPOSITION_TESTMODE);
@@ -10320,7 +9179,7 @@ fail_hw_cal:
 			zinitix_debug_msg("misc device NULL?\n");
 			return -1;
 		}
-		if (copy_from_user(&nval, argp, sizeof(nval))) {
+		if (copy_from_user(&nval, argp, 4)) {
 			input_info(true, &misc_info->client->dev, "[zinitix_touch] error : copy_from_user\r\n");
 			misc_info->work_state = NOTHING;
 			return -1;
@@ -10344,7 +9203,8 @@ fail_hw_cal:
 
 		misc_info->work_state = SET_MODE;
 
-		if (copy_from_user(&reg_ioctl, argp, sizeof(struct reg_ioctl))) {
+		if (copy_from_user(&reg_ioctl,
+			argp, sizeof(struct reg_ioctl))) {
 			misc_info->work_state = NOTHING;
 			up(&misc_info->work_lock);
 			input_info(true, &misc_info->client->dev, "[zinitix_touch] error : copy_from_user\n");
@@ -10357,11 +9217,7 @@ fail_hw_cal:
 
 		nval = (int)val;
 
-#ifdef CONFIG_COMPAT
 		if (copy_to_user(compat_ptr(reg_ioctl.val), (u8 *)&nval, 4)) {
-#else
-		if (copy_to_user((void __user *)(reg_ioctl.val), (u8 *)&nval, 4)) {
-#endif
 			misc_info->work_state = NOTHING;
 			up(&misc_info->work_lock);
 			input_info(true, &misc_info->client->dev, "[zinitix_touch] error : copy_to_user\n");
@@ -10394,11 +9250,7 @@ fail_hw_cal:
 			return -1;
 		}
 
-#ifdef CONFIG_COMPAT
-		if (copy_from_user(&val, compat_ptr(reg_ioctl.val), sizeof(val))) {
-#else
-		if (copy_from_user(&val,(void __user *)(reg_ioctl.val), sizeof(val))) {
-#endif
+		if (copy_from_user(&val, compat_ptr(reg_ioctl.val), 4)) {
 			misc_info->work_state = NOTHING;
 			up(&misc_info->work_lock);
 			input_info(true, &misc_info->client->dev, "[zinitix_touch] error : copy_from_user(2)\n");
@@ -10493,15 +9345,10 @@ fail_hw_cal:
 		misc_info->update = 0;
 
 		u8Data = (u8 *)&misc_info->cur_data[0];
-		if (raw_ioctl.sz > MAX_TRAW_DATA_SZ*2)
+		if(raw_ioctl.sz > MAX_TRAW_DATA_SZ*2)
 			raw_ioctl.sz = MAX_TRAW_DATA_SZ*2;
-#ifdef CONFIG_COMPAT
 		if (copy_to_user(compat_ptr(raw_ioctl.buf), (u8 *)u8Data,
 			raw_ioctl.sz)) {
-#else
-		if (copy_to_user((void __user *)(raw_ioctl.buf), (u8 *)u8Data,
-			raw_ioctl.sz)) {
-#endif
 			up(&misc_info->raw_data_lock);
 			return -1;
 		}
@@ -10605,7 +9452,7 @@ static int zinitix_init_gpio(struct bt532_ts_platform_data *pdata)
 	int ret = 0;
 
 	ret = gpio_request(pdata->gpio_int, "zinitix_tsp_irq");
-	if (ret) {
+	if(ret) {
 		pr_err("[TSP]%s: unable to request zinitix_tsp_irq [%d]\n",
 			__func__, pdata->gpio_int);
 		return ret;
@@ -10689,7 +9536,6 @@ static int bt532_ts_parse_dt(struct device_node *np,
 	pdata->support_aod = of_property_read_bool(np, "zinitix,aod");
 	pdata->support_aot = of_property_read_bool(np, "zinitix,aot");
 	pdata->support_ear_detect = of_property_read_bool(np, "support_ear_detect_mode");
-	pdata->support_open_short_test = of_property_read_bool(np, "support_open_short_test");
 	pdata->support_lpm_mode = (pdata->support_spay | pdata->support_aod | pdata->support_aot);
 	pdata->bringup = of_property_read_bool(np, "zinitix,bringup");
 	pdata->mis_cal_check = of_property_read_bool(np, "zinitix,mis_cal_check");
@@ -10720,100 +9566,10 @@ static void sec_tclm_parse_dt(struct i2c_client *client, struct sec_tclm_data *t
 }
 #endif
 
-static void zinitix_display_rawdata(struct bt532_ts_info *info, struct tsp_raw_data *raw_data, int type, int gap)
-{
-	int x_num = info->cap_info.x_node_num;
-	int y_num = info->cap_info.y_node_num;
-	unsigned char *pStr = NULL;
-	unsigned char pTmp[16] = { 0 };
-	int tmp_rawdata;
-	int i, j;
-
-	pStr = kzalloc(6 * (x_num + 1), GFP_KERNEL);
-	if (pStr == NULL)
-		return;
-
-	memset(pStr, 0x0, 6 * (x_num + 1));
-	snprintf(pTmp, sizeof(pTmp), "      Rx");
-	strlcat(pStr, pTmp, 6 * (x_num + 1));
-
-	for (i = 0; i < x_num; i++) {
-		snprintf(pTmp, sizeof(pTmp), " %02d  ", i);
-		strlcat(pStr, pTmp, 6 * (x_num + 1));
-	}
-
-	input_info(true, &info->client->dev, "%s\n", pStr);
-
-	memset(pStr, 0x0, 6 * (x_num + 1));
-	snprintf(pTmp, sizeof(pTmp), " +");
-	strlcat(pStr, pTmp, 6 * (x_num + 1));
-
-	for (i = 0; i < x_num; i++) {
-		snprintf(pTmp, sizeof(pTmp), "-----");
-		strlcat(pStr, pTmp, 6 * (x_num + 1));
-	}
-
-	input_info(true, &info->client->dev, "%s\n", pStr);
-
-	for (i = 0; i < y_num; i++) {
-		memset(pStr, 0x0, 6 * (x_num + 1));
-		snprintf(pTmp, sizeof(pTmp), "Tx%02d | ", i);
-		strlcat(pStr, pTmp, 6 * (x_num + 1));
-
-		for (j = 0; j < x_num; j++) {
-			switch (type) {
-			case TOUCH_REF_ABNORMAL_TEST_MODE:
-				/* print mis_cal data (value - DEF_MIS_CAL_SPEC_MID) */
-				tmp_rawdata = raw_data->reference_data_abnormal[(i * x_num) + j];
-				snprintf(pTmp, sizeof(pTmp), " %4d", tmp_rawdata);
-				break;
-			case TOUCH_DND_MODE:
-				if (gap == 1) {
-					/* print dnd v gap data */
-					tmp_rawdata = raw_data->vgap_data[(i * x_num) + j];
-					snprintf(pTmp, sizeof(pTmp), " %4d", tmp_rawdata);
-				} else if (gap == 2) {
-					/* print dnd h gap data */
-					tmp_rawdata = raw_data->hgap_data[(i * x_num) + j];
-					snprintf(pTmp, sizeof(pTmp), " %4d", tmp_rawdata);
-				} else {
-					/* print dnd data */
-					tmp_rawdata = raw_data->dnd_data[(i * x_num) + j];
-					snprintf(pTmp, sizeof(pTmp), " %4d", tmp_rawdata);
-				}
-				break;
-			case TOUCH_RAW_MODE:
-				/* print cnd data */
-				tmp_rawdata = raw_data->cnd_data[(i * x_num) + j];
-				snprintf(pTmp, sizeof(pTmp), " %4d", tmp_rawdata);
-				break;
-			case TOUCH_JITTER_MODE:
-				/* print jitter data */
-				tmp_rawdata = raw_data->jitter_data[(i * x_num) + j];
-				snprintf(pTmp, sizeof(pTmp), " %4d", tmp_rawdata);
-				break;
-			case TOUCH_REFERENCE_MODE:
-				/* print reference data */
-				tmp_rawdata = raw_data->reference_data[(i * x_num) + j];
-				snprintf(pTmp, sizeof(pTmp), " %4d", tmp_rawdata);
-				break;
-			case TOUCH_DELTA_MODE:
-				/* print delta data */
-				tmp_rawdata = raw_data->delta_data[(i * x_num) + j];
-				snprintf(pTmp, sizeof(pTmp), " %4d", tmp_rawdata);
-				break;
-			}
-			strlcat(pStr, pTmp, 6 * (x_num + 1));
-		}
-		input_info(true, &info->client->dev, "%s\n", pStr);
-	}
-
-	kfree(pStr);
-}
-
 /* print raw data at booting time */
 static void bt532_display_rawdata(struct bt532_ts_info *info, struct tsp_raw_data *raw_data, int *min, int *max, bool is_mis_cal)
 {
+	struct bt532_ts_platform_data *pdata = info->pdata;
 	int x_num = info->cap_info.x_node_num;
 	int y_num = info->cap_info.y_node_num;
 	unsigned char *pStr = NULL;
@@ -10821,44 +9577,47 @@ static void bt532_display_rawdata(struct bt532_ts_info *info, struct tsp_raw_dat
 	int tmp_rawdata;
 	int i, j;
 
-	input_raw_info(true, &info->client->dev, "%s: %s\n", __func__, is_mis_cal ? "mis_cal ": "dnd ");
+	input_raw_info(true, &info->client->dev, "%s: %s\n", __func__, is_mis_cal?"mis_cal ": "dnd ");
 
-	pStr = kzalloc(6 * (x_num + 1), GFP_KERNEL);
+	pStr = kzalloc(6 * (y_num + 1), GFP_KERNEL);
 	if (pStr == NULL)
 		return;
 
-	memset(pStr, 0x0, 6 * (x_num + 1));
+	memset(pStr, 0x0, 6 * (y_num + 1));
 	snprintf(pTmp, sizeof(pTmp), "      Rx");
-	strlcat(pStr, pTmp, 6 * (x_num + 1));
-
-	for (i = 0; i < x_num; i++) {
-		snprintf(pTmp, sizeof(pTmp), " %02d  ", i);
-		strlcat(pStr, pTmp, 6 * (x_num + 1));
-	}
-
-	input_raw_info(true, &info->client->dev, "%s\n", pStr);
-
-	memset(pStr, 0x0, 6 * (x_num + 1));
-	snprintf(pTmp, sizeof(pTmp), " +");
-	strlcat(pStr, pTmp, 6 * (x_num + 1));
-
-	for (i = 0; i < x_num; i++) {
-		snprintf(pTmp, sizeof(pTmp), "-----");
-		strlcat(pStr, pTmp, 6 * (x_num + 1));
-	}
-
-	input_raw_info(true, &info->client->dev, "%s\n", pStr);
+	strlcat(pStr, pTmp, 6 * (y_num + 1));
 
 	for (i = 0; i < y_num; i++) {
-		memset(pStr, 0x0, 6 * (x_num + 1));
-		snprintf(pTmp, sizeof(pTmp), "Tx%02d | ", i);
-		strlcat(pStr, pTmp, 6 * (x_num + 1));
+		snprintf(pTmp, sizeof(pTmp), " %02d  ", i);
+		strlcat(pStr, pTmp, 6 * (y_num + 1));
+	}
 
-		for (j = 0; j < x_num; j++) {
+	input_raw_info(true, &info->client->dev, "%s\n", pStr);
+
+	memset(pStr, 0x0, 6 * (y_num + 1));
+	snprintf(pTmp, sizeof(pTmp), " +");
+	strlcat(pStr, pTmp, 6 * (y_num + 1));
+
+	for (i = 0; i < y_num; i++) {
+		snprintf(pTmp, sizeof(pTmp), "-----");
+		strlcat(pStr, pTmp, 6 * (y_num + 1));
+	}
+
+	input_raw_info(true, &info->client->dev, "%s\n", pStr);
+
+	for (i = 0; i < x_num; i++) {
+		memset(pStr, 0x0, 6 * (y_num + 1));
+		snprintf(pTmp, sizeof(pTmp), "Tx%02d | ", i);
+		strlcat(pStr, pTmp, 6 * (y_num + 1));
+
+		for (j = 0; j < y_num; j++) {
 
 			if (is_mis_cal) {
 				/* print mis_cal data (value - DEF_MIS_CAL_SPEC_MID) */
-				tmp_rawdata = raw_data->reference_data_abnormal[(i * x_num) + j];
+				if (pdata->item_version >= 6)
+					tmp_rawdata = raw_data->reference_data_abnormal[(i * y_num) + j];
+				else
+					tmp_rawdata = raw_data->reference_data_abnormal[(i * y_num) + j] - DEF_MIS_CAL_SPEC_MID;
 				snprintf(pTmp, sizeof(pTmp), " %4d", tmp_rawdata);
 
 				if (tmp_rawdata < *min)
@@ -10869,7 +9628,7 @@ static void bt532_display_rawdata(struct bt532_ts_info *info, struct tsp_raw_dat
 
 			} else {
 				/* print dnd data */
-				tmp_rawdata = raw_data->dnd_data[(i * x_num) + j];
+				tmp_rawdata = raw_data->dnd_data[(i * y_num) + j];
 				snprintf(pTmp, sizeof(pTmp), " %4d", tmp_rawdata);
 
 				if (tmp_rawdata < *min && tmp_rawdata != 0)
@@ -10878,7 +9637,7 @@ static void bt532_display_rawdata(struct bt532_ts_info *info, struct tsp_raw_dat
 				if (tmp_rawdata > *max)
 					*max = tmp_rawdata;
 			}
-			strlcat(pStr, pTmp, 6 * (x_num + 1));
+			strlcat(pStr, pTmp, 6 * (y_num + 1));
 		}
 		input_raw_info(true, &info->client->dev, "%s\n", pStr);
 	}
@@ -10978,10 +9737,12 @@ static void bt532_run_mis_cal(struct bt532_ts_info *info)
 	ts_set_touchmode(TOUCH_POINT_MODE);
 
 	bt532_display_rawdata(info, raw_data, &min, &max, true);
-	if ((min + DEF_MIS_CAL_SPEC_MID) < DEF_MIS_CAL_SPEC_MIN ||
-		(max + DEF_MIS_CAL_SPEC_MID) > DEF_MIS_CAL_SPEC_MAX) {
-		mis_cal_data = 0xFD;
-		goto NG;
+	if (pdata->item_version < 6) {
+		if ((min + DEF_MIS_CAL_SPEC_MID) < DEF_MIS_CAL_SPEC_MIN ||
+			(max + DEF_MIS_CAL_SPEC_MID) > DEF_MIS_CAL_SPEC_MAX) {
+			mis_cal_data = 0xFD;
+			goto NG;
+		}
 	}
 
 	mis_cal_data = 0x00;
@@ -10995,7 +9756,7 @@ static void bt532_run_mis_cal(struct bt532_ts_info *info)
 	return;
 NG:
 	input_err(true, &info->client->dev, "%s : mis_cal_data: %X", __func__, mis_cal_data);
-	if (mis_cal_data == 0xFD)
+	if(mis_cal_data == 0xFD)
 	{
 		run_tsp_rawdata_read(&info->sec, 7, raw_data_buff);
 		run_tsp_rawdata_read(&info->sec, TOUCH_REFERENCE_MODE, raw_data_buff);
@@ -11071,35 +9832,18 @@ static void zt_read_info_work(struct work_struct *work)
 	int ret;
 #endif
 
+	// A41 temp
+	info->info_work_done = true;
+	return;
+
 	mutex_lock(&info->modechange);
 
 #ifdef TCLM_CONCEPT
 	get_zt_tsp_nvm_data(info, BT532_TS_NVM_OFFSET_FAC_RESULT, (u8 *)data, 2);
 	info->test_result.data[0] = data[0];
-
-#if ESD_TIMER_INTERVAL
-	esd_timer_stop(info);
-	write_reg(info->client, BT532_PERIODICAL_INTERRUPT_INTERVAL, 0);
-	write_cmd(info->client, BT532_CLEAR_INT_STATUS_CMD);
-#endif
-
-	write_reg(info->client, BT532_INT_ENABLE_FLAG, 0x153F);
-	input_info(true, &info->client->dev, "%s: int disabled addr = 0x%x, val = 0x153F\r\n",
-		__func__, BT532_INT_ENABLE_FLAG);
-
 	ret = sec_tclm_check_cal_case(info->tdata);
 	input_info(true, &info->client->dev, "%s: sec_tclm_check_cal_case result %d; test result %X\n",
 				__func__, ret, info->test_result.data[0]);
-
-	write_reg(info->client, BT532_INT_ENABLE_FLAG, 0x113F);
-	input_info(true, &info->client->dev, "%s: int enabled addr = 0x%x, val = 0x113F\r\n",
-		__func__, BT532_INT_ENABLE_FLAG);
-
-#if ESD_TIMER_INTERVAL
-	esd_timer_start(CHECK_ESD_TIMER, info);
-	write_reg(info->client, BT532_PERIODICAL_INTERRUPT_INTERVAL,
-		SCAN_RATE_HZ * ESD_TIMER_INTERVAL);
-#endif
 #endif
 	run_test_open_short(info);
 
@@ -11186,7 +9930,7 @@ static int bt532_ts_probe(struct i2c_client *client,
 		sec_tclm_parse_dt(client, tdata);
 
 		ret = zinitix_init_gpio(pdata);
-		if (ret < 0)
+		if(ret < 0)
 			goto err_gpio_request;
 
 	}
@@ -11295,7 +10039,7 @@ static int bt532_ts_probe(struct i2c_client *client,
 		goto err_fw_update;
 	}
 
-	if (pdata->support_touchkey){
+	if(pdata->support_touchkey){
 		for (i = 0; i < MAX_SUPPORTED_BUTTON_NUM; i++)
 			info->button[i] = ICON_BUTTON_UNCHANGE;
 	}
@@ -11321,16 +10065,14 @@ static int bt532_ts_probe(struct i2c_client *client,
 	set_bit(KEY_INT_CANCEL, info->input_dev->keybit);
 	set_bit(EV_LED, info->input_dev->evbit);
 	set_bit(LED_MISC, info->input_dev->ledbit);
-	set_bit(BTN_PALM, info->input_dev->keybit);
-
-	if (pdata->support_touchkey){
+	if(pdata->support_touchkey){
 		for (i = 0; i < MAX_SUPPORTED_BUTTON_NUM; i++)
 			set_bit(BUTTON_MAPPING_KEY[i], info->input_dev->keybit);
 	}
 
-	if (pdata->support_lpm_mode){
+	if(pdata->support_lpm_mode){
 		set_bit(KEY_BLACK_UI_GESTURE, info->input_dev->keybit);
-		set_bit(KEY_WAKEUP, info->input_dev->keybit);
+		set_bit(KEY_HOMEPAGE, info->input_dev->keybit);
 	}
 
 	input_set_abs_params(info->input_dev, ABS_MT_POSITION_X,
@@ -11369,7 +10111,7 @@ static int bt532_ts_probe(struct i2c_client *client,
 		}
 	}
 
-	if (init_touch(info) == false) {
+	if(init_touch(info) == false) {
 		ret = -EPERM;
 		goto err_init_touch;
 	}
@@ -11405,6 +10147,11 @@ static int bt532_ts_probe(struct i2c_client *client,
 		__func__, info->irq);
 #endif
 
+#ifdef CONFIG_INPUT_ENABLED
+	info->input_dev->open = bt532_ts_open;
+	info->input_dev->close = bt532_ts_close;
+#endif
+
 	sema_init(&info->raw_data_lock, 1);
 #ifdef USE_MISC_DEVICE
 	ret = misc_register(&touch_misc_device);
@@ -11421,11 +10168,6 @@ static int bt532_ts_probe(struct i2c_client *client,
 		goto err_kthread_create_failed;
 	}
 #endif
-#ifdef CONFIG_INPUT_ENABLED
-	ret = sysfs_create_group(&info->input_dev->dev.kobj, &input_attr_group);
-	if (ret < 0)
-		input_err(true, &info->client->dev, "%s: Failed to create input_attr_group\n", __func__);
-#endif
 
 	info->register_cb = info->pdata->register_cb;
 
@@ -11437,7 +10179,7 @@ static int bt532_ts_probe(struct i2c_client *client,
 				VBUS_NOTIFY_DEV_CHARGER);
 #endif
 
-	if (pdata->support_lpm_mode){
+	if(pdata->support_lpm_mode){
 		device_init_wakeup(&client->dev, true);
 	}
 

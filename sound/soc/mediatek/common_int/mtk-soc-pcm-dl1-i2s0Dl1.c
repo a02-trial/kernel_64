@@ -60,6 +60,7 @@
 #include "mtk-soc-pcm-common.h"
 #include "mtk-soc-pcm-platform.h"
 
+
 #include "mtk_mcdi_api.h"
 
 static struct afe_mem_control_t *pI2S0dl1MemControl;
@@ -169,7 +170,7 @@ static int Audio_hwgain_Set(struct snd_kcontrol *kcontrol,
 	pr_debug("%s()\n", __func__);
 	if (ucontrol->value.enumerated.item[0] >
 	    ARRAY_SIZE(I2S0dl1_WGAIN)) {
-		pr_debug("%s(), return -EINVAL\n", __func__);
+		pr_warn("%s(), return -EINVAL\n", __func__);
 		return -EINVAL;
 	}
 
@@ -355,19 +356,17 @@ static int mtk_pcm_I2S0dl1_close(struct snd_pcm_substream *substream)
 					  Soc_Aud_AFE_IO_Block_MEM_DL1,
 					  Soc_Aud_AFE_IO_Block_I2S1_DAC_2);
 		} else {
-			SetIntfConnection(Soc_Aud_InterCon_DisConnect,
-					  Soc_Aud_AFE_IO_Block_MEM_DL1,
+			SetIntfConnection(Soc_Aud_InterCon_DisConnect, Soc_Aud_AFE_IO_Block_MEM_DL1,
 					  Soc_Aud_AFE_IO_Block_HW_GAIN1_OUT);
 			SetIntfConnection(Soc_Aud_InterCon_DisConnect,
 					  Soc_Aud_AFE_IO_Block_MEM_DL1,
 					  Soc_Aud_AFE_IO_Block_I2S3);
-			if (GetFmI2sInPathEnable() == false) {
-				SetIntfConnection(Soc_Aud_InterCon_DisConnect,
-					  Soc_Aud_AFE_IO_Block_HW_GAIN1_IN,
-					  Soc_Aud_AFE_IO_Block_I2S1_DAC);
-				SetIntfConnection(Soc_Aud_InterCon_DisConnect,
-					  Soc_Aud_AFE_IO_Block_HW_GAIN1_IN,
-					  Soc_Aud_AFE_IO_Block_I2S1_DAC_2);
+			if (GetFmI2sInPathEnable() == false)
+			{
+			SetIntfConnection(Soc_Aud_InterCon_DisConnect, Soc_Aud_AFE_IO_Block_HW_GAIN1_IN,
+				  Soc_Aud_AFE_IO_Block_I2S1_DAC);
+			SetIntfConnection(Soc_Aud_InterCon_DisConnect, Soc_Aud_AFE_IO_Block_HW_GAIN1_IN,
+				  Soc_Aud_AFE_IO_Block_I2S1_DAC_2);
 			} else {
 				pr_debug("%s bypass hw gain control when FM Enable(%d)\n",
 				__func__, GetFmI2sInPathEnable());
@@ -467,25 +466,20 @@ static int mtk_pcm_I2S0dl1_prepare(struct snd_pcm_substream *substream)
 				  Soc_Aud_AFE_IO_Block_MEM_DL1,
 				  Soc_Aud_AFE_IO_Block_I2S1_DAC_2);
 		} else {
-			SetIntfConnection(Soc_Aud_InterCon_Connection,
-				  Soc_Aud_AFE_IO_Block_MEM_DL1,
+			SetIntfConnection(Soc_Aud_InterCon_Connection, Soc_Aud_AFE_IO_Block_MEM_DL1,
 				  Soc_Aud_AFE_IO_Block_HW_GAIN1_OUT);
-			SetIntfConnection(Soc_Aud_InterCon_Connection,
-				  Soc_Aud_AFE_IO_Block_HW_GAIN1_IN,
+			SetIntfConnection(Soc_Aud_InterCon_Connection, Soc_Aud_AFE_IO_Block_HW_GAIN1_IN,
 				  Soc_Aud_AFE_IO_Block_I2S1_DAC);
-			SetIntfConnection(Soc_Aud_InterCon_Connection,
-				  Soc_Aud_AFE_IO_Block_HW_GAIN1_IN,
+			SetIntfConnection(Soc_Aud_InterCon_Connection, Soc_Aud_AFE_IO_Block_HW_GAIN1_IN,
 				  Soc_Aud_AFE_IO_Block_I2S1_DAC_2);
 			SetIntfConnection(Soc_Aud_InterCon_Connection,
 				  Soc_Aud_AFE_IO_Block_MEM_DL1,
 				  Soc_Aud_AFE_IO_Block_I2S3);
 			/* Set HW_GAIN */
 			SetHwDigitalGainMode(Soc_Aud_Digital_Block_HW_GAIN1,
-					     runtime->rate, 0x40);
-			SetHwDigitalGainEnable(Soc_Aud_Digital_Block_HW_GAIN1,
-					       true);
-			SetHwDigitalGain(Soc_Aud_Digital_Block_HW_GAIN1,
-					 m_hw_volume);
+								 runtime->rate, 0x40);
+			SetHwDigitalGainEnable(Soc_Aud_Digital_Block_HW_GAIN1, true);
+			SetHwDigitalGain(Soc_Aud_Digital_Block_HW_GAIN1, m_hw_volume);
 		}
 		/* TODO: KC: use Set2ndI2SOut() to set i2s3 */
 		/* I2S out Setting */
@@ -630,12 +624,8 @@ static int mtk_I2S0dl1_probe(struct platform_device *pdev)
 {
 	pr_debug("%s\n", __func__);
 
-	if (pdev->dev.of_node) {
+	if (pdev->dev.of_node)
 		dev_set_name(&pdev->dev, "%s", MT_SOC_I2S0DL1_PCM);
-		pdev->name = pdev->dev.kobj.name;
-	} else {
-		pr_debug("%s(), pdev->dev.of_node = NULL!!!\n", __func__);
-	}
 
 	pr_debug("%s: dev name %s\n", __func__, dev_name(&pdev->dev));
 

@@ -18,15 +18,12 @@
 #ifndef __LINUX_A96T3X6_H
 #define __LINUX_A96T3X6_H
 
-//#include <linux/sensor/sensors_core.h>
-
 #define VENDOR_NAME	"ABOV"
 #define MODEL_NAME	"A96T3X6"
 #define MODULE_NAME	"grip_sensor"
 
-#define NOTIFY_CABLE_USB_FAST	0x01
+#define NOTIFY_CABLE_USB	0x01
 #define NOTIFY_CABLE_OTG	0x03
-#define NOTIFY_CABLE_USB_NORMAL	0x04
 #define NOTIFY_CABLE_TA		0x25
 #define NOTIFY_CABLE_TA_FAC	0x27
 
@@ -43,8 +40,10 @@
 #define REG_GLOVE                       0x13
 #define REG_TSPTA                       0x13
 #define REG_MODEL_NO                    0x14
+#define REG_ID_NO                       0x15
 #define REG_SAR_TOTALCAP                0x16
 #define REG_SAR_MODE                    0x17
+#define REG_GRIP_ALWAYS_ACTIVE          0x20
 #define REG_SW_RESET                    0x1A
 #define REG_SAR_ENABLE                  0x24
 #define REG_SAR_SENSING                 0x25
@@ -71,8 +70,10 @@
 #define REG_GLOVE		0x13
 #define REG_TSPTA		0x13
 #define REG_MODEL_NO		0x14
+#define REG_ID_NO           0x15
 #define REG_SAR_TOTALCAP	0x16
 #define REG_SAR_MODE		0x17
+#define REG_GRIP_ALWAYS_ACTIVE	0x20
 #define REG_SAR_TOTALCAP_READ	0x18
 #define REG_SW_RESET		0x1A
 #define REG_SAR_ENABLE		0x24
@@ -86,67 +87,35 @@
 #define REG_SAR_THRESHOLD	0x32
 #endif
 
-#define REG_REF_CAP		0x50
-#define REG_GAINDATA		0x52
-#ifdef CONFIG_SENSORS_A96T3X6_2CH
-#define REG_GAINDATA_2CH	0x55
-#endif
-#define REG_REF_GAINDATA	0x58
-
 #define REG_DATA_UPDATE		0x40
 #define REG_MODE_CHECK		0x41
 #define REG_LED_CTRL_ON		0x60
 #define REG_LED_CTRL_OFF	0x70
 #define REG_STOP_MODE		0x80
-#define REG_GRIP_ALWAYS_ACTIVE	0x20
-#define GRIP_ALWAYS_ACTIVE_READY	0x21
 
 /* command */
 #define CMD_ON			0x20
 #define CMD_OFF			0x10
 #define CMD_SW_RESET		0x10
 
+#define GRIP_ALWAYS_ACTIVE_READY	0x21
+
 #define BOOT_DELAY		45000
 #define RESET_DELAY		150000
 #define FLASH_DELAY		1400000
 #define FLASH_MODE		0x18
-#define CRC_FAIL		0
-#define CRC_PASS		1
 
-
-#define TK_FW_PATH_BIN 		"abov/abov_noble.fw"
-#define TK_FW_PATH_SDCARD 	"/sdcard/Firmware/Grip/abov_fw.bin"
-#define HALL_PATH		"/sys/class/sec/hall_ic/hall_detect"
-#define HALLIC_CERT_PATH	"/sys/class/sec/hall_ic/certify_hall_detect"
+#define TK_FW_PATH_BIN "abov/abov_noble.fw"
+#define TK_FW_PATH_SDCARD "/sdcard/Firmware/Grip/abov_fw.bin"
+#define HALL_PATH	"/sys/class/sec/sec_key/hall_detect"
 #define HALL_CLOSE_STATE        1
-
-/* depends on FW address configuration */
-#ifdef CONFIG_SENSORS_A96T365IF
-#define USER_CODE_ADDRESS 	0x600
-#else
-#define USER_CODE_ADDRESS 	0x800
-#endif
 
 #define I2C_M_WR 0		/* for i2c */
 #define GRIP_LOG_TIME	15 /* 30s */
-
-#define FIRMWARE_VENDOR_CALL_CNT 8
-#define TEST_FIRMWARE_DETECT_VER 0xa0
 
 enum {
 	BUILT_IN = 0,
 	SDCARD,
 };
-
-#define GRIP_ERR(fmt, ...) pr_err("[GRIP] %s: "fmt, __func__, ##__VA_ARGS__)
-#define GRIP_INFO(fmt, ...) pr_info("[GRIP] %s: "fmt, __func__, ##__VA_ARGS__)
-#define GRIP_WARN(fmt, ...) pr_warn("[GRIP] %s: "fmt, __func__, ##__VA_ARGS__)
-
-extern int sensors_create_symlink(struct input_dev *inputdev);
-extern void sensors_remove_symlink(struct input_dev *inputdev);
-extern int sensors_register(struct device *dev, void *drvdata,
-	struct device_attribute *attributes[], char *name);
-extern void sensors_unregister(struct device *dev,
-	struct device_attribute *attributes[]);
 
 #endif /* LINUX_A96T3X6_H */

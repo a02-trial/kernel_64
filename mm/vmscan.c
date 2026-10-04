@@ -1205,6 +1205,7 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 
 			if (unlikely(PageTransHuge(page)))
 				flags |= TTU_SPLIT_HUGE_PMD;
+
 			if (!try_to_unmap(page, flags, sc->target_vma)) {
 				nr_unmap_fail++;
 				if (!was_swapbacked && PageSwapBacked(page))
@@ -2323,6 +2324,7 @@ static unsigned long last_mode_change;
 static bool am_app_launch = false;
 
 #define MEM_BOOST_MAX_TIME (5 * HZ) /* 5 sec */
+#define MEM_BOOST_THRESHOLD ((200 * 1024 * 1024) / (PAGE_SIZE))
 
 #ifdef CONFIG_SYSFS
 static ssize_t mem_boost_mode_show(struct kobject *kobj,
@@ -2346,10 +2348,6 @@ static ssize_t mem_boost_mode_store(struct kobject *kobj,
 
 	mem_boost_mode = mode;
 	last_mode_change = jiffies;
-#ifdef CONFIG_ION_RBIN_HEAP
-	if (mem_boost_mode == BOOST_HIGH)
-		wake_ion_rbin_heap_prereclaim();
-#endif
 
 	return count;
 }
@@ -2450,8 +2448,7 @@ static inline bool mem_boost_pgdat_wmark(struct pglist_data *pgdat)
 	return false;
 }
 
-#define MEM_BOOST_THRESHOLD ((300 * 1024 * 1024) / (PAGE_SIZE))
-inline bool need_memory_boosting(struct pglist_data *pgdat)
+bool need_memory_boosting(struct pglist_data *pgdat)
 {
 	bool ret;
 	unsigned long pgdatfile = node_page_state(pgdat, NR_ACTIVE_FILE) +
@@ -2667,13 +2664,10 @@ out:
 			/*
 			 * Scan types proportional to swappiness and
 			 * their relative recent reclaim efficiency.
-			 * Make sure we don't miss the last page on
-			 * the offlined memory cgroups because of a
-			 * round-off error.
+			 * Make sure we don't miss the last page
+			 * because of a round-off error.
 			 */
-			scan = mem_cgroup_online(memcg) ?
-			       div64_u64(scan * fraction[file], denominator) :
-			       DIV64_U64_ROUND_UP(scan * fraction[file],
+			scan = DIV64_U64_ROUND_UP(scan * fraction[file],
 						  denominator);
 			break;
 		case SCAN_FILE:
@@ -3807,7 +3801,9 @@ static int balance_pgdat(pg_data_t *pgdat, int order, int classzone_idx)
 		 * progress in reclaiming pages
 		 */
 		nr_reclaimed = sc.nr_reclaimed - nr_reclaimed;
-		if (raise_priority || !nr_reclaimed)
+		if (raise_priority || !nr_reclaimed ||
+		(need_memory_boosting(pgdat) &&
+		IS_ENABLED(CONFIG_CAMERA_COMPACT_GO)))
 			sc.priority--;
 	} while (sc.priority >= 1);
 
@@ -3872,7 +3868,12 @@ static void kswapd_try_to_sleep(pg_data_t *pgdat, int alloc_order, int reclaim_o
 		 * We have freed the memory, now we should compact it to make
 		 * allocation of the requested order possible.
 		 */
-		wakeup_kcompactd(pgdat, alloc_order, classzone_idx);
+
+		if (need_memory_boosting(pgdat) &&
+		IS_ENABLED(CONFIG_CAMERA_COMPACT_GO))
+			wakeup_kcompactd(pgdat, -1, classzone_idx);
+		else
+			wakeup_kcompactd(pgdat, alloc_order, classzone_idx);
 
 		remaining = schedule_timeout(HZ/10);
 

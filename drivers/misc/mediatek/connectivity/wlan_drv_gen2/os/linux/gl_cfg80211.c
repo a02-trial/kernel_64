@@ -852,7 +852,6 @@ static PARAM_SCAN_REQUEST_EXT_T rScanRequest;
 int mtk_cfg80211_scan(struct wiphy *wiphy, struct cfg80211_scan_request *request)
 {
 	P_GLUE_INFO_T prGlueInfo = NULL;
-	P_BSS_INFO_T prBssInfo = NULL;
 	WLAN_STATUS rStatus;
 	UINT_32 u4BufLen;
 	UINT_32 num_ssid = 0;
@@ -865,7 +864,6 @@ int mtk_cfg80211_scan(struct wiphy *wiphy, struct cfg80211_scan_request *request
 
 	prGlueInfo = (P_GLUE_INFO_T) wiphy_priv(wiphy);
 	ASSERT(prGlueInfo);
-	prBssInfo = &(prGlueInfo->prAdapter->rWifiVar.arBssInfo[NETWORK_TYPE_AIS_INDEX]);
 
 	if ((!prGlueInfo->prAdapter->fgEnCfg80211Scan) &&
 			(kalGetMediaStateIndicated(prGlueInfo) ==
@@ -932,8 +930,8 @@ int mtk_cfg80211_scan(struct wiphy *wiphy, struct cfg80211_scan_request *request
 			  request->ssids[0].ssid_len);
 	} else if (request->n_ssids == 2) {
 		DBGLOG(REQ, INFO, "mtk_cfg80211_scan,[0]ssid:%s, [0]ssid_len:%d [1]ssid:%s, [1]ssid_len:%d"
-		, HIDE(request->ssids[0].ssid), request->ssids[0].ssid_len
-		, HIDE(request->ssids[1].ssid), request->ssids[1].ssid_len);
+		, request->ssids[0].ssid, request->ssids[0].ssid_len
+		, request->ssids[1].ssid, request->ssids[1].ssid_len);
 		/*ssids[0]: specific ssid*/
 		/*ssids[1]: wildcard ssid*/
 
@@ -948,8 +946,6 @@ int mtk_cfg80211_scan(struct wiphy *wiphy, struct cfg80211_scan_request *request
 #endif
 	DBGLOG(REQ, INFO, "mtk_cfg80211_scan(), n_ssids=%d, num_ssid=(%u=>%u), wildcard=0x%X\n"
 			, request->n_ssids, old_num_ssid, num_ssid, wildcard_flag);
-
-	kalScanParseRandomMac(prBssInfo, request, rScanRequest.aucRandomMac);
 
 	if (request->ie_len > 0) {
 		rScanRequest.u4IELength = request->ie_len;
@@ -1039,14 +1035,9 @@ int mtk_cfg80211_connect(struct wiphy *wiphy, struct net_device *ndev, struct cf
 {
 	P_GLUE_INFO_T prGlueInfo = NULL;
 	WLAN_STATUS rStatus;
-#if (CFG_REFACTORY_PMKSA == 0)
-#if CFG_SUPPORT_OKC
-	UINT_16 u2PmkIdCnt = 0;
-#endif
-#endif
 	UINT_32 u4BufLen;
 	ENUM_PARAM_ENCRYPTION_STATUS_T eEncStatus;
-	ENUM_PARAM_AUTH_MODE_T eAuthMode = AUTH_MODE_OPEN;
+	ENUM_PARAM_AUTH_MODE_T eAuthMode;
 	UINT_32 cipher, u4AkmSuite = 0;
 	PARAM_CONNECT_T rNewSsid;
 	ENUM_PARAM_OP_MODE_T eOpMode;
@@ -1356,24 +1347,26 @@ int mtk_cfg80211_connect(struct wiphy *wiphy, struct net_device *ndev, struct cf
 #if (CFG_REFACTORY_PMKSA == 0)
 #if CFG_SUPPORT_OKC
 		wextSrchOkcAndPMKID(pucIEStart, sme->ie_len, (PUINT_8 *)&prDesiredIE, &prConnSettings->fgOkcEnabled);
+		if (prConnSettings->fgOkcEnabled) {
+			UINT_16 u2PmkIdCnt = 0;
 
-		if (prDesiredIE)
-			u2PmkIdCnt = *(PUINT_16)prDesiredIE;
-		DBGLOG(REQ, INFO, "u2PmkIdCnt %d\n", u2PmkIdCnt);
+			if (prDesiredIE)
+				u2PmkIdCnt = *(PUINT_16)prDesiredIE;
+			DBGLOG(REQ, TRACE, "u2PmkIdCnt %d\n", u2PmkIdCnt);
+			if (u2PmkIdCnt != 0 && sme->bssid && !EQUAL_MAC_ADDR("\x0\x0\x0\x0\x0\x0", sme->bssid) &&
+				IS_UCAST_MAC_ADDR(sme->bssid)) {
+				PARAM_PMKID_T rPmkid;
 
-		if (u2PmkIdCnt != 0 && sme->bssid && !EQUAL_MAC_ADDR("\x0\x0\x0\x0\x0\x0", sme->bssid) &&
-		    IS_UCAST_MAC_ADDR(sme->bssid)) {
-			PARAM_PMKID_T rPmkid;
-
-			rPmkid.u4Length = (UINT_32)(sizeof(rPmkid) | (1 << 31));
-			rPmkid.u4BSSIDInfoCount = 1;
-			kalMemCopy(rPmkid.arBSSIDInfo[0].arBSSID, sme->bssid, MAC_ADDR_LEN);
-			kalMemCopy(rPmkid.arBSSIDInfo[0].arPMKID, prDesiredIE+2, IW_PMKID_LEN);
-			rStatus = kalIoctl(prGlueInfo,
-				   wlanoidSetPmkid,
-				   (PVOID)&rPmkid, rPmkid.u4Length, FALSE, FALSE, FALSE, FALSE, &u4BufLen);
-			if (rStatus != WLAN_STATUS_SUCCESS)
-				DBGLOG(REQ, WARN, "failed to add OKC PMKID\n");
+				rPmkid.u4Length = (UINT_32)(sizeof(rPmkid) | (1 << 31));
+				rPmkid.u4BSSIDInfoCount = 1;
+				kalMemCopy(rPmkid.arBSSIDInfo[0].arBSSID, sme->bssid, MAC_ADDR_LEN);
+				kalMemCopy(rPmkid.arBSSIDInfo[0].arPMKID, prDesiredIE+2, IW_PMKID_LEN);
+				rStatus = kalIoctl(prGlueInfo,
+					   wlanoidSetPmkid,
+					   (PVOID)&rPmkid, rPmkid.u4Length, FALSE, FALSE, FALSE, FALSE, &u4BufLen);
+				if (rStatus != WLAN_STATUS_SUCCESS)
+					DBGLOG(REQ, WARN, "failed to add OKC PMKID\n");
+			}
 		}
 #endif
 #endif
@@ -1407,6 +1400,7 @@ int mtk_cfg80211_connect(struct wiphy *wiphy, struct net_device *ndev, struct cf
 		break;
 	}
 	DBGLOG(REQ, INFO, "MFP=%d\n", prGlueInfo->rWpaInfo.u4Mfp);
+	DBGLOG(REQ, INFO, "RSN MFP Cap=%d\n", prGlueInfo->rWpaInfo.ucRSNMfpCap);
 #endif
 
 	rStatus = kalIoctl(prGlueInfo,
@@ -2234,7 +2228,6 @@ mtk_cfg80211_sched_scan_start(IN struct wiphy *wiphy,
 			      IN struct net_device *ndev, IN struct cfg80211_sched_scan_request *request)
 {
 	P_GLUE_INFO_T prGlueInfo = NULL;
-	P_BSS_INFO_T prBssInfo = NULL;
 	WLAN_STATUS rStatus;
 	UINT_32 i, u4BufLen;
 	P_PARAM_SCHED_SCAN_REQUEST prSchedScanRequest;
@@ -2244,10 +2237,10 @@ mtk_cfg80211_sched_scan_start(IN struct wiphy *wiphy,
 
 	DBGLOG(REQ, INFO, "--> %s() n_ssid:%d , match_set:%d\n", __func__, request->n_ssids, request->n_match_sets);
 
-	prGlueInfo = (P_GLUE_INFO_T) wiphy_priv(wiphy);
-	ASSERT(prGlueInfo);
 
-	prBssInfo = &(prGlueInfo->prAdapter->rWifiVar.arBssInfo[NETWORK_TYPE_AIS_INDEX]);
+	prGlueInfo = (P_GLUE_INFO_T) wiphy_priv(wiphy);
+
+	ASSERT(prGlueInfo);
 
 	if ((!prGlueInfo->prAdapter->fgEnCfg80211Scan) &&
 			(kalGetMediaStateIndicated(prGlueInfo) ==
@@ -2287,7 +2280,7 @@ mtk_cfg80211_sched_scan_start(IN struct wiphy *wiphy,
 	/*passed in the probe_reqs in active scans*/
 	for (i = 0; i < request->n_ssids; i++) {
 		if (request->ssids && (&(request->ssids[i]))) {
-			DBGLOG(SCN, TRACE, "ssids : (%d)[%s]\n", i, HIDE(request->ssids[i].ssid));
+			DBGLOG(SCN, TRACE, "ssids : (%d)[%s]\n", i, request->ssids[i].ssid);
 			/*driver ingored the null ssid*/
 			if (request->ssids[i].ssid_len == 0)
 				DBGLOG(SCN, WARN, "ignore the null ssid, index:%d\n", i);
@@ -2301,18 +2294,9 @@ mtk_cfg80211_sched_scan_start(IN struct wiphy *wiphy,
 	}
 	prSchedScanRequest->u4SsidNum = num;
 	num = 0;
-
-
-	if (kalSchedScanParseRandomMac(prBssInfo, request,
-		prSchedScanRequest->aucRandomMac, prSchedScanRequest->aucRandomMacMask)) {
-		prSchedScanRequest->ucScnFuncMask |= ENUM_SCN_RANDOM_MAC_EN;
-	}
-
-
 	for (i = 0; i < request->n_match_sets; i++) {
 		if (request->match_sets && (&(request->match_sets[i]))) {
-			DBGLOG(SCN, TRACE, "match : (%d)[%s]\n", i,
-				HIDE(request->match_sets[i].ssid.ssid));
+			DBGLOG(SCN, TRACE, "match : (%d)[%s]\n", i, request->match_sets[i].ssid.ssid);
 			/*driver ingored the null ssid*/
 			if (request->match_sets[i].ssid.ssid_len == 0)
 				DBGLOG(SCN, WARN, "ignore the null ssid, index:%d\n", i);
@@ -3637,7 +3621,7 @@ INT_32 mtk_cfg80211_process_str_cmd(P_GLUE_INFO_T prGlueInfo, PUINT_8 cmd, INT_3
 		if (len > 16 && (kalStrniCmp(cmd+16, " SSID=", 6) == 0)) {
 			pucSSID = cmd + 22;
 			u4SSIDLen = len - 22;
-			DBGLOG(REQ, INFO, "cmd=%s, ssid len %u, ssid=%s\n", cmd, u4SSIDLen, HIDE(pucSSID));
+			DBGLOG(REQ, INFO, "cmd=%s, ssid len %u, ssid=%s\n", cmd, u4SSIDLen, pucSSID);
 		}
 		rStatus = kalIoctl(prGlueInfo, wlanoidSendNeighborRequest,
 				   (PVOID)pucSSID, u4SSIDLen, FALSE, FALSE, TRUE, FALSE, &u4SetInfoLen);

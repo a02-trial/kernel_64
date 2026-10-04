@@ -3,6 +3,12 @@
 #include <linux/of.h>
 #include <linux/of_address.h>
 #include <linux/of_irq.h>
+//#include <linux/mm.h>
+#include <linux/types.h>
+#include <linux/stat.h>
+#include <linux/unistd.h>
+#include <linux/slab.h>
+#include <linux/vmalloc.h>
 
 #include "imgsensor_vendor.h"
 #include "imgsensor_vendor_specific.h"
@@ -40,8 +46,6 @@ static int parse_sysfs_caminfo(struct device_node *np,
 		camera_info[position].sub_sensor_id = 0;
 		camera_info[position].includes_sub = false;
 	}
-	of_property_read_u32(np, "afcal_type", &camera_info[position].afcal_type);
-	of_property_read_u32(np, "use_adaptive_mipi", &camera_info[position].use_adaptive_mipi);
 
 	return 0;
 }
@@ -60,10 +64,6 @@ int cam_info_probe(struct device_node *np) {
 	bool skip_cal_loading;
 
 	specific = (struct imgsensor_vendor_specific *)kmalloc(sizeof(struct imgsensor_vendor_specific), GFP_KERNEL);
-	if (specific == NULL) {
-		pr_err("%s: Memory allocation failed for specific", __func__);
-		return -ENOMEM;
-	}
 
 	vendor = of_find_node_by_name(np, "vendor");
 	ret = of_property_read_u32(vendor, "max_camera_num", &max_camera_num);
@@ -124,11 +124,6 @@ int cam_info_probe(struct device_node *np) {
 	specific->use_dualcam_set_cal = of_property_read_bool(vendor, "use_dualcam_set_cal");
 	if (specific->use_dualcam_set_cal == true)
 		pr_info("use_dualcam_set_cal\n");
-
-	specific->check_final_cam_module = of_property_read_bool(vendor, "check_final_cam_module");
-	if (!specific->check_final_cam_module)
-		pr_info("[%s] Skip: check_final_cam_module", __func__);
-
 	get_specific(&specific);
 
 	imgsensor_get_common_cam_info(&common_camera_infos);
@@ -148,55 +143,52 @@ int cam_info_probe(struct device_node *np) {
 
 void imgsensor_sec_init_err_cnt(struct cam_hw_param *hw_param)
 {
-        if (hw_param) {
-                memset(hw_param, 0, sizeof(struct cam_hw_param));
-        }
+	if (hw_param)
+		memset(hw_param, 0, sizeof(struct cam_hw_param));
 }
 
 void imgsensor_sec_get_hw_param(struct cam_hw_param **hw_param, u32 position)
 {
-        switch (position) {
-                case SENSOR_POSITION_REAR:
-                        *hw_param = &cam_hwparam_collector.rear_hwparam;
-                        break;
-                case SENSOR_POSITION_REAR2:
-                        *hw_param = &cam_hwparam_collector.rear2_hwparam;
-                        break;
-                case SENSOR_POSITION_REAR3:
-                        *hw_param = &cam_hwparam_collector.rear3_hwparam;
-                        break;
-                case SENSOR_POSITION_REAR4:
-                        *hw_param = &cam_hwparam_collector.rear4_hwparam;
-                        break;
-                case SENSOR_POSITION_FRONT:
-                        *hw_param = &cam_hwparam_collector.front_hwparam;
-                        break;
-                default:
-			pr_err("Sensor Position(%d) not found",position);
-                        return;
-        }
+	switch (position) {
+	case SENSOR_POSITION_REAR:
+		*hw_param = &cam_hwparam_collector.rear_hwparam;
+		break;
+	case SENSOR_POSITION_REAR2:
+		*hw_param = &cam_hwparam_collector.rear2_hwparam;
+		break;
+	case SENSOR_POSITION_REAR3:
+		*hw_param = &cam_hwparam_collector.rear3_hwparam;
+		break;
+	case SENSOR_POSITION_REAR4:
+		*hw_param = &cam_hwparam_collector.rear4_hwparam;
+		break;
+	case SENSOR_POSITION_FRONT:
+		*hw_param = &cam_hwparam_collector.front_hwparam;
+		break;
+	default:
+		pr_err("Sensor Position(%d) not found", position);
+		return;
+	}
 }
 
 bool imgsensor_sec_is_valid_moduleid(char* moduleid)
 {
-        int i = 0;
+	int i = 0;
 
-        if (moduleid == NULL || strlen(moduleid) < 5) {
-                goto err;
-        }
+	if (moduleid == NULL || strlen(moduleid) < 5)
+		goto err;
 
-        for (i = 0; i < 5; i++)
-        {
-                if (!((moduleid[i] > 47 && moduleid[i] < 58) || // 0 to 9
-                        (moduleid[i] > 64 && moduleid[i] < 91))) {  // A to Z
-                        goto err;
-                }
-        }
+	for (i = 0; i < 5; i++) {
+		if (!((moduleid[i] > 47 && moduleid[i] < 58) || // 0 to 9
+			(moduleid[i] > 64 && moduleid[i] < 91))) {  // A to Z
+			goto err;
+		}
+	}
 
-        return true;
+	return true;
 
 err:
-        pr_err("invalid moduleid\n");
-        return false;
+	pr_err("invalid moduleid\n");
+	return false;
 }
 #endif

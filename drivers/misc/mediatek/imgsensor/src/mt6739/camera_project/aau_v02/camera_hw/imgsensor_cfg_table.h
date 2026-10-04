@@ -11,7 +11,6 @@
  * GNU General Public License for more details.
  */
 #include "imgsensor_common.h"
-#include "imgsensor_platform.h"
 
 #include <linux/atomic.h>
 

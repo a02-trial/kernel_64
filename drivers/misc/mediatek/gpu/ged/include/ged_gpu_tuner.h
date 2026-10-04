@@ -10,7 +10,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
  */
-
 #ifndef __GED_GPU_TUNER_H__
 
 #define __GED_GPU_TUNER_H__
@@ -19,7 +18,7 @@
 #include <linux/kernel.h>
 #include <ged_bridge.h>
 #include "ged_type.h"
-#include <mt-plat/mtk_gpu_utility.h>
+#include "mtk_gpu_utility.h"
 
 #if defined(__cplusplus)
 extern "C" {

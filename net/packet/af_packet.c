@@ -593,8 +593,7 @@ static int prb_calc_retire_blk_tmo(struct packet_sock *po,
 			msec = 1;
 			div = ecmd.base.speed / 1000;
 		}
-	} else
-		return DEFAULT_PRB_RETIRE_TOV;
+	}
 
 	mbits = (blk_size_in_bytes * 8) / (1024 * 1024);
 
@@ -1337,21 +1336,15 @@ static void packet_sock_destruct(struct sock *sk)
 
 static bool fanout_flow_is_huge(struct packet_sock *po, struct sk_buff *skb)
 {
-	u32 *history = po->rollover->history;
-	u32 victim, rxhash;
+	u32 rxhash;
 	int i, count = 0;
 
 	rxhash = skb_get_hash(skb);
 	for (i = 0; i < ROLLOVER_HLEN; i++)
-		if (READ_ONCE(history[i]) == rxhash)
+		if (po->rollover->history[i] == rxhash)
 			count++;
 
-	victim = prandom_u32() % ROLLOVER_HLEN;
-
-	/* Avoid dirtying the cache line if possible */
-	if (READ_ONCE(history[victim]) != rxhash)
-		WRITE_ONCE(history[victim], rxhash);
-
+	po->rollover->history[prandom_u32() % ROLLOVER_HLEN] = rxhash;
 	return count > (ROLLOVER_HLEN >> 1);
 }
 
@@ -2232,6 +2225,13 @@ static int tpacket_rcv(struct sk_buff *skb, struct net_device *dev,
 			skb_pull(skb, skb_network_offset(skb));
 		}
 	}
+
+	//gro on: clatd checksum fail patch
+	//if is nornal and gro packet, not calculate tcp's checksum
+	if (skb->ip_summed == CHECKSUM_UNNECESSARY ||
+	    (NAPI_GRO_CB(skb)->count > 1 &&
+	    (skb->dev && skb->dev->features & (1 << NETIF_F_GRO_BIT))))
+		status |= TP_STATUS_CSUM_VALID;
 
 	snaplen = skb->len;
 
@@ -3432,29 +3432,20 @@ static int packet_recvmsg(struct socket *sock, struct msghdr *msg, size_t len,
 	sock_recv_ts_and_drops(msg, sk, skb);
 
 	if (msg->msg_name) {
-		int copy_len;
-
 		/* If the address length field is there to be filled
 		 * in, we fill it in now.
 		 */
 		if (sock->type == SOCK_PACKET) {
 			__sockaddr_check_size(sizeof(struct sockaddr_pkt));
 			msg->msg_namelen = sizeof(struct sockaddr_pkt);
-			copy_len = msg->msg_namelen;
 		} else {
 			struct sockaddr_ll *sll = &PACKET_SKB_CB(skb)->sa.ll;
 
 			msg->msg_namelen = sll->sll_halen +
 				offsetof(struct sockaddr_ll, sll_addr);
-			copy_len = msg->msg_namelen;
-			if (msg->msg_namelen < sizeof(struct sockaddr_ll)) {
-				memset(msg->msg_name +
-				       offsetof(struct sockaddr_ll, sll_addr),
-				       0, sizeof(sll->sll_addr));
-				msg->msg_namelen = sizeof(struct sockaddr_ll);
-			}
 		}
-		memcpy(msg->msg_name, &PACKET_SKB_CB(skb)->sa, copy_len);
+		memcpy(msg->msg_name, &PACKET_SKB_CB(skb)->sa,
+		       msg->msg_namelen);
 	}
 
 	if (pkt_sk(sk)->auxdata) {
@@ -4470,10 +4461,9 @@ static int packet_set_ring(struct sock *sk, union tpacket_req_u *req_u,
 	}
 
 out_free_pg_vec:
-	if (pg_vec) {
-		bitmap_free(rx_owner_map);
+	bitmap_free(rx_owner_map);
+	if (pg_vec)
 		free_pg_vec(pg_vec, order, req->tp_block_nr);
-	}
 out:
 	return err;
 }

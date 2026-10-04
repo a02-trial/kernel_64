@@ -22,7 +22,6 @@
 #include "core/iwservice.h"
 #include "core/log.h"
 #include "core/notifier.h"
-#include "core/subsystem.h"
 #include "core/sysdep.h"
 
 static DECLARE_WAIT_QUEUE_HEAD(tz_hotplug_wq);
@@ -199,7 +198,7 @@ static struct notifier_block tz_hotplug_post_smc_notifier = {
 	.notifier_call = tz_hotplug_post_smc_call,
 };
 
-int tz_hotplug_init(void)
+static int __init tz_hotplug_init(void)
 {
 	int rc;
 
@@ -234,4 +233,4 @@ fini_notifier_registration_failed:
 	return rc;
 }
 
-tzdev_early_initcall(tz_hotplug_init);
+early_initcall(tz_hotplug_init);

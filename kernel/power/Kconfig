@@ -325,3 +325,4 @@ config SEC_PM
 	default n
 	help
 	  Samsung PowerManagement Feature.
+

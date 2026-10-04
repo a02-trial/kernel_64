@@ -22,24 +22,19 @@
  * Support IC : IST4070
  * Release : 2016.11.15 by Drake
  */
+#define BRINGUP		0
+#define POCKET_MODE	0
+#include <linux/i2c.h>
 
-//#undef CONFIG_VBUS_NOTIFIER
-#undef CONFIG_MUIC_NOTIFIER
-#undef CONFIG_USB_TYPEC_MANAGER_NOTIFIER
-
-
-#if defined(CONFIG_VBUS_NOTIFIER) || defined(CONFIG_MUIC_NOTIFIER) || defined(CONFIG_USB_TYPEC_MANAGER_NOTIFIER)
-#include <linux/notifier.h>
-#endif
-#if defined(CONFIG_MUIC_NOTIFIER)
-#include <linux/muic/common/muic.h>
-#include <linux/muic/common/muic_notifier.h>
-#endif
-#if defined(CONFIG_VBUS_NOTIFIER)
+#if BRINGUP
+#if defined(CONFIG_VBUS_NOTIFIER) || defined(CONFIG_MUIC_NOTIFIER)
+#include <linux/muic/muic.h>
+#include <linux/muic/muic_notifier.h>
 #include <linux/vbus_notifier.h>
 #endif
 #if defined(CONFIG_USB_TYPEC_MANAGER_NOTIFIER)
 #include <linux/usb/typec/usb_typec_manager_notifier.h>
+#endif
 #endif
 
 #include <linux/input/sec_cmd.h>
@@ -369,7 +364,6 @@ struct ts_test_result {
 #define IST40XX_SPONGE_UTC		(0x10)
 #define IST40XX_SPONGE_FOD_PROPERTY	(0x14)
 #define IST40XX_SPONGE_FOD_INFO		(0x15)
-
 #define IST40XX_SPONGE_LP_DUMP		(0xF0)
 
 #define IST40XX_SPONGE_N_FODVI_BASE	IST40XX_DA_ADDR(0x000042E0)
@@ -381,24 +375,11 @@ struct ts_test_result {
 
 /* interrupt macro */
 #define IST40XX_TOUCH_FRAME_CNT		(4)
-#define PARSE_POCKET_STATUS(n)		((n >> 0) & 0x1)
-#define PARSE_HOVER_LEVEL(n)		((n >> 1) & 0x7)
-#define PARSE_ZERO_PREVENTION(n)	((n >> 11) & 0x1)
-#define PARSE_TOUCH_CNT(n)		((n >> 12) & 0xF)
-#define PARSE_TOUCH_SIG(n)		((n >> 24) & 0xFF)
-
-/* Type */
-typedef enum {
-    TYPE_NORMAL = 0,
-	TYPE_HOVER	= 1,
-	TTPE_COVER	= 2,
-    TYPE_GLOVE  = 3,
-    TYPE_STYLUS	= 4,
-    TYPE_PALM   = 5,
-    TYPE_WET	= 6,
-    TYPE_PROXIMITY	= 7,
-    TYPE_JIG	=8,
-} TOUCH_TYPE;
+#define PARSE_POCKET_STATUS(n)      ((n >> 0) & 0x1)
+#define PARSE_HOVER_LEVEL(n)        ((n >> 1) & 0x7)
+#define PARSE_ZERO_PREVENTION(n)    ((n >> 11) & 0x1)
+#define PARSE_TOUCH_CNT(n)		    ((n >> 12) & 0xF)
+#define PARSE_TOUCH_SIG(n)		    ((n >> 24) & 0xFF)
 
 /* mode */
 typedef enum {
@@ -465,7 +446,6 @@ enum ist40xx_write_commands {
 	eHCOM_SET_FOD_DISABLE		= 0x25,
 	eHCOM_SET_SPONGE_FEATURE	= 0x25,
 	eHCOM_SET_AOD_RECT		= 0x26,
-	eHCOM_SET_FOD_RECT		= 0x27,
 
 	eHCOM_RUN_RAMCODE		= 0x30,
 	eHCOM_RUN_CAL_AUTO		= 0x31,
@@ -700,7 +680,6 @@ struct ist40xx_dt_data {
 	int irq_gpio;
 	int power_gpio;
 	bool is_power_by_gpio;
-	int fw_det_gpio;
 	const char *regulator_avdd;
 	int fw_bin;
 	const char *ic_version;
@@ -754,25 +733,20 @@ struct ist40xx_data {
 	struct ts_event_coordinate fingers[IST40XX_MAX_FINGER_ID];
 	bool tsp_touched[IST40XX_MAX_FINGER_ID];
 	u32 move_count[IST40XX_MAX_FINGER_ID];
-	u8 prev_type[IST40XX_MAX_FINGER_ID];
 	u8 hover;
 	u8 noise;
 	u8 pocket;
-	bool force_pocket_event;
 	struct delayed_work work_read_info;
 	bool info_work_done;
 	u32 disassemble_count;
-	int enabled;
-
-	char pos[5];
-	struct delayed_work work_print_info;
-	int print_info_cnt_open;
-	int print_info_cnt_release;
-
 #ifdef CONFIG_TOUCHSCREEN_DUMP_MODE
 	struct delayed_work ghost_check;
 	u8 tsp_dump_lock;
 #endif
+	u32 gap_spec;
+	u32 selftest_addr;
+	u32 selftest_tx_addr;
+	u32 selftest_rx_addr;
 	u32 cdc_addr;
 	u32 self_cdc_addr;
 	u32 prox_cdc_addr;
@@ -795,8 +769,6 @@ struct ist40xx_data {
 	int report_rate;
 	int idle_rate;
 	u8 lpm_mode;
-	u8 fod_lp_mode;
-	u16 fod_rect_data[4];
 	u16 rect_data[4];
 	u16 rejectzone_t;
 	u16 rejectzone_b;
@@ -825,13 +797,13 @@ struct ist40xx_data {
 	int rec_type;
 	char *rec_file_name;
 	u32 recording_scancnt;
-	u32 rec_prox[IST40XX_MAX_SELF_NODE_NUM];
 	struct delayed_work work_reset_check;
 #ifdef IST40XX_NOISE_MODE
 	struct delayed_work work_noise_protect;
 #else
 	struct delayed_work work_force_release;
 #endif
+#if BRINGUP
 #ifdef CONFIG_MUIC_NOTIFIER
 	struct notifier_block muic_nb;
 #endif
@@ -840,6 +812,7 @@ struct ist40xx_data {
 #endif
 #ifdef CONFIG_VBUS_NOTIFIER
 	struct notifier_block vbus_nb;
+#endif
 #endif
 	struct ts_test_result test_result;
 
@@ -880,8 +853,6 @@ struct ist40xx_data {
 	bool prox_power_off;
 	int ed_enable;
 	int pocket_enable;
-	int debug_string;
-	u32 palm_flag;
 
 };
 
@@ -914,7 +885,9 @@ void ist40xx_set_glove_mode(int mode);
 int ist40xx_set_rejectzone_mode(int mode, u16 top, u16 bottom);
 void ist40xx_set_sensitivity_mode(int mode);
 void ist40xx_set_touchable_mode(int mode);
+#if POCKET_MODE
 void ist40xx_set_pocket_mode(int mode);
+#endif
 void ist40xx_start(struct ist40xx_data *data);
 
 int ist40xx_read_reg(struct i2c_client *client, u32 reg, u32 *buf);
@@ -971,10 +944,5 @@ extern unsigned int lpcharge;
 irqreturn_t ist40xx_irq_thread(int irq, void *ptr);
 irqreturn_t ist40xx_filter_interrupt(struct ist40xx_data *data);
 void ist40xx_secure_touch_stop(struct ist40xx_data *data, int blocking);
-#endif
-
-#ifndef CONFIG_SAMSUNG_PRODUCT_SHIP
-int ist40xx_create_vendor_sysfs(struct ist40xx_data *data);
-void ist40xx_remove_vendor_sysfs(struct ist40xx_data *data);
 #endif
 #endif  /* __IST40XX_H__ */

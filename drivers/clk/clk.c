@@ -732,8 +732,7 @@ static void clk_core_disable_unprepare(struct clk_core *core)
 }
 
 #if (!defined(CONFIG_MACH_MT6771) && !defined(CONFIG_MACH_MT6739) &&	\
-	!defined(CONFIG_MACH_MT6785) && !defined(CONFIG_MACH_MT6768) &&	\
-	!defined(CONFIG_MACH_MT6873))
+	!defined(CONFIG_MACH_MT6785) && !defined(CONFIG_MACH_MT6768))
 static void clk_unprepare_unused_subtree(struct clk_core *core)
 {
 	struct clk_core *child;
@@ -812,8 +811,7 @@ __setup("clk_ignore_unused", clk_ignore_unused_setup);
 static int clk_disable_unused(void)
 {
 #if (!defined(CONFIG_MACH_MT6771) && !defined(CONFIG_MACH_MT6739) &&	\
-	!defined(CONFIG_MACH_MT6785) && !defined(CONFIG_MACH_MT6768) &&	\
-	!defined(CONFIG_MACH_MT6873))
+	!defined(CONFIG_MACH_MT6785) && !defined(CONFIG_MACH_MT6768))
 	struct clk_core *core;
 #endif
 
@@ -823,8 +821,7 @@ static int clk_disable_unused(void)
 	}
 
 #if (!defined(CONFIG_MACH_MT6771) && !defined(CONFIG_MACH_MT6739) &&	\
-	!defined(CONFIG_MACH_MT6785) && !defined(CONFIG_MACH_MT6768) &&	\
-	!defined(CONFIG_MACH_MT6873))
+	!defined(CONFIG_MACH_MT6785) && !defined(CONFIG_MACH_MT6768))
 	clk_prepare_lock();
 
 	hlist_for_each_entry(core, &clk_root_list, child_node)
@@ -2234,16 +2231,18 @@ static int clk_debug_create_one(struct clk_core *core, struct dentry *pdentry)
 
 	core->dentry = d;
 
-	d = debugfs_create_ulong("clk_rate", 0444, core->dentry, &core->rate);
+	d = debugfs_create_u32("clk_rate", S_IRUGO, core->dentry,
+			(u32 *)&core->rate);
 	if (!d)
 		goto err_out;
 
-	d = debugfs_create_ulong("clk_accuracy", 0444, core->dentry,
-				 &core->accuracy);
+	d = debugfs_create_u32("clk_accuracy", S_IRUGO, core->dentry,
+			(u32 *)&core->accuracy);
 	if (!d)
 		goto err_out;
 
-	d = debugfs_create_u32("clk_phase", 0444, core->dentry, &core->phase);
+	d = debugfs_create_u32("clk_phase", S_IRUGO, core->dentry,
+			(u32 *)&core->phase);
 	if (!d)
 		goto err_out;
 
@@ -2252,23 +2251,23 @@ static int clk_debug_create_one(struct clk_core *core, struct dentry *pdentry)
 	if (!d)
 		goto err_out;
 
-	d = debugfs_create_u32("clk_prepare_count", 0444, core->dentry,
-			       &core->prepare_count);
+	d = debugfs_create_u32("clk_prepare_count", S_IRUGO, core->dentry,
+			(u32 *)&core->prepare_count);
 	if (!d)
 		goto err_out;
 
-	d = debugfs_create_u32("clk_enable_count", 0444, core->dentry,
-			       &core->enable_count);
+	d = debugfs_create_u32("clk_enable_count", S_IRUGO, core->dentry,
+			(u32 *)&core->enable_count);
 	if (!d)
 		goto err_out;
 
-	d = debugfs_create_u32("clk_notifier_count", 0444, core->dentry,
-			       &core->notifier_count);
+	d = debugfs_create_u32("clk_notifier_count", S_IRUGO, core->dentry,
+			(u32 *)&core->notifier_count);
 	if (!d)
 		goto err_out;
 
 	if (core->num_parents > 1) {
-		d = debugfs_create_file("clk_possible_parents", 0444,
+		d = debugfs_create_file("clk_possible_parents", S_IRUGO,
 				core->dentry, core, &possible_parents_fops);
 		if (!d)
 			goto err_out;
@@ -2364,22 +2363,22 @@ static int __init clk_debug_init(void)
 	if (!rootdir)
 		return -ENOMEM;
 
-	d = debugfs_create_file("clk_summary", 0444, rootdir, &all_lists,
+	d = debugfs_create_file("clk_summary", S_IRUGO, rootdir, &all_lists,
 				&clk_summary_fops);
 	if (!d)
 		return -ENOMEM;
 
-	d = debugfs_create_file("clk_dump", 0444, rootdir, &all_lists,
+	d = debugfs_create_file("clk_dump", S_IRUGO, rootdir, &all_lists,
 				&clk_dump_fops);
 	if (!d)
 		return -ENOMEM;
 
-	d = debugfs_create_file("clk_orphan_summary", 0444, rootdir,
+	d = debugfs_create_file("clk_orphan_summary", S_IRUGO, rootdir,
 				&orphan_list, &clk_summary_fops);
 	if (!d)
 		return -ENOMEM;
 
-	d = debugfs_create_file("clk_orphan_dump", 0444, rootdir,
+	d = debugfs_create_file("clk_orphan_dump", S_IRUGO, rootdir,
 				&orphan_list, &clk_dump_fops);
 	if (!d)
 		return -ENOMEM;
@@ -2542,17 +2541,11 @@ static int __clk_core_init(struct clk_core *core)
 	if (core->flags & CLK_IS_CRITICAL) {
 		unsigned long flags;
 
-		ret = clk_core_prepare(core);
-		if (ret)
-			goto out;
+		clk_core_prepare(core);
 
 		flags = clk_enable_lock();
-		ret = clk_core_enable(core);
+		clk_core_enable(core);
 		clk_enable_unlock(flags);
-		if (ret) {
-			clk_core_unprepare(core);
-			goto out;
-		}
 	}
 
 	/*
@@ -3357,6 +3350,42 @@ unsigned int of_clk_get_parent_count(struct device_node *np)
 	return count;
 }
 EXPORT_SYMBOL_GPL(of_clk_get_parent_count);
+
+#ifdef CONFIG_SEC_PM
+static void clock_debug_print_clock(struct clk_core *c, int level)
+{
+	struct clk_core *child;
+
+	if (!c || !c->enable_count)
+		return ;
+
+	pr_info("%*s%-*s %11d %12d %11lu %10lu %-3d\n",
+		   level * 3 + 1, "",
+		   30 - level * 3, c->name,
+		   c->enable_count, c->prepare_count, clk_core_get_rate(c),
+		   clk_core_get_accuracy(c), clk_core_get_phase(c));
+
+	hlist_for_each_entry(child, &c->children, child_node)
+		clock_debug_print_clock(child, level + 1);
+}
+
+void clock_debug_print_enabled(void)
+{
+	struct clk_core *c;
+	struct hlist_head **lists = (struct hlist_head **)all_lists;
+
+	pr_info("   clock                         enable_cnt  prepare_cnt        rate   accuracy   phase\n");
+	pr_info("----------------------------------------------------------------------------------------\n");
+
+	clk_prepare_lock();
+
+	for (; *lists; lists++)
+		hlist_for_each_entry(c, *lists, child_node)
+			clock_debug_print_clock(c, 0);
+
+	clk_prepare_unlock();
+}
+#endif
 
 const char *of_clk_get_parent_name(struct device_node *np, int index)
 {

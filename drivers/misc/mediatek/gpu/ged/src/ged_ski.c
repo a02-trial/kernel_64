@@ -17,15 +17,23 @@
 
 static struct kobject *gpu_kobj;
 
-ssize_t gpu_available_governor_show(struct kobject *kobj,
+define_one_global_ro(gpu_available_governor);
+define_one_global_ro(gpu_busy);
+define_one_global_ro(gpu_clock);
+define_one_global_ro(gpu_freq_table);
+define_one_global_ro(gpu_governor);
+define_one_global_ro(gpu_max_clock);
+define_one_global_ro(gpu_min_clock);
+define_one_global_ro(gpu_model);
+define_one_global_ro(gpu_tmu);
+
+ssize_t show_gpu_available_governor(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
 	return scnprintf(buf, PAGE_SIZE, "Default\n");
 }
 
-static KOBJ_ATTR_RO(gpu_available_governor);
-
-ssize_t gpu_busy_show(struct kobject *kobj,
+ssize_t show_gpu_busy(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
 	unsigned int gpu_loading = 0;
@@ -35,9 +43,7 @@ ssize_t gpu_busy_show(struct kobject *kobj,
 	return scnprintf(buf, PAGE_SIZE, "%u %%\n", gpu_loading);
 }
 
-static KOBJ_ATTR_RO(gpu_busy);
-
-ssize_t gpu_clock_show(struct kobject *kobj,
+ssize_t show_gpu_clock(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
 	unsigned int gpu_freq = 0;
@@ -47,9 +53,7 @@ ssize_t gpu_clock_show(struct kobject *kobj,
 	return scnprintf(buf, PAGE_SIZE, "%u\n", gpu_freq);
 }
 
-static KOBJ_ATTR_RO(gpu_clock);
-
-ssize_t gpu_freq_table_show(struct kobject *kobj,
+ssize_t show_gpu_freq_table(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
 	struct mt_gpufreq_power_table_info *power_table = NULL;
@@ -63,7 +67,11 @@ ssize_t gpu_freq_table_show(struct kobject *kobj,
 
 	power_table = pass_gpu_table_to_eara();
 	table_num = mt_gpufreq_get_dvfs_table_num();
+#ifdef CONFIG_MACH_MT6739
+	max_opp_idx = 0;
+#else
 	max_opp_idx = mt_gpufreq_get_seg_max_opp_index();
+#endif
 
 	for (idx = max_opp_idx; count < table_num; count++) {
 		length = scnprintf(temp + pos, 1024 - pos,
@@ -74,17 +82,13 @@ ssize_t gpu_freq_table_show(struct kobject *kobj,
 	return scnprintf(buf, PAGE_SIZE, "%s\n", temp);
 }
 
-static KOBJ_ATTR_RO(gpu_freq_table);
-
-ssize_t gpu_governor_show(struct kobject *kobj,
+ssize_t show_gpu_governor(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
 	return scnprintf(buf, PAGE_SIZE, "Default\n");
 }
 
-static KOBJ_ATTR_RO(gpu_governor);
-
-static ssize_t gpu_max_clock_show(struct kobject *kobj,
+ssize_t show_gpu_max_clock(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
 	unsigned int max_clock = 0;
@@ -98,47 +102,7 @@ static ssize_t gpu_max_clock_show(struct kobject *kobj,
 	return scnprintf(buf, PAGE_SIZE, "%u\n", max_clock);
 }
 
-static ssize_t gpu_max_clock_store(struct kobject *kobj,
-		struct kobj_attribute *attr, const char *buf, size_t count)
-{
-	int max_freq = 0;
-	struct mt_gpufreq_power_table_info *power_table = NULL;
-	unsigned int table_num = 0;
-	unsigned int max_opp_idx = 0;
-	int idx = 0;
-	int index_count = 0;
-
-	char acBuffer[GED_SYSFS_MAX_BUFF_SIZE];
-
-	if ((count > 0) && (count < GED_SYSFS_MAX_BUFF_SIZE)) {
-		if (scnprintf(acBuffer, GED_SYSFS_MAX_BUFF_SIZE, "%s", buf)) {
-			if (kstrtoint(acBuffer, 0, &max_freq) == 0) {
-				if (max_freq <= 0)
-					return -EINVAL;
-
-				power_table = pass_gpu_table_to_eara();
-				table_num = mt_gpufreq_get_dvfs_table_num();
-				max_opp_idx = mt_gpufreq_get_seg_max_opp_index();
-
-				for (idx = max_opp_idx; index_count < table_num; index_count++) {
-					if (max_freq ==
-					    power_table[idx + index_count].gpufreq_khz) {
-						mtk_custom_upbound_gpu_freq(index_count);
-						return count;
-					}
-				}
-
-				GED_LOGE("SKI: set max clock failed (%d not support)!\n", max_freq);
-			}
-		}
-	}
-
-	return -EINVAL;
-}
-
-static KOBJ_ATTR_RW(gpu_max_clock);
-
-ssize_t gpu_min_clock_show(struct kobject *kobj,
+ssize_t show_gpu_min_clock(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
 	unsigned long min_clock = 0;
@@ -152,64 +116,17 @@ ssize_t gpu_min_clock_show(struct kobject *kobj,
 	return scnprintf(buf, PAGE_SIZE, "%lu\n", min_clock);
 }
 
-static ssize_t gpu_min_clock_store(struct kobject *kobj,
-		struct kobj_attribute *attr, const char *buf, size_t count)
-{
-	int min_freq = 0;
-	struct mt_gpufreq_power_table_info *power_table = NULL;
-	unsigned int table_num = 0;
-	unsigned int max_opp_idx = 0;
-	int idx = 0;
-	int index_count = 0;
-
-	char acBuffer[GED_SYSFS_MAX_BUFF_SIZE];
-
-	if ((count > 0) && (count < GED_SYSFS_MAX_BUFF_SIZE)) {
-		if (scnprintf(acBuffer, GED_SYSFS_MAX_BUFF_SIZE, "%s", buf)) {
-			if (kstrtoint(acBuffer, 0, &min_freq) == 0) {
-				if (min_freq <= 0)
-					return -EINVAL;
-
-				power_table = pass_gpu_table_to_eara();
-				table_num = mt_gpufreq_get_dvfs_table_num();
-				max_opp_idx = mt_gpufreq_get_seg_max_opp_index();
-
-				for (idx = max_opp_idx; index_count < table_num; index_count++) {
-					if (min_freq ==
-					    power_table[idx + index_count].gpufreq_khz) {
-						mtk_custom_boost_gpu_freq(index_count);
-						return count;
-					}
-				}
-
-				GED_LOGE("SKI: set min clock failed (%d not support)!\n", min_freq);
-			}
-		}
-	}
-
-	return -EINVAL;
-}
-
-static KOBJ_ATTR_RW(gpu_min_clock);
-
-ssize_t gpu_model_show(struct kobject *kobj,
+ssize_t show_gpu_model(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
-#if defined(CONFIG_MACH_MT6768)
-	return scnprintf(buf, PAGE_SIZE, "Mali-G52 MC2\n"); //MT6768
-#elif defined(CONFIG_MACH_MT6853)
-	return scnprintf(buf, PAGE_SIZE, "Mali-G57 MC3\n"); //MT6853
-#elif defined(CONFIG_MACH_MT6739)
-	return scnprintf(buf, PAGE_SIZE, "IMG PowerVR GE8100\n"); //MT6739
+#ifdef CONFIG_MACH_MT6739
+	return scnprintf(buf, PAGE_SIZE, "IMG PowerVR GE8100\n");
 #else
-	GED_LOGE("SKI: gpu model not set!\n");
-	return scnprintf(buf, PAGE_SIZE, "UNKNOWN\n");
+	return scnprintf(buf, PAGE_SIZE, "Mali-G52 MC2\n");
 #endif
 }
 
-static KOBJ_ATTR_RO(gpu_model);
-
-ssize_t gpu_tmu_show(struct kobject *kobj,
+ssize_t show_gpu_tmu(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
 	int temperature;
@@ -218,8 +135,6 @@ ssize_t gpu_tmu_show(struct kobject *kobj,
 
 	return scnprintf(buf, PAGE_SIZE, "%d\n", temperature);
 }
-
-static KOBJ_ATTR_RO(gpu_tmu);
 
 GED_ERROR ged_ski_init(void)
 {
@@ -232,55 +147,55 @@ GED_ERROR ged_ski_init(void)
 		goto EXIT;
 	}
 
-	ret = ged_sysfs_create_file(gpu_kobj, &kobj_attr_gpu_available_governor);
+	ret = sysfs_create_file(gpu_kobj, &gpu_available_governor.attr);
 	if (ret) {
 		ret = GED_ERROR_OOM;
 		GED_LOGE("ged: failed to create gpu_available_governor!\n");
 		goto EXIT;
 	}
-	ret = ged_sysfs_create_file(gpu_kobj, &kobj_attr_gpu_busy);
+	ret = sysfs_create_file(gpu_kobj, &gpu_busy.attr);
 	if (ret) {
 		ret = GED_ERROR_OOM;
 		GED_LOGE("ged: failed to create gpu_busy!\n");
 		goto EXIT;
 	}
-	ret = ged_sysfs_create_file(gpu_kobj, &kobj_attr_gpu_clock);
+	ret = sysfs_create_file(gpu_kobj, &gpu_clock.attr);
 	if (ret) {
 		ret = GED_ERROR_OOM;
 		GED_LOGE("ged: failed to create gpu_clock!\n");
 		goto EXIT;
 	}
-	ret = ged_sysfs_create_file(gpu_kobj, &kobj_attr_gpu_freq_table);
+	ret = sysfs_create_file(gpu_kobj, &gpu_freq_table.attr);
 	if (ret) {
 		ret = GED_ERROR_OOM;
 		GED_LOGE("ged: failed to create gpu_freq_table!\n");
 		goto EXIT;
 	}
-	ret = ged_sysfs_create_file(gpu_kobj, &kobj_attr_gpu_governor);
+	ret = sysfs_create_file(gpu_kobj, &gpu_governor.attr);
 	if (ret) {
 		ret = GED_ERROR_OOM;
 		GED_LOGE("ged: failed to create gpu_governor!\n");
 		goto EXIT;
 	}
-	ret = ged_sysfs_create_file(gpu_kobj, &kobj_attr_gpu_max_clock);
+	ret = sysfs_create_file(gpu_kobj, &gpu_max_clock.attr);
 	if (ret) {
 		ret = GED_ERROR_OOM;
 		GED_LOGE("ged: failed to create gpu_max_clock!\n");
 		goto EXIT;
 	}
-	ret = ged_sysfs_create_file(gpu_kobj, &kobj_attr_gpu_min_clock);
+	ret = sysfs_create_file(gpu_kobj, &gpu_min_clock.attr);
 	if (ret) {
 		ret = GED_ERROR_OOM;
 		GED_LOGE("ged: failed to create gpu_min_clock!\n");
 		goto EXIT;
 	}
-	ret = ged_sysfs_create_file(gpu_kobj, &kobj_attr_gpu_model);
+	ret = sysfs_create_file(gpu_kobj, &gpu_model.attr);
 	if (ret) {
 		ret = GED_ERROR_OOM;
 		GED_LOGE("ged: failed to create gpu_model!\n");
 		goto EXIT;
 	}
-	ret = ged_sysfs_create_file(gpu_kobj, &kobj_attr_gpu_tmu);
+	ret = sysfs_create_file(gpu_kobj, &gpu_tmu.attr);
 	if (ret) {
 		ret = GED_ERROR_OOM;
 		GED_LOGE("ged: failed to create gpu_tmu!\n");
@@ -296,15 +211,15 @@ EXIT:
 
 void ged_ski_exit(void)
 {
-	ged_sysfs_remove_file(gpu_kobj, &kobj_attr_gpu_available_governor);
-	ged_sysfs_remove_file(gpu_kobj, &kobj_attr_gpu_busy);
-	ged_sysfs_remove_file(gpu_kobj, &kobj_attr_gpu_clock);
-	ged_sysfs_remove_file(gpu_kobj, &kobj_attr_gpu_freq_table);
-	ged_sysfs_remove_file(gpu_kobj, &kobj_attr_gpu_governor);
-	ged_sysfs_remove_file(gpu_kobj, &kobj_attr_gpu_max_clock);
-	ged_sysfs_remove_file(gpu_kobj, &kobj_attr_gpu_min_clock);
-	ged_sysfs_remove_file(gpu_kobj, &kobj_attr_gpu_model);
-	ged_sysfs_remove_file(gpu_kobj, &kobj_attr_gpu_tmu);
+	sysfs_remove_file(gpu_kobj, &gpu_available_governor.attr);
+	sysfs_remove_file(gpu_kobj, &gpu_busy.attr);
+	sysfs_remove_file(gpu_kobj, &gpu_clock.attr);
+	sysfs_remove_file(gpu_kobj, &gpu_freq_table.attr);
+	sysfs_remove_file(gpu_kobj, &gpu_governor.attr);
+	sysfs_remove_file(gpu_kobj, &gpu_max_clock.attr);
+	sysfs_remove_file(gpu_kobj, &gpu_min_clock.attr);
+	sysfs_remove_file(gpu_kobj, &gpu_model.attr);
+	sysfs_remove_file(gpu_kobj, &gpu_tmu.attr);
 	kobject_put(gpu_kobj);
 	gpu_kobj = NULL;
 }

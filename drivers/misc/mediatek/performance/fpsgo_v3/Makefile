@@ -25,7 +25,7 @@ VIDEOX_TOP += $(srctree)/drivers/misc/mediatek/video/$(MTK_PLATFORM)/videox
 obj-y += fpsgo_main.o
 obj-y += base/
 obj-y += composer/
-obj-$(CONFIG_MTK_EARA_AI) += eara_job/
+obj-y += eara_job/
 
 obj-y += fbt/
 obj-y += fstb/
@@ -40,5 +40,3 @@ ccflags-y += \
         -I$(COM_TOP)/include/ \
         -I$(EARA_JOB_TOP)/include/ \
         -I$(VIDEOX_TOP)/ \
-        -I$(srctree)/drivers/gpu/drm/mediatek/ \
-

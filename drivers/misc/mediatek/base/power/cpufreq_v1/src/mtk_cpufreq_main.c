@@ -24,7 +24,6 @@
 #include "mtk_cpufreq_opp_table.h"
 
 #define DCM_ENABLE 1
-
 #ifdef CONFIG_CPU_FREQ_LIMIT
 #include <linux/cpufreq_limit.h>
 #endif
@@ -1166,7 +1165,6 @@ static void ppm_limit_callback(struct ppm_client_req req)
 			cpuhvfs_set_min_max(i,
 				ppm->cpu_limit[i].min_cpufreq_idx,
 				ppm->cpu_limit[i].max_cpufreq_idx);
-		cpuhvfs_write_advise_freq(i, ppm->cpu_limit[i].has_advise_freq);
 	}
 #else
 	unsigned long flags;
@@ -1666,20 +1664,16 @@ static int _mt_cpufreq_pdrv_probe(struct platform_device *pdev)
 	cpufreq_procfs_init();
 	_mt_cpufreq_aee_init();
 
-	ret = mt_cpufreq_regulator_map(pdev);
-	if (ret)
-		tag_pr_notice("%s regulator map fail\n", __func__);
-
 #ifdef CONFIG_HYBRID_CPU_DVFS
-#ifdef INIT_MCUPM_VOLTAGE_SETTING
-	cpuhvfs_set_init_volt();
-#endif
-	/* For SSPM/MCUPM probe */
+	/* For SSPM probe */
 	cpuhvfs_set_init_sta();
 	/* Default disable schedule assist DVFS */
 	cpuhvfs_set_sched_dvfs_disable(1);
 #endif
 
+	ret = mt_cpufreq_regulator_map(pdev);
+	if (ret)
+		tag_pr_notice("regulator map fail\n");
 
 	/* Prepare OPP table for PPM in probe to avoid nested lock */
 	for_each_cpu_dvfs(j, p) {

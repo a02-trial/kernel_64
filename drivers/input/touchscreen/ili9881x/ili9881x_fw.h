@@ -28,9 +28,11 @@
 #define DEF_FW_FILP_PATH		"/sdcard/Firmware/TSP/tsp.hex"
 #define DEF_INI_REQUEST_PATH		"mp.ini"
 //#define DEF_FW_REQUEST_PATH		"ILITEK_FW"
+/*
 static unsigned char CTPM_FW_DEF[] = {
 	0xFF,
 };
+*/
 
 #define CSOT_INI_NAME_PATH		"/sdcard/mp_csot.ini"
 #define CSOT_FW_FILP_PATH		"/sdcard/ILITEK_FW_CSOT"

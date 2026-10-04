@@ -21,7 +21,9 @@
 #include <linux/slab.h>
 #include <linux/rbtree.h>
 #include <linux/preempt.h>
+#include <linux/proc_fs.h>
 #include <linux/trace_events.h>
+#include <linux/debugfs.h>
 #include <linux/spinlock.h>
 #include <linux/vmalloc.h>
 #include <linux/module.h>
@@ -34,6 +36,21 @@
 #include "pob_pfm.h"
 
 #define TRACELOG_SIZE 512
+
+#define POB_QOS_DEBUGFS_ENTRY(name) \
+static int pob_qos_##name##_open(struct inode *i, struct file *file) \
+{ \
+	return single_open(file, pob_qos_##name##_show, i->i_private); \
+} \
+\
+static const struct file_operations pob_qos_##name##_fops = { \
+	.owner = THIS_MODULE, \
+	.open = pob_qos_##name##_open, \
+	.read = seq_read, \
+	.write = pob_qos_##name##_write, \
+	.llseek = seq_lseek, \
+	.release = single_release, \
+}
 
 #define POB_QOS_SYSTRACE_LIST(macro) \
 	macro(QOSSEQ, 0), \
@@ -86,8 +103,6 @@ static void pob_fn_tracelog(void *pfn, char *prefix)
 
 	tmplen = snprintf(log, TRACELOG_SIZE, "%s %pS",
 				prefix, pfn);
-	if (tmplen < 0 || tmplen >= sizeof(log))
-		return;
 
 	_trace_pob_log(log);
 }
@@ -238,8 +253,6 @@ static void _pob_qos_seq_log(struct pob_qos_trace_info *pqti,
 
 	tmplen = snprintf(log, TRACELOG_SIZE, "%s size=%d,",
 				pqti->prefix, pqi->size);
-	if (tmplen < 0 || tmplen >= sizeof(log))
-		return;
 
 	for (i = 0; i < pqi->size; i++) {
 		sublen = snprintf(valuelog, 8, " %d",
@@ -281,8 +294,6 @@ static void _pob_qos_bm_log(struct pob_qos_trace_info *pqti,
 					"%s probe=%s, source=%s, size=%d,",
 					pqti->prefix,
 					PQBP_str[i], PQBS_str[j], pqi->size);
-				if (tmplen < 0 || tmplen >= sizeof(log))
-					return;
 
 				for (k = 0; k < pqi->size; k++) {
 					sublen = snprintf(valuelog, 8, " %d",
@@ -307,8 +318,6 @@ static void _pob_qos_bm_log(struct pob_qos_trace_info *pqti,
 					"%s%d probe=%s, source=%s, size=%d,",
 					pqti->prefix, x,
 					PQBP_str[i], PQBS_str[j], pqi->size);
-				if (tmplen < 0 || tmplen >= sizeof(log))
-					return;
 
 				for (k = 0; k < pqi->size; k++) {
 					sublen = snprintf(valuelog, 8, " %d",
@@ -355,8 +364,6 @@ static void _pob_qos_lat_log(struct pob_qos_trace_info *pqti,
 				"%s source=%s, size=%d,",
 				pqti->prefix,
 				PQLS_str[i], pqi->size);
-			if (tmplen < 0 || tmplen >= sizeof(log))
-				return;
 
 			for (k = 0; k < pqi->size; k++) {
 				sublen = snprintf(valuelog, 8, " %d",
@@ -381,8 +388,6 @@ static void _pob_qos_lat_log(struct pob_qos_trace_info *pqti,
 				"%s%d source=%s, size=%d,",
 				pqti->prefix, x,
 				PQLS_str[i], pqi->size);
-			if (tmplen < 0 || tmplen >= sizeof(log))
-				return;
 
 			for (k = 0; k < pqi->size; k++) {
 				sublen = snprintf(valuelog, 8, " %d",
@@ -499,85 +504,55 @@ static inline void _pob_qos_disable(void)
 	pob_qos_unregister_client(&pob_qos_notifier);
 }
 
-static ssize_t pob_mask_show(struct kobject *kobj,
-		struct kobj_attribute *attr, char *buf)
+static int pob_qos_systrace_mask_show(struct seq_file *m, void *unused)
 {
 	int i;
-	char temp[POB_SYSFS_MAX_BUFF_SIZE];
-	int pos = 0;
-	int length;
 
-	length = scnprintf(temp + pos, POB_SYSFS_MAX_BUFF_SIZE - pos,
-			" Current enabled systrace:\n");
-	pos += length;
+	seq_puts(m, " Current enabled systrace:\n");
+	for (i = 0; (1U << i) < POB_QOS_DEBUG_MAX; i++)
+		seq_printf(m, "  %-*s ... %s\n", 12, mask_string[i],
+			   pob_qos_systrace_mask & (1U << i) ?
+			     "On" : "Off");
 
-	for (i = 0; (1U << i) < POB_QOS_DEBUG_MAX; i++) {
-		length = scnprintf(temp + pos, POB_SYSFS_MAX_BUFF_SIZE - pos,
-			"  %-*s ... %s\n", 12, mask_string[i],
-		   pob_qos_systrace_mask & (1U << i) ?
-		   "On" : "Off");
-		pos += length;
-
-	}
-
-	return scnprintf(buf, PAGE_SIZE, "%s", temp);
+	return 0;
 }
 
-static ssize_t pob_mask_store(struct kobject *kobj,
-		struct kobj_attribute *attr,
-		const char *buf, size_t count)
+static ssize_t pob_qos_systrace_mask_write(struct file *flip,
+			const char *ubuf, size_t cnt, loff_t *data)
 {
-	int val = -1;
-	char acBuffer[POB_SYSFS_MAX_BUFF_SIZE];
-	int arg;
+	uint32_t val;
+	int ret;
 
-	if ((count > 0) && (count < POB_SYSFS_MAX_BUFF_SIZE)) {
-		if (scnprintf(acBuffer, POB_SYSFS_MAX_BUFF_SIZE, "%s", buf)) {
-			if (kstrtoint(acBuffer, 0, &arg) == 0)
-				val = arg;
-			else
-				return count;
-		}
-	}
+	ret = kstrtou32_from_user(ubuf, cnt, 16, &val);
+	if (ret)
+		return ret;
 
 	val = val & (POB_QOS_DEBUG_MAX - 1U);
 
 	pob_qos_systrace_mask = val;
 
-	return count;
+	return cnt;
 }
 
-KOBJ_ATTR_RW(pob_mask);
+POB_QOS_DEBUGFS_ENTRY(systrace_mask);
 
-static ssize_t pob_forceon_show(struct kobject *kobj,
-		struct kobj_attribute *attr, char *buf)
+static int pob_qos_forceon_show(struct seq_file *m, void *unused)
 {
-	int val = -1;
+	seq_printf(m, "forceon: %s\n",
+			pob_qos_forceon?"On":"Off");
 
-	val = pob_qos_forceon;
-
-	return scnprintf(buf, PAGE_SIZE, "%d\n", val);
+	return 0;
 }
 
-static ssize_t pob_forceon_store(struct kobject *kobj,
-		struct kobj_attribute *attr,
-		const char *buf, size_t count)
+static ssize_t pob_qos_forceon_write(struct file *flip,
+			const char *ubuf, size_t cnt, loff_t *data)
 {
-	int val = -1;
-	char acBuffer[POB_SYSFS_MAX_BUFF_SIZE];
-	int arg;
+	uint32_t val;
+	int ret;
 
-	if ((count > 0) && (count < POB_SYSFS_MAX_BUFF_SIZE)) {
-		if (scnprintf(acBuffer, POB_SYSFS_MAX_BUFF_SIZE, "%s", buf)) {
-			if (kstrtoint(acBuffer, 0, &arg) == 0)
-				val = arg;
-			else
-				return count;
-		}
-	}
-
-	if (val > 1 || val < 0)
-		return count;
+	ret = kstrtou32_from_user(ubuf, cnt, 10, &val);
+	if (ret)
+		return ret;
 
 	if (val && !pob_qos_forceon)
 		_pob_qos_enable();
@@ -586,35 +561,41 @@ static ssize_t pob_forceon_store(struct kobject *kobj,
 
 	pob_qos_forceon = val;
 
-	return count;
+	return cnt;
 }
 
-KOBJ_ATTR_RW(pob_forceon);
+POB_QOS_DEBUGFS_ENTRY(forceon);
 
-int __init pob_qos_init(struct kobject *pob_kobj)
+int __init pob_qos_init(struct dentry *pob_debugfs_dir)
 {
-	if (pob_qos_pfm_init())
+	if (!pob_debugfs_dir)
+		return -ENODEV;
+
+	if (pob_qos_pfm_init(pob_debugfs_dir))
 		return -EFAULT;
+
+	debugfs_create_file("qos_systrace_mask",
+			    0644,
+			    pob_debugfs_dir,
+			    NULL,
+			    &pob_qos_systrace_mask_fops);
+
+	debugfs_create_file("qos_forceon",
+			    0644,
+			    pob_debugfs_dir,
+			    NULL,
+			    &pob_qos_forceon_fops);
 
 	pob_qos_systrace_mask =
 		POB_QOS_DEBUG_QOSSEQ |
 		POB_QOS_DEBUG_BWBOUND |
 		POB_QOS_DEBUG_BWTOTAL;
 
-	if (!pob_kobj)
-		return -ENODEV;
-
-	pob_sysfs_create_file(pob_kobj, &kobj_attr_pob_forceon);
-	pob_sysfs_create_file(pob_kobj, &kobj_attr_pob_mask);
-
 	return 0;
 }
-
-void __exit pob_qos_exit(struct kobject *pob_kobj)
+#if 0
+int __init pob_qos_init(struct dentry *pob_debugfs_dir)
 {
-	pob_sysfs_remove_file(pob_kobj, &kobj_attr_pob_forceon);
-	pob_sysfs_remove_file(pob_kobj, &kobj_attr_pob_mask);
-
-	pob_qos_pfm_exit();
+	return 0;
 }
-
+#endif

@@ -22,9 +22,6 @@
 #include <linux/workqueue.h>
 
 #include "extcon_usb.h"
-#if IS_ENABLED(CONFIG_CABLE_TYPE_NOTIFIER)
-#include <linux/cable_type_notifier.h>
-#endif
 
 struct usb_extcon_info {
 	struct device *dev;
@@ -132,85 +129,35 @@ static void issue_connection_work(unsigned int dr)
 }
 
 #if !defined(CONFIG_USB_MU3D_DRV)
-void mtk_usb_connect(void)
-{
-#ifndef CONFIG_TCPC_CLASS
-#ifdef CONFIG_DUAL_ROLE_USB_INTF
-	mt_usb_dual_role_to_device();
-#endif
-#endif
-
-	pr_info("usb: %s\n", __func__);
-	issue_connection_work(DUAL_PROP_DR_DEVICE);
-}
-EXPORT_SYMBOL_GPL(mtk_usb_connect);
-
 void mt_usb_connect(void)
 {
-#if IS_ENABLED(CONFIG_CABLE_TYPE_NOTIFIER)
-	cable_type_notifier_set_attached_dev(CABLE_TYPE_USB);
-#else
 #ifndef CONFIG_TCPC_CLASS
 #ifdef CONFIG_DUAL_ROLE_USB_INTF
 	mt_usb_dual_role_to_device();
 #endif
 #endif
 
-	pr_info("usb: %s\n", __func__);
+	pr_info("%s\n", __func__);
 	issue_connection_work(DUAL_PROP_DR_DEVICE);
-#endif
 }
 EXPORT_SYMBOL_GPL(mt_usb_connect);
 
-void mtk_usb_disconnect(void)
-{
-#ifndef CONFIG_TCPC_CLASS
-#ifdef CONFIG_DUAL_ROLE_USB_INTF
-	mt_usb_dual_role_to_none();
-#endif
-#endif
-
-	pr_info("usb: %s\n", __func__);
-	issue_connection_work(DUAL_PROP_DR_NONE);
-}
-EXPORT_SYMBOL_GPL(mtk_usb_disconnect);
-
 void mt_usb_disconnect(void)
 {
-#if IS_ENABLED(CONFIG_CABLE_TYPE_NOTIFIER)
-	cable_type_notifier_set_attached_dev(CABLE_TYPE_NONE);
-#else
 #ifndef CONFIG_TCPC_CLASS
 #ifdef CONFIG_DUAL_ROLE_USB_INTF
 	mt_usb_dual_role_to_none();
 #endif
 #endif
 
-	pr_info("usb: %s\n", __func__);
+	pr_info("%s\n", __func__);
 	issue_connection_work(DUAL_PROP_DR_NONE);
-#endif
 }
 EXPORT_SYMBOL_GPL(mt_usb_disconnect);
 #endif
 
-void mtk_usbhost_connect(void)
-{
-#ifndef CONFIG_TCPC_CLASS
-#ifdef CONFIG_DUAL_ROLE_USB_INTF
-	mt_usb_dual_role_to_host();
-#endif
-#endif
-
-	pr_info("%s\n", __func__);
-	issue_connection_work(DUAL_PROP_DR_HOST);
-}
-EXPORT_SYMBOL_GPL(mtk_usbhost_connect);
-
 void mt_usbhost_connect(void)
 {
-#if IS_ENABLED(CONFIG_CABLE_TYPE_NOTIFIER)
-	cable_type_notifier_set_attached_dev(CABLE_TYPE_OTG);
-#else
 #ifndef CONFIG_TCPC_CLASS
 #ifdef CONFIG_DUAL_ROLE_USB_INTF
 	mt_usb_dual_role_to_host();
@@ -219,28 +166,11 @@ void mt_usbhost_connect(void)
 
 	pr_info("%s\n", __func__);
 	issue_connection_work(DUAL_PROP_DR_HOST);
-#endif
 }
 EXPORT_SYMBOL_GPL(mt_usbhost_connect);
 
-void mtk_usbhost_disconnect(void)
-{
-#ifndef CONFIG_TCPC_CLASS
-#ifdef CONFIG_DUAL_ROLE_USB_INTF
-	mt_usb_dual_role_to_none();
-#endif
-#endif
-
-	pr_info("%s\n", __func__);
-	issue_connection_work(DUAL_PROP_DR_NONE);
-}
-EXPORT_SYMBOL_GPL(mtk_usbhost_disconnect);
-
 void mt_usbhost_disconnect(void)
 {
-#if IS_ENABLED(CONFIG_CABLE_TYPE_NOTIFIER)
-	cable_type_notifier_set_attached_dev(CABLE_TYPE_NONE);
-#else
 #ifndef CONFIG_TCPC_CLASS
 #ifdef CONFIG_DUAL_ROLE_USB_INTF
 	mt_usb_dual_role_to_none();
@@ -249,7 +179,6 @@ void mt_usbhost_disconnect(void)
 
 	pr_info("%s\n", __func__);
 	issue_connection_work(DUAL_PROP_DR_NONE);
-#endif
 }
 EXPORT_SYMBOL_GPL(mt_usbhost_disconnect);
 

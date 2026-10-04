@@ -889,24 +889,14 @@ int rawbulk_start_transactions(int transfer_id, int nups, int ndowns, int upsz,
 		return -ENODEV;
 
 	memset(name, 0, 20);
-	ret = snprintf(name, sizeof(name), "%s_flow_ctrl",
+	snprintf(name, sizeof(name), "%s_flow_ctrl",
 			transfer_name[transfer_id]);
-	if (ret > 20)
-		C2K_NOTE("%s: transfer_name %s excced log buffer\n", __func__,
-			transfer_name[transfer_id]);
-
 	if (!transfer->flow_wq)
 		transfer->flow_wq = create_singlethread_workqueue(name);
 	if (!transfer->flow_wq)
 		return -ENOMEM;
-
 	memset(name, 0, 20);
-	ret = snprintf(name, sizeof(name), "%s_tx_wq",
-			transfer_name[transfer_id]);
-	if (ret > 20)
-		C2K_NOTE("%s: transfer_name %s excced log buffer\n", __func__,
-			transfer_name[transfer_id]);
-
+	snprintf(name, sizeof(name), "%s_tx_wq", transfer_name[transfer_id]);
 	if (!transfer->tx_wq)
 		transfer->tx_wq = create_singlethread_workqueue(name);
 	if (!transfer->tx_wq)
@@ -1315,7 +1305,6 @@ static __init int rawbulk_init(void)
 {
 	int n;
 	char name[20];
-	int ret = 0;
 
 	C2K_NOTE("%s\n", __func__);
 	drop_check_timeout = jiffies;
@@ -1334,18 +1323,10 @@ static __init int rawbulk_init(void)
 		INIT_LIST_HEAD(&t->cache_buf_lists.transactions);
 		INIT_DELAYED_WORK(&t->delayed, downstream_delayed_work);
 		memset(name, 0, 20);
-		ret = snprintf(name, sizeof(name), "%s_flow_ctrl",
-			 transfer_name[n]);
-		if (ret >= sizeof(name))
-			return -ENOMEM;
-
+		snprintf(name, sizeof(name), "%s_flow_ctrl", transfer_name[n]);
 		INIT_WORK(&t->write_work, start_upstream);
 		memset(name, 0, 20);
-		ret = snprintf(name, sizeof(name), "%s_tx_wq",
-			       transfer_name[n]);
-		if (ret >= sizeof(name))
-			return -ENOMEM;
-
+		snprintf(name, sizeof(name), "%s_tx_wq", transfer_name[n]);
 		mutex_init(&t->modem_up_mutex);
 		mutex_init(&t->usb_up_mutex);
 		spin_lock_init(&t->lock);

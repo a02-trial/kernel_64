@@ -87,7 +87,6 @@ EXPORT_SYMBOL(mtk_lpm_callee_get_impl);
 int mtk_lpm_callee_put_impl(struct mtk_lpm_callee const *callee)
 {
 	struct mtk_lpm_callee *pos;
-	int ret = -EPERM;
 
 	if (!callee)
 		return -EINVAL;
@@ -96,13 +95,12 @@ int mtk_lpm_callee_put_impl(struct mtk_lpm_callee const *callee)
 	list_for_each_entry(pos, &mtk_lpm_callees, list) {
 		if (pos && (pos->uid == callee->uid)) {
 			pos->ref--;
-			ret = 0;
 			break;
 		}
 	}
 	spin_unlock(&mtk_lp_plat_call_locker);
 
-	return ret;
+	return pos ? 0 : -EPERM;
 }
 EXPORT_SYMBOL(mtk_lpm_callee_put_impl);
 

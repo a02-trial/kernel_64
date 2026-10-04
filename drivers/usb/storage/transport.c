@@ -481,9 +481,7 @@ int usb_stor_bulk_srb(struct us_data* us, unsigned int pipe,
 	unsigned int partial;
 	int result;
 
-#ifdef CONFIG_MEDIATEK_SOLUTION
 	usb_boost();
-#endif
 	result = usb_stor_bulk_transfer_sglist(us, pipe, scsi_sglist(srb),
 				      scsi_sg_count(srb), scsi_bufflen(srb),
 				      &partial);
@@ -926,6 +924,9 @@ Retry_Sense:
 	 * will want to acquire it.
 	 */
 	mutex_unlock(&us->dev_mutex);
+#ifdef CONFIG_USB_STORAGE_DETECT
+	msleep(200);
+#endif
 	result = usb_stor_port_reset(us);
 	mutex_lock(&us->dev_mutex);
 

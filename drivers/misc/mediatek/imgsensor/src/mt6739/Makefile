@@ -16,9 +16,10 @@
 #
 
 MTK_PLATFORM := $(subst ",,$(CONFIG_MTK_PLATFORM))
-ifdef CONFIG_CAMERA_SAMSUNG_MODEL_NAME
-ARCH_MTK_PROJECT := $(subst ",,$(CONFIG_CAMERA_SAMSUNG_MODEL_NAME))
+ifdef CONFIG_CAMERA_AAU_V02
+ARCH_MTK_PROJECT := aau_v02
 else
+$(warning CONFIG_CAMERA_AAU_V02 is not defined)
 ARCH_MTK_PROJECT := $(subst ",,$(CONFIG_ARCH_MTK_PROJECT))
 endif
 
@@ -27,21 +28,32 @@ COMMON_VERSION := v1
 
 subdir-ccflags-y +=  -I$(IMGSENSOR_DRIVER_PATH)/common/$(COMMON_VERSION) \
 	-I$(IMGSENSOR_DRIVER_PATH)/inc \
-	-I$(IMGSENSOR_DRIVER_PATH)/common/sysfs \
-	-I$(IMGSENSOR_DRIVER_PATH)/common/adaptive_mipi
-
+	-I$(IMGSENSOR_DRIVER_PATH)/common/sysfs
 obj-y				+= ../common/$(COMMON_VERSION)/imgsensor.o
 obj-y				+= ../common/$(COMMON_VERSION)/imgsensor_hw.o
 obj-y				+= ../common/$(COMMON_VERSION)/imgsensor_i2c.o
 obj-y				+= ../common/$(COMMON_VERSION)/imgsensor_legacy.o
 obj-y				+= ../common/$(COMMON_VERSION)/imgsensor_proc.o
 obj-y				+= ../common/$(COMMON_VERSION)/imgsensor_sensor_list.o
+ifneq ($(ARCH_MTK_PROJECT), $(subst ",,$(CONFIG_ARCH_MTK_PROJECT)))
+ifeq ($(strip $(ARCH_MTK_PROJECT)),)
+$(warning ARCH_MTK_PROJECT is not defined)
+else
+obj-y				+= ../common/sysfs/imgsensor_sysfs.o
+obj-y				+= ../common/sysfs/imgsensor_vendor.o
+obj-y				+= ../common/sysfs/crc32.o
+obj-y				+= ../common/sysfs/imgsensor_vendor_rom_config.o
+obj-y				+= ../common/sysfs/imgsensor_vendor_rom_config_$(ARCH_MTK_PROJECT).o
+endif
+else
+$(warning Unable to build sysfs files)
+endif
 
-# Build sysfs folder
-obj-$(CONFIG_IMGSENSOR_SYSFS) += ../common/sysfs/
-
-# Build adaptive mipi folder
-obj-$(CONFIG_CAMERA_ADAPTIVE_MIPI) += ../common/adaptive_mipi/
+ifdef CONFIG_CAMERA_AAU_V02
+obj-y				+= ../common/sysfs/imgsensor_eeprom_rear_imx258_v008.o
+obj-y				+= ../common/sysfs/imgsensor_eeprom_rear2_gc02m1_v008.o
+obj-y				+= ../common/sysfs/imgsensor_otp_front_gc5035_v008.o
+endif
 
 define FILTER_DRV
 ifeq ($(wildcard $(IMGSENSOR_DRIVER_PATH)/$(MTK_PLATFORM)/camera_project/$(ARCH_MTK_PROJECT)/$(1)),)
@@ -73,11 +85,7 @@ obj-y				+= imgsensor_clk.o
 ifeq (,$(wildcard $(IMGSENSOR_DRIVER_PATH)/$(MTK_PLATFORM)/camera_project/$(ARCH_MTK_PROJECT)/camera_hw))
 subdir-ccflags-y		+= -I$(IMGSENSOR_DRIVER_PATH)/$(MTK_PLATFORM)/camera_hw
 obj-y				+= camera_hw/
-ifneq ($(project_drv),)
-obj-y				+= camera_project/$(ARCH_MTK_PROJECT)/
-endif
 else
-obj-y				+= camera_project/$(ARCH_MTK_PROJECT)/
 subdir-ccflags-y		+= -I$(IMGSENSOR_DRIVER_PATH)/$(MTK_PLATFORM)/camera_project/$(ARCH_MTK_PROJECT)/camera_hw
 endif
 

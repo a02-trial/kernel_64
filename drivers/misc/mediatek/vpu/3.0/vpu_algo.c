@@ -79,9 +79,8 @@ int vpu_init_algo(struct vpu_device *vpu_device)
 	return 0;
 }
 
-int vpu_add_algo_to_pool(int core_s, struct vpu_algo *algo)
+int vpu_add_algo_to_pool(int core, struct vpu_algo *algo)
 {
-	unsigned int core = core_s;
 	LOG_DBG("[vpu] %s +\n", __func__);
 	list_add_tail(vlist_link(algo, struct vpu_algo), &vpu_algo_pool[core]);
 	return 0;
@@ -95,9 +94,8 @@ int vpu_add_algo_to_user_pool(struct vpu_algo *algo, struct vpu_user *user)
 	return 0;
 }
 
-int vpu_free_algo_from_user_pool(int core_s, vpu_id_t id, struct vpu_user *user)
+int vpu_free_algo_from_user_pool(int core, vpu_id_t id, struct vpu_user *user)
 {
-	unsigned int core = core_s;
 	struct list_head *head, *temp;
 	struct vpu_algo *algo_tmp;
 
@@ -114,10 +112,9 @@ int vpu_free_algo_from_user_pool(int core_s, vpu_id_t id, struct vpu_user *user)
 	return 0;
 }
 
-int vpu_find_algo_by_id_from_user(int core_s, vpu_id_t id,
+int vpu_find_algo_by_id_from_user(int core, vpu_id_t id,
 	struct vpu_algo **ralgo, struct vpu_user *user)
 {
-	unsigned int core = core_s;
 	struct vpu_algo *algo;
 	struct list_head *head;
 
@@ -134,10 +131,9 @@ int vpu_find_algo_by_id_from_user(int core_s, vpu_id_t id,
 	return -ENOENT;
 }
 
-int vpu_find_algo_by_name_from_user(int core_s, char *name,
+int vpu_find_algo_by_name_from_user(int core, char *name,
 	struct vpu_algo **ralgo, struct vpu_user *user)
 {
-	unsigned int core = core_s;
 	struct vpu_algo *algo;
 	struct list_head *head;
 
@@ -154,10 +150,9 @@ int vpu_find_algo_by_name_from_user(int core_s, char *name,
 	return -ENOENT;
 }
 
-int vpu_find_algo_by_id(int core_s, vpu_id_t id,
+int vpu_find_algo_by_id(int core, vpu_id_t id,
 	struct vpu_algo **ralgo, struct vpu_user *user)
 {
-	unsigned int core = core_s;
 	struct vpu_algo *algo;
 	struct list_head *head;
 	char *name;
@@ -193,10 +188,9 @@ err:
 	return -ENOENT;
 }
 
-int vpu_find_algo_by_name(int core_s, char *name,
+int vpu_find_algo_by_name(int core, char *name,
 	struct vpu_algo **ralgo, bool needload, struct vpu_user *user)
 {
-	unsigned int core = core_s;
 	struct vpu_algo *algo;
 	struct list_head *head;
 
@@ -229,12 +223,11 @@ err:
 	return -ENOENT;
 }
 
-int vpu_get_algo_id_by_name(int core_s, char *name, struct vpu_user *user)
+int vpu_get_algo_id_by_name(int core, char *name, struct vpu_user *user)
 {
 	struct vpu_algo *algo = NULL;
 	int algo_id = -1;
 	int ret = 0;
-	unsigned int core = core_s;
 
 	if (name == NULL)
 		goto out;
@@ -297,10 +290,9 @@ static int vpu_calc_prop_offset(struct vpu_prop_desc *descs,
 	return 0;
 }
 
-int vpu_create_algo(int core_s, char *name,
+int vpu_create_algo(int core, char *name,
 	struct vpu_algo **ralgo, bool needload)
 {
-	unsigned int core = core_s;
 	int ret, id, length;
 	unsigned int mva;
 	struct vpu_algo *algo = NULL;
@@ -408,7 +400,7 @@ out:
 int vpu_free_algo_from_user(struct vpu_user *user,
 	struct vpu_create_algo *create_algo)
 {
-	uint32_t core = (uint32_t)create_algo->core;
+	int core = (int)create_algo->core;
 	struct vpu_algo *ralgo;
 	vpu_id_t id;
 

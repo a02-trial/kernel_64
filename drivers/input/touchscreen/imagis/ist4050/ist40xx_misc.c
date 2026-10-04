@@ -1371,6 +1371,7 @@ end:
 			result[3], result[4]);
 }
 
+#if POCKET_MODE
 /* sysfs: /sys/class/touch/sys/mode_pocket */
 ssize_t ist40xx_pocket_mode_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size)
@@ -1389,6 +1390,7 @@ ssize_t ist40xx_pocket_mode_store(struct device *dev,
 
 	return size;
 }
+#endif
 
 /* sysfs: /sys/class/touch/sys/ic_inform */
 ssize_t ist40xx_read_ic_inform(struct device *dev,
@@ -2394,27 +2396,6 @@ ssize_t recording_frame_show(struct device *dev, struct device_attribute *attr,
 	kfree(frame_data);
 	return count;
 }
-
-/* sysfs: /sys/class/touch/tunes/recording_Prox */
-ssize_t recording_prox_show(struct device *dev, struct device_attribute *attr, char *buf)
-{
-	int i;
-	int count = 0;
-	char msg[10];
-	struct ist40xx_data *data = dev_get_drvdata(dev);
-
-	if (!recording_initialize)
-		return count;
-
-	for (i = 0; i < IST40XX_MAX_SELF_NODE_NUM; i++) {
-		count += sprintf(msg, "%d,%d,", data->rec_prox[i] & 0xFFF, (data->rec_prox[i] >> 16) & 0xFFF);
-		strcat(buf, msg);
-	}
-	count += sprintf(msg, "\n");
-	strcat(buf, msg);
-
-	return count;
-}
 #endif
 
 #ifdef TCLM_CONCEPT
@@ -2591,8 +2572,10 @@ static DEVICE_ATTR(mode_glove, S_IRUGO | S_IWUSR | S_IWGRP, NULL,
 		ist40xx_glove_mode_store);
 static DEVICE_ATTR(mode_sensitivity, S_IRUGO | S_IWUSR | S_IWGRP,
 		ist40xx_sensitivity_mode_show, ist40xx_sensitivity_mode_store);
+#if POCKET_MODE
 static DEVICE_ATTR(pocket_mode, S_IWUSR | S_IWGRP,
 		NULL, ist40xx_pocket_mode_store);
+#endif
 static DEVICE_ATTR(ic_inform, S_IRUGO, ist40xx_read_ic_inform, NULL);
 #ifdef TCLM_CONCEPT
 static DEVICE_ATTR(sec_info, S_IRUGO | S_IWUSR | S_IWGRP, ist40xx_sec_info_show,
@@ -2629,9 +2612,6 @@ static DEVICE_ATTR(recording_cnt, S_IRUGO | S_IWUSR | S_IWGRP,
 		recording_cnt_show, NULL);
 static DEVICE_ATTR(recording_frame, S_IRUGO | S_IWUSR | S_IWGRP,
 		recording_frame_show, NULL);
-static DEVICE_ATTR(recording_prox, S_IRUGO,
-		recording_prox_show, NULL);
-
 #endif
 static struct attribute *node_attributes[] = {
 	&dev_attr_refresh.attr,
@@ -2658,7 +2638,9 @@ static struct attribute *sys_attributes[] = {
 	&dev_attr_mode_cover.attr,
 	&dev_attr_mode_glove.attr,
 	&dev_attr_mode_sensitivity.attr,
-	&dev_attr_pocket_mode.attr,
+#if POCKET_MODE
+	&dev_attr_mode_pocket_mode.attr,
+#endif
 	&dev_attr_ic_inform.attr,
 #ifdef TCLM_CONCEPT
 	&dev_attr_sec_info.attr,
@@ -2682,7 +2664,6 @@ static struct attribute *tunes_attributes[] = {
 	&dev_attr_recording_cnt.attr,
 	&dev_attr_recording_frame.attr,
 	&dev_attr_recording_status.attr,
-	&dev_attr_recording_prox.attr,
 #endif
 	NULL,
 };

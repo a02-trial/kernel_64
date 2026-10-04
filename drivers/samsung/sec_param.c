@@ -183,7 +183,7 @@ int sec_set_param(unsigned long offset, char val)
 		break;
 	default:
 		if (offset != FMM_LOCK_OFFSET)
-			goto unlock_out;
+		goto unlock_out;
 		break;
 	}
 

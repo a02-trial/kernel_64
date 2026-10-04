@@ -11,7 +11,6 @@
  * GNU General Public License for more details.
  */
 
-#include <linux/export.h>
 #include <linux/list.h>
 #include <linux/mutex.h>
 #include <linux/slab.h>
@@ -712,7 +711,6 @@ TEEC_Result TEEC_OpenSession(TEEC_Context *context, TEEC_Session *session,
 	return TEECS_OpenSession(context, session, destination, NULL, 0,
 				connectionMethod, connectionData, operation, returnOrigin);
 }
-EXPORT_SYMBOL(TEEC_OpenSession);
 
 TEEC_Result TEECS_OpenSession(TEEC_Context *context, TEEC_Session *session,
 		const TEEC_UUID *destination, const void *src_ta_image,
@@ -803,7 +801,6 @@ out:
 
 	return result;
 }
-EXPORT_SYMBOL(TEECS_OpenSession);
 
 void TEEC_CloseSession(TEEC_Session *session)
 {
@@ -838,7 +835,6 @@ out_fini:
 out:
 	log_debug(tzdev_teec, "Exit, session = %pK result = %x origin = %u\n", session, result, origin);
 }
-EXPORT_SYMBOL(TEEC_CloseSession);
 
 TEEC_Result TEEC_InvokeCommand(TEEC_Session *session, uint32_t commandID,
 		TEEC_Operation *operation, uint32_t *returnOrigin)
@@ -879,7 +875,6 @@ out:
 
 	return result;
 }
-EXPORT_SYMBOL(TEEC_InvokeCommand);
 
 void TEEC_RequestCancellation(TEEC_Operation *operation)
 {
@@ -908,4 +903,3 @@ void TEEC_RequestCancellation(TEEC_Operation *operation)
 out:
 	log_debug(tzdev_teec, "Enter, operation = %pK result = %x origin = %u\n", operation, result, origin);
 }
-EXPORT_SYMBOL(TEEC_RequestCancellation);

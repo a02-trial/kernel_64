@@ -77,6 +77,8 @@ DECLARE_COMPLETION(testing_remove_complete);
 
 static struct testing_hcd *testing_hcd;
 
+static const char *device_id_limit = "3618";
+
 
 /* testing implementation */
 static int testing_device_id(void);

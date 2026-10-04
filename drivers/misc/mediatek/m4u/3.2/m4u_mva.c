@@ -298,7 +298,6 @@ void m4u_mvaGraph_dump(unsigned int domain_idx)
 	unsigned long irq_flags;
 	enum graph_lock_tpye lock_type;
 	spinlock_t *mva_graph_lock;
-	unsigned int is_reserved;
 
 	if (domain_idx == 0)
 		lock_type = SPINLOCK_MVA_GRAPH0;
@@ -314,19 +313,13 @@ void m4u_mvaGraph_dump(unsigned int domain_idx)
 	M4ULOG_HIGH(
 		"[M4U_K] mva allocation info dump: domain=%u ==================>\n",
 		domain_idx);
-	M4ULOG_HIGH("start      size     blocknum    busy   reserved\n");
+	M4ULOG_HIGH("start      size     blocknum    busy\n");
 
 	spin_lock_irqsave(mva_graph_lock, irq_flags);
 	for (index = 1; index < MVA_MAX_BLOCK_NR + 1; index += nr) {
 		addr = index << MVA_BLOCK_SIZE_ORDER;
 		nr = MVA_GET_NR(domain_idx, index);
 		size = nr << MVA_BLOCK_SIZE_ORDER;
-
-		if (MVA_IS_RESERVED(domain_idx, index))
-			is_reserved = 1;
-		else
-			is_reserved = 0;
-
 		if (MVA_IS_BUSY(domain_idx, index)) {
 			is_busy = 1;
 			nr_alloc += nr;
@@ -342,8 +335,8 @@ void m4u_mvaGraph_dump(unsigned int domain_idx)
 			frag[max_bit]++;
 		}
 
-		M4ULOG_HIGH("0x%08x  0x%08x  %4d    %d   %d\n",
-			addr, size, nr, is_busy, is_reserved);
+		M4ULOG_HIGH("0x%08x  0x%08x  %4d    %d\n",
+			addr, size, nr, is_busy);
 	}
 
 	spin_unlock_irqrestore(mva_graph_lock, irq_flags);
@@ -442,6 +435,47 @@ int mva_foreach_priv(mva_buf_fn_t *fn, void *data,
 	}
 
 	spin_unlock_irqrestore(mva_graph_lock, irq_flags);
+	return 0;
+}
+
+int mva_foreach_priv_sync(mva_buf_fn_sync_t *fn, unsigned int type,
+		unsigned int domain_idx)
+{
+	unsigned short index = 1, nr = 0;
+	unsigned int mva;
+	struct m4u_buf_info_t *priv;
+	unsigned long irq_flags;
+	int ret;
+	enum graph_lock_tpye lock_type;
+	spinlock_t *mva_graph_lock;
+
+	if (domain_idx == 0)
+		lock_type = SPINLOCK_MVA_GRAPH0;
+	else if (domain_idx == 1)
+		lock_type = SPINLOCK_MVA_GRAPH1;
+	else {
+		M4UMSG("%s error: invalid m4u domain_idx(%d)!\n",
+				__func__, domain_idx);
+		return -1;
+	}
+	mva_graph_lock = get_mva_graph_lock(lock_type);
+
+	spin_lock_irqsave(mva_graph_lock, irq_flags);
+
+
+	for (index = 1; index < MVA_MAX_BLOCK_NR + 1; index += nr) {
+		mva = index << MVA_BLOCK_SIZE_ORDER;
+		nr = MVA_GET_NR(domain_idx, index);
+		if (MVA_IS_BUSY(domain_idx, index)) {
+			priv = mvaInfoGraph[domain_idx][index];
+			ret = fn(NULL, priv->port, priv->va,
+			  priv->size, priv->mva, type);
+			if (ret)
+				break;
+		}
+	}
+	spin_unlock_irqrestore(mva_graph_lock, irq_flags);
+
 	return 0;
 }
 
@@ -1722,12 +1756,10 @@ int __m4u_do_mva_free(unsigned int domain_idx,
 	ret = check_reserved_region_integrity(domain_idx,
 		MVAGRAPH_INDEX(CCU_FIX_MVA_START),
 		CCU_FIX_BLOCK_NR);
-	if (!ret) {
+	if (!ret)
 		M4UMSG(
-		"CCU region is corruptted when port(%d) free mva(0x%x) sz(0x%x)\n",
-		port, mva, size);
-		m4u_mvaGraph_dump(domain_idx);
-	}
+		"CCU region is corruptted when port(%d) free mva(0x%x)\n",
+		port, mva);
 
 	return 0;
 }

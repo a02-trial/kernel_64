@@ -486,7 +486,7 @@ u32 ist40xx_parse_ver(struct ist40xx_data *data, int flag, const u8 *buf)
 	else if (flag == FLAG_TEST)
 		ver = (u32)buf32[(data->tags.flag_addr + 0x3F4) >> 2];
 	else if (flag == FLAG_FW)
-		ver = (u32)buf32[(data->tags.flag_addr + 0x3F0) >> 2];
+		ver = (u32)buf32[(data->tags.cfg_addr + 0x4) >> 2];
 	else
 		input_err(true, &data->client->dev, "Parsing ver's flag is not corrent!\n");
 
@@ -759,7 +759,13 @@ int ist40xx_tsp_update_info(struct ist40xx_data *data)
 	algo_info = info[IST40XX_CMD_VALUE(eHCOM_GET_ALGOINFO)];
 	prox_th = info[IST40XX_CMD_VALUE(eHCOM_GET_PROXIMITY_TH)];
 
+	data->gap_spec = info[IST40XX_CMD_VALUE(eHCOM_GET_GAP_SPEC)] & 0xFFFF;
+
 	data->miscal_addr = info[IST40XX_CMD_VALUE(eHCOM_GET_MISCAL_BASE)];
+	data->selftest_tx_addr =
+		info[IST40XX_CMD_VALUE(eHCOM_GET_SELFTEST_TX_BASE)];
+	data->selftest_rx_addr = data->selftest_tx_addr + 0x8;
+	data->selftest_addr = info[IST40XX_CMD_VALUE(eHCOM_GET_SELFTEST_BASE)];
 	data->prox_cp_addr = info[IST40XX_CMD_VALUE(eHCOM_GET_PROX_CP_BASE)];
 	data->prox_cdc_addr = info[IST40XX_CMD_VALUE(eHCOM_GET_PROX_CDC_BASE)];
 	data->sec_info_addr = info[IST40XX_CMD_VALUE(eHCOM_GET_SEC_INFO_BASE)];
@@ -848,6 +854,12 @@ void ist40xx_print_info(struct ist40xx_data *data)
 			tsp->node.self_len);
 	input_info(true, &data->client->dev, " miscal addr: 0x%08X\n",
 			data->miscal_addr);
+	input_info(true, &data->client->dev, " selftest addr: 0x%08X\n",
+			data->selftest_addr);
+	input_info(true, &data->client->dev, " selftest tx addr: 0x%08X\n",
+			data->selftest_tx_addr);
+	input_info(true, &data->client->dev, " selftest rx addr: 0x%08X\n",
+			data->selftest_rx_addr);
 	input_info(true, &data->client->dev, " prox cp addr: 0x%08X\n",
 			data->prox_cp_addr);
 	input_info(true, &data->client->dev, " prox cdc addr: 0x%08X\n",

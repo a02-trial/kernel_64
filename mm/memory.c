@@ -81,10 +81,6 @@
 #include <asm/tlbflush.h>
 #include <asm/pgtable.h>
 
-#ifdef CONFIG_PAGE_BOOST_RECORDING
-#include <linux/io_record.h>
-#endif
-
 #include "internal.h"
 
 #ifdef CONFIG_SPECULATIVE_PAGE_FAULT
@@ -2558,10 +2554,6 @@ static int do_page_mkwrite(struct vm_fault *vmf)
 
 	vmf->flags = FAULT_FLAG_WRITE|FAULT_FLAG_MKWRITE;
 
-	if (vmf->vma->vm_file &&
-	    IS_SWAPFILE(vmf->vma->vm_file->f_mapping->host))
-		return VM_FAULT_SIGBUS;
-
 	ret = vmf->vma->vm_ops->page_mkwrite(vmf);
 	/* Restore original flags so that caller is not surprised */
 	vmf->flags = old_flags;
@@ -3871,10 +3863,6 @@ static int do_read_fault(struct vm_fault *vmf)
 		ret = do_fault_around(vmf);
 		if (ret)
 			return ret;
-#ifdef CONFIG_PAGE_BOOST_RECORDING
-	} else if (vma->vm_ops->map_pages && fault_around_bytes >> PAGE_SHIFT == 1) {
-		record_io_info(vma->vm_file, vmf->pgoff, 1);
-#endif
 	}
 
 	ret = __do_fault(vmf);
@@ -4513,9 +4501,6 @@ int __handle_speculative_fault(struct mm_struct *mm, unsigned long address,
 	if (address < READ_ONCE(vma->vm_start)
 	    || READ_ONCE(vma->vm_end) <= address)
 		goto out_put;
-
-	/* do counter updates before entering really critical section. */
-	check_sync_rss_stat(current);
 
 	if (!arch_vma_access_permitted(vma, flags & FAULT_FLAG_WRITE,
 				       flags & FAULT_FLAG_INSTRUCTION,

@@ -17,19 +17,12 @@ struct mtk_spk_i2c_ctrl {
 };
 
 #define MTK_SPK_NOT_SMARTPA_STR "MTK_SPK_NOT_SMARTPA"
-#if defined(CONFIG_SND_SOC_AW8896)
-#define MTK_SPK_AWINIC_AW8896_STR "MTK_SPK_AWINIC_AW8896"
-#endif
 #define MTK_SPK_RICHTEK_RT5509_STR "MTK_SPK_RICHTEK_RT5509"
 #define MTK_SPK_MEDIATEK_MT6660_STR "MTK_SPK_MEDIATEK_MT6660"
 #define MTK_SPK_NXP_TFA98XX_STR "MTK_SPK_NXP_TFAXXXX"
-#ifdef CONFIG_SND_SOC_SMA1303
-#define MTK_SPK_SILICON_SM1303_STR "MTK_SPK_SILICON_SM1303"
+#ifdef CONFIG_SND_SOC_SMA1301
+#define MTK_SPK_SILICON_SM1301_STR "MTK_SPK_SILICON_SM1301"
 #endif
-#ifdef CONFIG_SND_SOC_SMA1305
-#define MTK_SPK_SILICON_SM1305_STR "MTK_SPK_SILICON_SM1305"
-#endif
-#define MTK_SPK_TI_TAS256X_STR "MTK_SPK_TI_TAS256X"
 
 #define MTK_SPK_I2S_0_STR "MTK_SPK_I2S_0"
 #define MTK_SPK_I2S_1_STR "MTK_SPK_I2S_1"
@@ -42,23 +35,15 @@ struct mtk_spk_i2c_ctrl {
 #define MTK_SPK_I2S_9_STR "MTK_SPK_I2S_9"
 #define MTK_SPK_TINYCONN_I2S_0_STR "MTK_SPK_TINYCONN_I2S_0"
 
+
 enum mtk_spk_type {
 	MTK_SPK_NOT_SMARTPA = 0,
-#if defined(CONFIG_SND_SOC_AW8896)
-	MTK_SPK_AWINIC_AW8896,
-#endif
-#ifdef CONFIG_SND_SOC_SMA1303
-	MTK_SPK_SILICON_SM1303,
-#endif
-#ifdef CONFIG_SND_SOC_SMA1305
-	MTK_SPK_SILICON_SM1305,
+#ifdef CONFIG_SND_SOC_SMA1301
+	MTK_SPK_SILICON_SM1301,
 #endif
 	MTK_SPK_RICHTEK_RT5509,
 	MTK_SPK_MEDIATEK_MT6660,
 	MTK_SPK_NXP_TFA98XX,
-#ifdef CONFIG_SND_SOC_TAS256X
-	MTK_SPK_TI_TAS256X,
-#endif
 	MTK_SPK_TYPE_NUM
 };
 
@@ -88,12 +73,6 @@ enum mtk_spk_i2s_type {
 int mtk_spk_get_type(void);
 int mtk_spk_get_i2s_out_type(void);
 int mtk_spk_get_i2s_in_type(void);
-int mtk_ext_spk_get_status(void);
-void mtk_ext_spk_enable(int enable);
-int mtk_spk_update_info(struct snd_soc_card *card,
-			struct platform_device *pdev,
-			int *spk_out_dai_link_idx, int *spk_ref_dai_link_idx,
-			const struct snd_soc_ops *i2s_ops);
 int mtk_spk_update_dai_link(struct snd_soc_card *card,
 			    struct platform_device *pdev,
 			    const struct snd_soc_ops *i2s_ops);

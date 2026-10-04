@@ -573,7 +573,7 @@ BOOLEAN wlanoidGetChannelInfo(IN P_ADAPTER_T prAdapter, IN PUINT_8 puPartialScan
 				continue;
 			}
 
-			if (i >= MAXIMUM_OPERATION_CHANNEL_LIST || i < 0)
+			if (i >= MAXIMUM_OPERATION_CHANNEL_LIST)
 				break;
 			if (channel_tmp->band == IEEE80211_BAND_2GHZ)
 				PartialScanChannel->arChnlInfoList[i].eBand = BAND_2G4;
@@ -832,8 +832,7 @@ WLAN_STATUS wlanoidSetBssidListScanAdv(IN P_ADAPTER_T prAdapter, IN PVOID pvSetB
 				partial_result = wlanoidGetChannelInfo(prAdapter, prScanRequest->puPartialScanReq);
 				if (partial_result == FALSE)
 					return WLAN_STATUS_FAILURE;
-				aisFsmScanRequestAdv(prAdapter, ucSsidNum, rSsid, pucIe, u4IeLength,
-					prScanRequest->aucRandomMac);
+				aisFsmScanRequestAdv(prAdapter, ucSsidNum, rSsid, pucIe, u4IeLength);
 			} else
 				return WLAN_STATUS_FAILURE;
 		} else {
@@ -846,14 +845,12 @@ WLAN_STATUS wlanoidSetBssidListScanAdv(IN P_ADAPTER_T prAdapter, IN PVOID pvSetB
 			partial_result = wlanoidGetChannelInfo(prAdapter, prScanRequest->puPartialScanReq);
 			if (partial_result == FALSE)
 				return WLAN_STATUS_FAILURE;
-			aisFsmScanRequestAdv(prAdapter, ucSsidNum, rSsid, pucIe, u4IeLength,
-				prScanRequest->aucRandomMac);
+			aisFsmScanRequestAdv(prAdapter, ucSsidNum, rSsid, pucIe, u4IeLength);
 		} else if (kalGetMediaStateIndicated(prAdapter->prGlueInfo) != PARAM_MEDIA_STATE_CONNECTED) {
 			partial_result = wlanoidGetChannelInfo(prAdapter, prScanRequest->puPartialScanReq);
 			if (partial_result == FALSE)
 				return WLAN_STATUS_FAILURE;
-			aisFsmScanRequestAdv(prAdapter, ucSsidNum, rSsid, pucIe, u4IeLength,
-				prScanRequest->aucRandomMac);
+			aisFsmScanRequestAdv(prAdapter, ucSsidNum, rSsid, pucIe, u4IeLength);
 		} else
 			return WLAN_STATUS_FAILURE;
 	}
@@ -1121,7 +1118,7 @@ wlanoidSetConnect(IN P_ADAPTER_T prAdapter, IN PVOID pvSetBuffer, IN UINT_32 u4S
 	cnmTimerStopTimer(prAdapter, &prAdapter->rScanNloTimeoutTimer);
 
 	DBGLOG(OID, INFO, "ssid %s, bssid %pM, conn policy %d, disc reason %d\n",
-			     HIDE(prConnSettings->aucSSID), prConnSettings->aucBSSID,
+			     prConnSettings->aucSSID, prConnSettings->aucBSSID,
 			     prConnSettings->eConnectionPolicy, prAisAbortMsg->ucReasonOfDisconnect);
 	return WLAN_STATUS_SUCCESS;
 }
@@ -1265,8 +1262,7 @@ wlanoidSetSsid(IN P_ADAPTER_T prAdapter, IN PVOID pvSetBuffer, IN UINT_32 u4SetB
 	}
 	DBGLOG(OID, INFO, "u4ScanResultNum=%d, SSID=%s, ucSSIDLen=%d\n",
 		prAdapter->rWlanInfo.u4ScanResultNum,
-		HIDE(prAdapter->rWifiVar.rConnSettings.aucSSID),
-		prAdapter->rWifiVar.rConnSettings.ucSSIDLen);
+		prAdapter->rWifiVar.rConnSettings.aucSSID, prAdapter->rWifiVar.rConnSettings.ucSSIDLen);
 
 	mboxSendMsg(prAdapter, MBOX_ID_0, (P_MSG_HDR_T) prAisAbortMsg, MSG_SEND_METHOD_BUF);
 
@@ -10893,7 +10889,7 @@ wlanoidSendNeighborRequest(P_ADAPTER_T prAdapter, PVOID pvSetBuffer, UINT_32 u4S
 	prSSIDIE->rSubIE.ucSubID = ELEM_ID_SSID;
 	prSSIDIE->rSubIE.ucLength = (UINT_8)u4SetBufferLen;
 	kalMemCopy(&prSSIDIE->rSubIE.aucOptInfo[0], pucSSID, (UINT_8)u4SetBufferLen);
-	DBGLOG(OID, INFO, "Send Neighbor Request, SSID=%s\n", HIDE(pucSSID));
+	DBGLOG(OID, INFO, "Send Neighbor Request, SSID=%s\n", pucSSID);
 	rlmTxNeighborReportRequest(prAdapter, prAisBssInfo->prStaRecOfAP, prSSIDIE);
 	kalMemFree(prSSIDIE, PHY_MEM_TYPE, ucSSIDIELen);
 	return WLAN_STATUS_SUCCESS;
@@ -12641,15 +12637,11 @@ wlanoidConfigRoaming(IN P_ADAPTER_T prAdapter, IN PVOID pvSetBuffer,
 			}
 
 			prBlackList = aisAddBlacklist(prAdapter, prBssDesc);
-			if (prBlackList != NULL) {
-				prBlackList->fgIsInFWKBlacklist = TRUE;
-				DBGLOG(REQ, INFO,
-					"Receives roaming blacklist SSID=%s addr=%pM len=%d %d\n",
-					prBlackList->aucSSID, prBlackList->aucBSSID,
-					len_shift, u4SetBufferLen);
-			} else {
-				DBGLOG(REQ, ERROR, "add blacklist failed\n");
-			}
+			prBlackList->fgIsInFWKBlacklist = TRUE;
+			DBGLOG(REQ, INFO,
+			       "Receives roaming blacklist SSID=%s addr=%pM len=%d %d\n",
+			       prBlackList->aucSSID, prBlackList->aucBSSID,
+			       len_shift, u4SetBufferLen);
 		}
 	}
 
@@ -12699,41 +12691,6 @@ wlanoidExternalAuthDone(IN P_ADAPTER_T prAdapter,
 
 	mboxSendMsg(prAdapter, MBOX_ID_0, (P_MSG_HDR_T)prExternalAuthMsg,
 		    MSG_SEND_METHOD_BUF);
-
-	return WLAN_STATUS_SUCCESS;
-}
-
-uint32_t
-wlanoidSetScanMacOui(IN P_ADAPTER_T prAdapter,
-		IN void *pvSetBuffer, IN uint32_t u4SetBufferLen,
-		OUT uint32_t *pu4SetInfoLen)
-{
-	P_BSS_INFO_T prBssInfo = NULL;
-
-	if (!prAdapter) {
-		DBGLOG(SCN, WARN,
-			"wlanoidSetScanMacOui, prAdapter = NULL");
-		return WLAN_STATUS_FAILURE;
-	}
-	if (!prAdapter->prGlueInfo) {
-		DBGLOG(SCN, WARN,
-			"wlanoidSetScanMacOui, prAdapter->prGlueInfo = NULL");
-		return WLAN_STATUS_FAILURE;
-	}
-
-	ASSERT(pvSetBuffer);
-	ASSERT(u4SetBufferLen == MAC_OUI_LEN);
-
-	prBssInfo = &(prAdapter->rWifiVar.arBssInfo[NETWORK_TYPE_AIS_INDEX]);
-
-	if (!pvSetBuffer) {
-		DBGLOG(REQ, WARN, "Buffer is NULL!\n");
-		return WLAN_STATUS_FAILURE;
-	}
-
-	kalMemCopy(prBssInfo->ucScanOui, pvSetBuffer, MAC_OUI_LEN);
-	prBssInfo->fgIsScanOuiSet = TRUE;
-	*pu4SetInfoLen = MAC_OUI_LEN;
 
 	return WLAN_STATUS_SUCCESS;
 }

@@ -11,7 +11,6 @@
  * GNU General Public License for more details.
  */
 
-
 /* An example test TA implementation.
  */
 

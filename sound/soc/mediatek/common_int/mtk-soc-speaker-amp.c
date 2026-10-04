@@ -31,12 +31,12 @@
 #if defined(CONFIG_SND_SOC_AW8896)
 #include "../../codecs/aw8896.h"
 #endif
-#ifdef CONFIG_SND_SOC_MT6660
-#include "../../codecs/mt6660.h"
-#endif /* CONFIG_SND_SOC_MT6660 */
 #if defined(CONFIG_SND_SOC_TAS5782M)
 #include "../../codecs/tas5782m.h"
 #endif
+#ifdef CONFIG_SND_SOC_MT6660
+#include "../../codecs/mt6660.h"
+#endif /* CONFIG_SND_SOC_MT6660 */
 
 static unsigned int mtk_spk_type;
 static struct mtk_spk_i2c_ctrl mtk_spk_list[MTK_SPK_TYPE_NUM] = {

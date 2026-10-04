@@ -339,7 +339,7 @@ static int nvram_read(char *filename, char *buf, ssize_t len, int offset)
 
 		p = (__force char __user *)buf;
 		pos = (loff_t)offset;
-		retLen = __vfs_read(fd, p, len, &pos);
+		retLen = vfs_read(fd, p, len, &pos);
 		if (retLen < 0)
 			DBGLOG(INIT, ERROR, "[MT6620][nvram_read] : read failed!! Error code: %d\n", retLen);
 

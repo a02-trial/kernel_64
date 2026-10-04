@@ -47,101 +47,6 @@
 #include "lcm_drv.h"
 #include "lcm_util.h"
 
-#ifndef BUILD_LK
-static unsigned int GPIO_LCD_RST;
-struct pinctrl *lcd_pinctrl;
-struct pinctrl_state *lcd_disp_pwm;
-struct pinctrl_state *lcd_disp_pwm_gpio;
-
-void lcm_request_gpio_control(struct device *dev)
-{
-	int ret;
-
-	GPIO_LCD_RST = of_get_named_gpio(dev->of_node, "gpio_lcd_rst", 0);
-	gpio_request(GPIO_LCD_RST, "GPIO_LCD_RST");
-
-	lcd_pinctrl = devm_pinctrl_get(dev);
-	if (IS_ERR(lcd_pinctrl)) {
-		ret = PTR_ERR(lcd_pinctrl);
-		pr_notice(" Cannot find lcd_pinctrl %d!\n", ret);
-	}
-
-	lcd_disp_pwm = pinctrl_lookup_state(lcd_pinctrl, "disp_pwm");
-	if (IS_ERR(lcd_pinctrl)) {
-		ret = PTR_ERR(lcd_pinctrl);
-		pr_notice(" Cannot find lcd_disp_pwm %d!\n", ret);
-	}
-
-	lcd_disp_pwm_gpio = pinctrl_lookup_state(lcd_pinctrl, "disp_pwm_gpio");
-	if (IS_ERR(lcd_pinctrl)) {
-		ret = PTR_ERR(lcd_pinctrl);
-		pr_notice(" Cannot find lcd_disp_pwm_gpio %d!\n", ret);
-	}
-}
-
-static int lcm_driver_probe(struct device *dev, void const *data)
-{
-	lcm_request_gpio_control(dev);
-
-	return 0;
-}
-
-static const struct of_device_id lcm_platform_of_match[] = {
-	{
-		.compatible = "truly,nt35595_fhd_dsi",
-		.data = 0,
-	}, {
-		/* sentinel */
-	}
-};
-
-MODULE_DEVICE_TABLE(of, platform_of_match);
-
-static int lcm_platform_probe(struct platform_device *pdev)
-{
-	const struct of_device_id *id;
-
-	id = of_match_node(lcm_platform_of_match, pdev->dev.of_node);
-	if (!id)
-		return -ENODEV;
-
-	return lcm_driver_probe(&pdev->dev, id->data);
-}
-
-static struct platform_driver lcm_driver = {
-	.probe = lcm_platform_probe,
-	.driver = {
-		.name = "nt35595",
-		.owner = THIS_MODULE,
-		.of_match_table = lcm_platform_of_match,
-	},
-};
-
-static int __init lcm_drv_init(void)
-{
-	pr_notice("LCM: Register lcm driver\n");
-	if (platform_driver_register(&lcm_driver)) {
-		pr_notice("LCM: failed to register disp driver\n");
-		return -ENODEV;
-	}
-
-	return 0;
-}
-
-static void __exit lcm_drv_exit(void)
-{
-	platform_driver_unregister(&lcm_driver);
-	pr_notice("LCM: Unregister lcm driver done\n");
-}
-
-late_initcall(lcm_drv_init);
-module_exit(lcm_drv_exit);
-MODULE_AUTHOR("mediatek");
-MODULE_DESCRIPTION("Display subsystem Driver");
-MODULE_LICENSE("GPL");
-#endif
-
-
 /* --------------------------------------------------------------------- */
 /*  Local Constants */
 /* --------------------------------------------------------------------- */
@@ -149,8 +54,6 @@ MODULE_LICENSE("GPL");
 #define FRAME_WIDTH                                         (1080)
 #define FRAME_HEIGHT                                        (1920)
 #define LCM_ID_NT35595                                      (0x95)
-#define GPIO_OUT_ONE                                        1
-#define GPIO_OUT_ZERO                                       0
 
 #define REGFLAG_DELAY                                       0xFC
 #define REGFLAG_END_OF_TABLE                                0xFD
@@ -191,18 +94,6 @@ static struct LCM_UTIL_FUNCS lcm_util = {0};
 #define LCD_DEBUG(fmt)  pr_debug(fmt)
 #endif
 
-static void lcm_set_gpio_output(unsigned int GPIO, unsigned int output)
-{
-#ifdef BUILD_LK
-	mt_set_gpio_mode(GPIO, GPIO_MODE_00);
-	mt_set_gpio_dir(GPIO, GPIO_DIR_OUT);
-	mt_set_gpio_out(GPIO, output);
-#else
-	gpio_direction_output(GPIO, output);
-	gpio_set_value(GPIO, output);
-#endif
-}
-
 struct LCM_setting_table {
 	unsigned int cmd;
 	unsigned char count;
@@ -229,7 +120,7 @@ static struct LCM_setting_table lcm_initinal_setting[] = {
 	{0x5E, 1, {0x00} },
 
 	{0x11, 0, {} },
-	{REGFLAG_DELAY, 120, {} },
+	{REGFLAG_DELAY, 150, {} },
 
 	{0xFF, 1, {0x24} },
 	{REGFLAG_DELAY, 2, {} },
@@ -850,52 +741,43 @@ static void lcm_init_power(void)
 #ifdef BUILD_LK
 	dprintf("[LK/LCM] %s() enter\n", __func__);
 
-	lcm_set_gpio_output(GPIO_LCD_RST, GPIO_OUT_ONE);
+	SET_RESET_PIN(1);
 	MDELAY(10);
 
-	lcm_set_gpio_output(GPIO_LCD_RST, GPIO_OUT_ZERO);
+	SET_RESET_PIN(0);
 	MDELAY(10);
 
-	lcm_set_gpio_output(GPIO_LCD_RST, GPIO_OUT_ONE);
+	SET_RESET_PIN(1);
 	MDELAY(10);
-
-	pinctrl_select_state(lcd_pinctrl, lcd_disp_pwm);
-
 #else
-	pr_notice("[KERNEL/LCM] %s() enter\n", __func__);
+	pr_debug("[KERNEL/LCM] %s() enter\n", __func__);
 #endif
 }
 
 static void lcm_resume_power(void)
 {
-	lcm_set_gpio_output(GPIO_LCD_RST, GPIO_OUT_ONE);
+	SET_RESET_PIN(1);
 	MDELAY(10);
 
-	lcm_set_gpio_output(GPIO_LCD_RST, GPIO_OUT_ZERO);
-	MDELAY(2);
+	SET_RESET_PIN(0);
+	MDELAY(10);
 
-	lcm_set_gpio_output(GPIO_LCD_RST, GPIO_OUT_ONE);
-	MDELAY(5);
-
-	pinctrl_select_state(lcd_pinctrl, lcd_disp_pwm);
+	SET_RESET_PIN(1);
+	MDELAY(10);
 }
 
 static void lcm_suspend_power(void)
 {
-	pinctrl_select_state(lcd_pinctrl, lcd_disp_pwm_gpio);
-
-	lcm_set_gpio_output(GPIO_LCD_RST, GPIO_OUT_ZERO);
-	MDELAY(10);
-	lcm_set_gpio_output(GPIO_LCD_RST, GPIO_OUT_ONE);
+	SET_RESET_PIN(1);
 	MDELAY(10);
 
-	lcm_set_gpio_output(GPIO_LCD_RST, GPIO_OUT_ZERO);
+	SET_RESET_PIN(0);
 	MDELAY(10);
 }
 
 static void lcm_init_lcm(void)
 {
-	pr_notice("[KERNEL/LCM] nt35595 %s enter\n", __func__);
+	pr_debug("[KERNEL/LCM] nt35595 %s enter\n", __func__);
 	push_table(lcm_initinal_setting,
 	 sizeof(lcm_initinal_setting) / sizeof(struct LCM_setting_table),
 	 1);
@@ -903,7 +785,7 @@ static void lcm_init_lcm(void)
 
 static void lcm_suspend(void)
 {
-	pr_notice("[Kernel/LCM] nt35595 %s() enter\n", __func__);
+	pr_debug("[Kernel/LCM] nt35595 %s() enter\n", __func__);
 	push_table(lcm_suspend_setting,
 		sizeof(lcm_suspend_setting) / sizeof(struct LCM_setting_table),
 		1);
@@ -911,7 +793,7 @@ static void lcm_suspend(void)
 
 static void lcm_resume(void)
 {
-	pr_notice("[Kernel/LCM] nt35595 %s() enter\n", __func__);
+	pr_debug("[Kernel/LCM] nt35595 %s() enter\n", __func__);
 	lcm_init_lcm();
 }
 
@@ -936,7 +818,7 @@ static unsigned int lcm_compare_id(void)
 #ifdef BUILD_LK
 	dprintf(0, "%s, [LK/LCM] nt35595: id = 0x%08x\n", __func__, id);
 #else
-	pr_notice("%s, [Kernel/LCM] nt35595: id = 0x%08x\n", __func__, id);
+	pr_debug("%s, [Kernel/LCM] nt35595: id = 0x%08x\n", __func__, id);
 #endif
 
 	if (id == LCM_ID_NT35595)

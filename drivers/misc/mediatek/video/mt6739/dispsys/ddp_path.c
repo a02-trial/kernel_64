@@ -24,9 +24,6 @@
 #include "ddp_hal.h"
 #include "disp_helper.h"
 #include "ddp_path.h"
-#if IS_ENABLED(CONFIG_MTK_SMI_EXT)
-#include "smi_public.h"
-#endif
 
 #include "m4u.h"
 
@@ -750,12 +747,8 @@ int ddp_path_top_clock_on(void)
 		if (disp_helper_get_option(DISP_OPT_DYNAMIC_SWITCH_MMSYSCLK))
 			; /*ddp_clk_prepare_enable(MM_VENCPLL);*/
 		ddp_clk_prepare_enable(DISP_MTCMOS_CLK);
-#ifdef CONFIG_MTK_SMI_EXT
-		smi_bus_prepare_enable(SMI_LARB0, "DISP");
-#else
 		ddp_clk_prepare_enable(DISP0_SMI_COMMON);
 		ddp_clk_prepare_enable(DISP0_SMI_LARB0);
-#endif
 	} else {
 		need_enable = 1;
 		if (disp_helper_get_option(DISP_OPT_DYNAMIC_SWITCH_MMSYSCLK))
@@ -769,12 +762,8 @@ int ddp_path_top_clock_on(void)
 
 int ddp_path_top_clock_off(void)
 {
-#ifdef CONFIG_MTK_SMI_EXT
-	smi_bus_disable_unprepare(SMI_LARB0, "DISP");
-#else
 	ddp_clk_disable_unprepare(DISP0_SMI_LARB0);
 	ddp_clk_disable_unprepare(DISP0_SMI_COMMON);
-#endif
 	ddp_clk_disable_unprepare(DISP_MTCMOS_CLK);
 	if (disp_helper_get_option(DISP_OPT_DYNAMIC_SWITCH_MMSYSCLK))
 		; /*ddp_clk_disable_unprepare(MM_VENCPLL);*/

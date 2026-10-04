@@ -136,7 +136,7 @@ int Ripi_cpu_dvfs_thread(void *data)
 		&cpudvfs_lock, &cpufreq_act);
 
 	if (ret != 0) {
-		pr_info("Error: ipi_recv_registration CPU DVFS error: %d\n",
+		cpufreq_ver_dbg("Error: ipi_recv_registration CPU DVFS error: %d\n",
 			ret);
 		do {
 			msleep(1000);
@@ -295,7 +295,7 @@ int dvfs_to_spm2_command(u32 cmd, struct cdvfs_data *cdvfs_d)
 	case IPI_DVFS_INIT_PTBL:
 		cdvfs_d->cmd = cmd;
 
-		pr_info("I'd like to initialize sspm DVFS, segment code = %d\n",
+		cpufreq_ver_dbg("I'd like to initialize sspm DVFS, segment code = %d\n",
 			cdvfs_d->u.set_fv.arg[0]);
 
 		ret = sspm_ipi_send_sync_new(IPI_ID_CPU_DVFS,
@@ -313,7 +313,7 @@ int dvfs_to_spm2_command(u32 cmd, struct cdvfs_data *cdvfs_d)
 	case IPI_DVFS_INIT:
 		cdvfs_d->cmd = cmd;
 
-		pr_info("I'd like to initialize sspm DVFS, segment code = %d\n",
+		cpufreq_ver_dbg("I'd like to initialize sspm DVFS, segment code = %d\n",
 			cdvfs_d->u.set_fv.arg[0]);
 
 		ret = sspm_ipi_send_sync_new(IPI_ID_CPU_DVFS,
@@ -865,8 +865,7 @@ void cpuhvfs_pvt_tbl_create(void)
 			((*(recordTbl + (i * ARRAY_COL_SIZE) + 1) &
 			0xFFF) << 16) |
 			(*(recordTbl + (i * ARRAY_COL_SIZE)) & 0xFFFF);
-		cpufreq_ver_dbg("DVFS - recordRef[%d] = 0x%x\n",
-			i, recordRef[i]);
+		cpufreq_ver_dbg("DVFS - recordRef[%d] = 0x%x\n", i, recordRef[i]);
 		/* LL [31:16] = clk_div, [15:0] = post_div */
 		recordRef[i + NR_FREQ] =
 			((*(recordTbl + (i * ARRAY_COL_SIZE) + 3) & 0xFF) << 16)

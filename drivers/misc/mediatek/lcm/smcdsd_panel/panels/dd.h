@@ -11,6 +11,7 @@
 #define __DD_H__
 
 #include <linux/ctype.h>
+#include <linux/uaccess.h>
 
 struct mdnie_info;
 struct mdnie_table;
@@ -62,10 +63,10 @@ static inline int dd_simple_write_to_buffer(char *ibuf, size_t sizeof_ibuf,
 
 	ibuf[ret] = '\0';
 
-	ibuf = strim(ibuf);
-
-	if (ibuf[0] && !isalnum(ibuf[0]))
+	if (ibuf[0] && !isdigit(ibuf[0]))
 		return -EFAULT;
+
+	strim(ibuf);
 
 	return 0;
 };

@@ -105,9 +105,19 @@ config PROC_DLOG
 	depends on PROC_FSLOG
 	default y
 
+config PROC_FSLOG_LOWMEM
+	bool "Reduce log buffers for lowmem device"
+	depends on PROC_FSLOG
+	default n
+
 config PROC_UID
 	bool "Include /proc/uid/ files"
 	default y
 	depends on PROC_FS && RT_MUTEXES
 	help
 	Provides aggregated per-uid information under /proc/uid.
+
+config PROC_TRIGGER_SQLITE_BUG
+	bool "Trigger bug for SQLite debugging"
+	depends on PROC_FS
+	default y if !SAMSUNG_PRODUCT_SHIP

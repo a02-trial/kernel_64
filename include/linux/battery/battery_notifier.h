@@ -1,5 +1,4 @@
 /*
- * include/linux/battery/battery_notifier.h
  *
  * header file supporting battery notifier call chain information
  *
@@ -90,13 +89,16 @@ typedef enum {
 } pdic_notifier_event_t;
 
 typedef struct _power_list {
+#if defined(CONFIG_PDIC_PD30)
 	int accept;
 	int max_voltage;
 	int min_voltage;
 	int max_current;
 	int apdo;
-	int comm_capable;
-	int suspend;
+#else
+	int max_voltage;
+	int max_current;
+#endif
 } POWER_LIST;
 
 typedef enum
@@ -113,10 +115,12 @@ typedef struct _pdic_sink_status {
 	int available_pdo_num; // the number of available PDO
 	int selected_pdo_num; // selected number of PDO to change
 	int current_pdo_num; // current number of PDO
+#if defined(CONFIG_PDIC_PD30)
 	int pps_voltage;
 	int pps_current;
 	int request_apdo; // apdo for pps communication
 	int has_apdo; // pd source has apdo or not
+#endif
 	unsigned int rp_currentlvl; // rp current level by pdic
 } PDIC_SINK_STATUS;
 

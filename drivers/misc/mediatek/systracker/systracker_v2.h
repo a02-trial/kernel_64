@@ -39,9 +39,7 @@
 	#define BUS_DBG_BUS_MHZ             (135)
 #elif defined(CONFIG_MACH_MT6765) || defined(CONFIG_MACH_MT6761)
 	#define BUS_DBG_BUS_MHZ             (156)
-#elif defined(CONFIG_MACH_MT6785) || defined(CONFIG_MACH_MT6885) || \
-	defined(CONFIG_MACH_MT6873) || defined(CONFIG_MACH_MT6853) || \
-	defined(CONFIG_MACH_MT6893)
+#elif defined(CONFIG_MACH_MT6785)
 	#define BUS_DBG_BUS_MHZ             (156)
 #elif defined(CONFIG_MACH_MT6779)
 	#define BUS_DBG_BUS_MHZ             (273)
@@ -67,7 +65,6 @@
 #define BUS_DBG_CON_WDT_RST_EN      (0x00001000)
 #define BUS_DBG_CON_HALT_ON_EN      (0x00002000)
 #define BUS_DBG_CON_BUS_OT_EN       (0x00004000)
-#define BUS_DBG_CON_WSLV_ERR_EN     (0x00008000)
 #define BUS_DBG_CON_SW_RST          (0x00010000)
 #define BUS_DBG_CON_IRQ_AR_STA1     (0x00100000)
 #define BUS_DBG_CON_IRQ_AW_STA1     (0x00200000)
@@ -154,7 +151,6 @@ struct systracker_config_t {
 	int timeout_ms;
 	int timeout2_ms;
 	int wp_phy_address;
-	int wp_phy_mask;
 };
 
 extern int tracker_dump(char *buf);
@@ -178,7 +174,6 @@ extern void save_entry(void);
 extern void aee_dump_backtrace(struct pt_regs *regs, struct task_struct *tsk);
 extern irqreturn_t systracker_isr(void);
 extern int systracker_watchpoint_enable(void);
-extern int systracker_set_watchpoint_mask(unsigned int mask);
 extern int systracker_set_watchpoint_addr(unsigned int phy_addr);
 extern void systracker_reset(void);
 extern void systracker_enable(void);

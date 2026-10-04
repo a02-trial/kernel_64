@@ -20,7 +20,6 @@
 #include <linux/delay.h>
 #include <linux/string.h>
 #include <linux/io.h>
-#include "adsp_ipi.h"
 #include "mtk_hifixdsp_common.h"
 #include "adsp_helper.h"
 
@@ -58,17 +57,15 @@ int hifixdsp_run_status(void)
 	return 0;
 }
 
-static void set_hifixdsp_run_status(int done)
+static void set_hifixdsp_run_status(void)
 {
 	struct adsp_chip_info *adsp;
 
 	adsp = get_adsp_chip_data();
 	if (!adsp)
 		return;
-	adsp->adsp_bootup_done = done;
-	adsp_ipi_set_wdt_status();
-	pr_notice("[ADSP] HIFIxDSP %s to run now.\n",
-		done ? "start" : "stop");
+	adsp->adsp_bootup_done = 1;
+	pr_notice("[ADSP] HIFIxDSP start to run now.\n");
 }
 
 static
@@ -249,18 +246,11 @@ static void async_load_hifixdsp_and_run(
 	u32 adsp_bootup_addr;
 	struct adsp_chip_info *adsp;
 
-	adsp = get_adsp_chip_data();
-	if (!adsp) {
-		err = -EINVAL;
-		goto TAIL;
-	}
-
 	if (!fw) {
-		err = -ENOENT;
 		pr_err("[ADSP] error: fw == NULL!\n");
 		pr_err("request_firmware_nowait (%s) not available.\n",
 				HIFIXDSP_IMAGE_NAME);
-		goto TAIL;
+		return;
 	}
 
 	pr_info("firmware %s load success, size = %d\n",
@@ -270,6 +260,12 @@ static void async_load_hifixdsp_and_run(
 	 * Step1:
 	 * Parse Image Header for security image format.
 	 */
+	adsp = get_adsp_chip_data();
+	if (!adsp) {
+		err = -EINVAL;
+		pr_err("adsp_chip_data is not initialized!\n");
+		goto TAIL;
+	}
 	adsp_bootup_addr = firmware_adsp_load(
 		(void *)fw->data,
 		fw->size, adsp->pa_dram);
@@ -284,8 +280,6 @@ TAIL:
 	release_firmware(fw);
 	if (err) {
 		pr_err("[ADSP] firmware_adsp_load Error!\n");
-		if (adsp)
-			adsp_clock_power_off(adsp->data->dev);
 		return;
 	}
 
@@ -294,10 +288,10 @@ TAIL:
 	 * Power-on HIFIxDSP boot sequence
 	 */
 	msleep(20);
-	hifixdsp_boot_sequence(adsp_bootup_addr);
+	hifixdsp_poweron(adsp_bootup_addr);
 
 	adsp_misc_setting_after_poweron();
-	set_hifixdsp_run_status(1);
+	set_hifixdsp_run_status();
 
 	/* callback function for user */
 	if (user_callback_fn)
@@ -305,14 +299,12 @@ TAIL:
 }
 
 /*
- * HIFIxDSP start to run and load bin.
  * Assume called by audio system only.
  */
 int async_load_hifixdsp_bin_and_run(
 			callback_fn callback, void *param)
 {
 	int ret = 0;
-	struct adsp_chip_info *adsp;
 
 	if (hifixdsp_run_status()) {
 		pr_err("[ADSP] error: bootup two times!\n");
@@ -322,62 +314,13 @@ int async_load_hifixdsp_bin_and_run(
 	user_callback_fn = callback;
 	callback_arg = param;
 
-	/* Open HIFIxDSP power and clock */
-	adsp = get_adsp_chip_data();
-	if (!adsp)
-		goto TAIL;
-	ret = adsp_clock_power_on(adsp->data->dev);
-	if (ret) {
-		pr_err("[ADSP] adsp_clock_power_on fail!\n");
-		goto TAIL;
-	}
-
 	/* Async load firmware and run HIFIxDSP */
 	ret = request_firmware_nowait(THIS_MODULE, true,
 			HIFIXDSP_IMAGE_NAME, NULL,
 			GFP_KERNEL, NULL,
 			async_load_hifixdsp_and_run
 			);
-TAIL:
-	return ret;
-}
 
-/*
- * HIFIxDSP shutdown and not run.
- * Assume called by audio system only.
- */
-int hifixdsp_stop_run(void)
-{
-	int ret = 0;
-	struct adsp_chip_info *adsp;
-
-	if (!hifixdsp_run_status()) {
-		pr_notice("[ADSP] not boot to run yet!\n");
-		return ret;
-	}
-
-	ret = adsp_shutdown_notify_check();
-	if (ret) {
-		pr_err("[ADSP] adsp_shutdown_notify_check fail!\n");
-		goto TAIL;
-	}
-
-	adsp_wdt_stop();
-	hifixdsp_shutdown();
-	adsp_remove_setting_after_shutdown();
-
-	adsp = get_adsp_chip_data();
-	if (!adsp)
-		goto TAIL;
-	ret = adsp_clock_power_off(adsp->data->dev);
-	if (ret) {
-		pr_err("[ADSP] adsp_clock_power_off fail!\n");
-		goto TAIL;
-	}
-
-	set_hifixdsp_run_status(0);
-
-TAIL:
 	return ret;
 }
 

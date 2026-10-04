@@ -16,8 +16,7 @@ config MTK_GAUGE_VERSION
 	default 0
 	help
 	  Select MTK Gauge Master version
-	  30: Gauge Master 3.0
-	  20: Gauge Master 2.0
+	  20: Gauge Master 3.0
 
 config MTK_DISABLE_GAUGE
 	bool "disable Gauge Master 3.0"

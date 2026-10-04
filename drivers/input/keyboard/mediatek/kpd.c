@@ -15,8 +15,10 @@
  */
 
 #include "kpd.h"
-#ifdef CONFIG_PM_SLEEP
+#ifdef CONFIG_PM_WAKELOCKS
 #include <linux/pm_wakeup.h>
+#else
+#include <linux/wakelock.h>
 #endif
 #include <linux/of.h>
 #include <linux/of_address.h>
@@ -49,20 +51,22 @@ static u32 kpd_keymap[KPD_NUM_KEYS];
 static u16 kpd_keymap_state[KPD_NUM_MEMS];
 
 struct input_dev *kpd_input_dev;
-#ifdef CONFIG_PM_SLEEP
+#ifdef CONFIG_PM_WAKELOCKS
 struct wakeup_source kpd_suspend_lock;
+#else
+struct wake_lock kpd_suspend_lock;
 #endif
 struct keypad_dts_data kpd_dts_data;
-
-#ifdef CONFIG_SEC_PM
-static struct device *key_reset;
-static int volkey_wakeup = 0;
-#endif
 
 struct device *sec_key;
 int check_vukey_press;
 int check_vdkey_press;
 int check_pkey_press;
+
+#ifdef CONFIG_SEC_PM
+static struct device *key_reset;
+static int volkey_wakeup;
+#endif
 
 /* for keymap handling */
 static void kpd_keymap_handler(unsigned long data);
@@ -203,8 +207,10 @@ static void kpd_keymap_handler(unsigned long data)
 	void *dest;
 
 	kpd_get_keymap_state(new_state);
-#ifdef CONFIG_PM_SLEEP
+#ifdef CONFIG_PM_WAKELOCKS
 	__pm_wakeup_event(&kpd_suspend_lock, 500);
+#else
+	wake_lock_timeout(&kpd_suspend_lock, HZ / 2);
 #endif
 	for (i = 0; i < KPD_NUM_MEMS; i++) {
 		change = new_state[i] ^ kpd_keymap_state[i];
@@ -233,8 +239,7 @@ static void kpd_keymap_handler(unsigned long data)
 			input_report_key(kpd_input_dev, linux_keycode, pressed);
 			input_sync(kpd_input_dev);
 			/* kpd_print("report Linux keycode = %d\n", linux_keycode); */
-			pr_info("%s %s: code=%d, state=%ld\n", SECLOG, __func__, linux_keycode, pressed);
-
+			pr_info("%s %s: code=%d, state=%d\n", SECLOG, __func__, linux_keycode, pressed);
 			check_vukey_press = pressed;
 
 #ifdef CONFIG_LONG_PRESS_MODE_EN
@@ -347,96 +352,6 @@ static int32_t kpd_gpio_init(struct device *dev)
 	return ret;
 }
 
-#ifdef CONFIG_SEC_PM
-static ssize_t volkey_wakeup_show(struct kobject *kobj,
-				struct kobj_attribute *attr, char *buf)
-{
-	return sprintf(buf, "%d\n", volkey_wakeup);
-}
-
-static ssize_t volkey_wakeup_store(struct kobject *kobj,
-				struct kobj_attribute *attr, const char *buf, size_t n)
-{
-	int val;
-
-	if (sscanf(buf, "%d", &val) != 1)
-		return -EINVAL;
-
-	if (volkey_wakeup == val) {
-		return n;
-	}
-
-	volkey_wakeup = val;
-	return n;
-}
-
-static ssize_t reset_enable_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	int key_mode;
-
-#if	defined(CONFIG_MTK_PMIC_CHIP_MT6359P)
-	key_mode = pmic_get_register_value(PMIC_RG_PWRKEY_KEY_MODE);
-#elif defined(CONFIG_MTK_PMIC_CHIP_MT6358)
-	key_mode = pmic_get_register_value(PMIC_RG_PWRKEY_RST_EN) && pmic_get_register_value(PMIC_RG_HOMEKEY_RST_EN);
-#endif
-
-	if(key_mode)
-		return snprintf(buf, PAGE_SIZE, "%s\n", "N");
-	else
-		return snprintf(buf, PAGE_SIZE, "%s\n", "Y");
-}
-
-static ssize_t reset_enable_store(struct device *dev,
-		struct device_attribute *attr, const char *buf,size_t count)
-{
-	int err = 0;
-	unsigned int value = 0;
-
-	err = kstrtouint(buf, 10, &value);
-	if (err)
-		pr_err("%s, kstrtoint failed.", __func__);
-
-	value = !!value;
-
-#if	defined(CONFIG_MTK_PMIC_CHIP_MT6359P)
-	/* unlock PMIC protect key */
-	pmic_set_register_value(PMIC_RG_CPS_W_KEY, 0x4729);
-#endif
-
-	if (value) {
-#if	defined(CONFIG_MTK_PMIC_CHIP_MT6359P)
-		pmic_set_register_value(PMIC_RG_PWRKEY_KEY_MODE, 0x00);
-		pmic_set_register_value(PMIC_RG_PWRKEY_RST_TD, CONFIG_KPD_PMIC_LPRST_TD);
-#elif defined(CONFIG_MTK_PMIC_CHIP_MT6358)
-		pmic_set_register_value(PMIC_RG_PWRKEY_RST_EN, 0x01);
-		pmic_set_register_value(PMIC_RG_HOMEKEY_RST_EN, 0x00);
-		pmic_set_register_value(PMIC_RG_PWRKEY_RST_TD, CONFIG_KPD_PMIC_LPRST_TD);
-#endif
-	} else {
-#if	defined(CONFIG_MTK_PMIC_CHIP_MT6359P)
-		pmic_set_register_value(PMIC_RG_PWRKEY_KEY_MODE, 0x01);
-		pmic_set_register_value(PMIC_RG_PWRKEY_RST_TD, CONFIG_KPD_PMIC_LPRST_TD);
-#elif defined(CONFIG_MTK_PMIC_CHIP_MT6358)
-		pmic_set_register_value(PMIC_RG_PWRKEY_RST_EN, 0x01);
-		pmic_set_register_value(PMIC_RG_HOMEKEY_RST_EN, 0x01);
-		pmic_set_register_value(PMIC_RG_PWRKEY_RST_TD, CONFIG_KPD_PMIC_LPRST_TD);
-#endif
-	}
-
-#if	defined(CONFIG_MTK_PMIC_CHIP_MT6359P)
-	/* lock PMIC protect key */
-	pmic_set_register_value(PMIC_RG_CPS_W_KEY, 0);
-#endif
-
-	return count;
-}
-
-static struct kobj_attribute volkey_wakeup_attr =
-	__ATTR(volkey_wakeup, 0644, volkey_wakeup_show, volkey_wakeup_store);
-static DEVICE_ATTR(reset_enabled, 0664, reset_enable_show, reset_enable_store);
-#endif
-
 static ssize_t key_pressed_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
@@ -453,6 +368,7 @@ static ssize_t wakeup_enable(struct device *dev,
 	pr_info("%s %s: %s\n", SECLOG, __func__, buf);
 	return count;
 }
+
 static DEVICE_ATTR(sec_key_pressed, 0444 , key_pressed_show, NULL);
 static DEVICE_ATTR(wakeup_keys, 0220, NULL, wakeup_enable);
 
@@ -465,6 +381,74 @@ static struct attribute *sec_key_attrs[] = {
 static struct attribute_group sec_key_attr_group = {
 	.attrs = sec_key_attrs,
 };
+
+#ifdef CONFIG_SEC_PM
+static ssize_t volkey_wakeup_show(struct kobject *kobj,
+				struct kobj_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%d\n", volkey_wakeup);
+}
+
+static ssize_t volkey_wakeup_store(struct kobject *kobj,
+				struct kobj_attribute *attr, const char *buf, size_t n)
+{
+	int val;
+
+	if (kstrtoint(buf, 10, &val))
+		return -EINVAL;
+
+	if (volkey_wakeup == val)
+		return n;
+
+	volkey_wakeup = val;
+	return n;
+}
+
+static ssize_t reset_enable_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	int key_mode;
+
+	key_mode = pmic_get_register_value(PMIC_RG_PWRKEY_RST_EN)
+			&& pmic_get_register_value(PMIC_RG_HOMEKEY_RST_EN);
+
+	if (key_mode)
+		return snprintf(buf, PAGE_SIZE, "%s\n", "N");
+	else
+		return snprintf(buf, PAGE_SIZE, "%s\n", "Y");
+}
+
+static ssize_t reset_enable_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	int err = 0;
+	unsigned int value = 0;
+
+	err = kstrtouint(buf, 10, &value);
+	if (err)
+		pr_err("%s, kstrtoint failed.", __func__);
+
+	value = !!value;
+
+	if (value) {
+		pmic_set_register_value(PMIC_RG_PWRKEY_RST_EN, 0x01);
+		pmic_set_register_value(PMIC_RG_HOMEKEY_RST_EN, 0x00);
+		pmic_set_register_value(PMIC_RG_PWRKEY_RST_TD,
+			CONFIG_KPD_PMIC_LPRST_TD);
+	} else {
+		pmic_set_register_value(PMIC_RG_PWRKEY_RST_EN, 0x01);
+		pmic_set_register_value(PMIC_RG_HOMEKEY_RST_EN, 0x01);
+		pmic_set_register_value(PMIC_RG_PWRKEY_RST_TD,
+			CONFIG_KPD_PMIC_LPRST_TD);
+	}
+
+	return count;
+}
+
+static struct kobj_attribute volkey_wakeup_attr =
+	__ATTR(volkey_wakeup, 0644, volkey_wakeup_show, volkey_wakeup_store);
+static DEVICE_ATTR(reset_enabled, 0664, reset_enable_show, reset_enable_store);
+#endif
 
 static int mt_kpd_debugfs(void)
 {
@@ -565,8 +549,10 @@ static int kpd_pdrv_probe(struct platform_device *pdev)
 		kpd_notice("register input device failed (%d)\n", err);
 		return err;
 	}
-#ifdef CONFIG_PM_SLEEP
+#ifdef CONFIG_PM_WAKELOCKS
 	wakeup_source_init(&kpd_suspend_lock, "kpd wakelock");
+#else
+	wake_lock_init(&kpd_suspend_lock, WAKE_LOCK_SUSPEND, "kpd wakelock");
 #endif
 	/* register IRQ and EINT */
 	kpd_set_debounce(kpd_dts_data.kpd_key_debounce);
@@ -577,10 +563,6 @@ static int kpd_pdrv_probe(struct platform_device *pdev)
 		input_unregister_device(kpd_input_dev);
 		return err;
 	}
-
-	if (enable_irq_wake(kp_irqnr) < 0)
-		kpd_notice("irq %d enable irq wake fail\n", kp_irqnr);
-
 #ifdef CONFIG_MTK_MRDUMP_KEY
 	mt_eint_register();
 #endif
@@ -597,11 +579,9 @@ static int kpd_pdrv_probe(struct platform_device *pdev)
 	sec_key = sec_device_create(pdev, "sec_key");
 	if (IS_ERR(sec_key)) {
 		dev_err(&pdev->dev, "%s: Failed to create device(sec_key)!\n", __func__);
-#ifdef CONFIG_SEC_PM
 		goto out;
-#endif
 	}
-
+	
 	err = sysfs_create_group(&sec_key->kobj, &sec_key_attr_group);
 	if (err) {
 		dev_err(&pdev->dev, "%s: Failed to create sysfs group: %d\n", __func__, err);
@@ -615,19 +595,16 @@ static int kpd_pdrv_probe(struct platform_device *pdev)
 	}
 
 	err = device_create_file(key_reset, &dev_attr_reset_enabled);
-	if (err) {
+	if (err)
 		dev_err(&pdev->dev, "%s: Failed to create device file in sysfs entries(%s)!\n",
 			__func__, dev_attr_reset_enabled.attr.name);
-	}
 
 	err = sysfs_create_file(power_kobj, &volkey_wakeup_attr.attr);
-	if (err) {
+	if (err)
 		kpd_info("volkey_wakeup sysfs_create_file failed (%d)\n", err);
-	}
-
-out:
 #endif
 
+out:
 	/* Add kpd debug node */
 	mt_kpd_debugfs();
 
@@ -639,21 +616,14 @@ out:
 static int kpd_pdrv_suspend(struct platform_device *pdev, pm_message_t state)
 {
 	kpd_suspend = true;
-#if defined(MTK_KP_WAKESOURCE) && defined(CONFIG_SEC_PM)
+#ifdef MTK_KP_WAKESOURCE
+#ifdef CONFIG_SEC_PM
 	if (!volkey_wakeup) {
-#if	defined(CONFIG_MTK_PMIC_CHIP_MT6359P)
-		/* unlock PMIC protect key */
-		pmic_set_register_value(PMIC_RG_CPS_W_KEY, 0x4729);
-#endif
 		/* Disable RST key interrupt while system going to suspend */
 		pmic_set_register_value(PMIC_RG_INT_EN_HOMEKEY, 0);
 		pmic_set_register_value(PMIC_RG_INT_EN_HOMEKEY_R, 0);
-#if	defined(CONFIG_MTK_PMIC_CHIP_MT6359P)
-		/* lock PMIC protect key */
-		pmic_set_register_value(PMIC_RG_CPS_W_KEY, 0);
-#endif
 	}
-#else
+#endif
 	if (call_status == 2) {
 		kpd_print("kpd_early_suspend wake up source enable!! (%d)\n",
 				kpd_suspend);
@@ -670,19 +640,12 @@ static int kpd_pdrv_suspend(struct platform_device *pdev, pm_message_t state)
 static int kpd_pdrv_resume(struct platform_device *pdev)
 {
 	kpd_suspend = false;
-#if defined(MTK_KP_WAKESOURCE) && defined(CONFIG_SEC_PM)
-#if	defined(CONFIG_MTK_PMIC_CHIP_MT6359P)
-	/* unlock PMIC protect key */
-	pmic_set_register_value(PMIC_RG_CPS_W_KEY, 0x4729);
-#endif
+#ifdef MTK_KP_WAKESOURCE
+#ifdef CONFIG_SEC_PM
 	/* Re-enable RST key interrupt */
 	pmic_set_register_value(PMIC_RG_INT_EN_HOMEKEY, 1);
 	pmic_set_register_value(PMIC_RG_INT_EN_HOMEKEY_R, 1);
-#if	defined(CONFIG_MTK_PMIC_CHIP_MT6359P)
-	/* lock PMIC protect key */
-	pmic_set_register_value(PMIC_RG_CPS_W_KEY, 0);
 #endif
-#else
 	if (call_status == 2) {
 		kpd_print("kpd_early_suspend wake up source enable!! (%d)\n",
 				kpd_suspend);

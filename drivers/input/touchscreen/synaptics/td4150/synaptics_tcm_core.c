@@ -46,7 +46,7 @@
 
 #define RESET_ON_RESUME_DELAY_MS 50
 
-#define PREDICTIVE_READING 
+#define PREDICTIVE_READING
 
 #define MIN_READ_LENGTH 9
 
@@ -83,7 +83,7 @@
 #define RMI_UBL_FN_NUMBER 0x35
 
 static struct syna_tcm_module_pool mod_pool;
-static bool shutdown_is_on_going_tsp;
+bool shutdown_is_on_going_tsp;
 
 DECLARE_COMPLETION(response_complete);
 
@@ -194,7 +194,7 @@ static void touch_print_info_work(struct work_struct *work)
 
 static void sec_read_info_work(struct work_struct *work)
 {
-	struct syna_tcm_hcd *tcm_hcd = container_of(work, struct syna_tcm_hcd, 
+	struct syna_tcm_hcd *tcm_hcd = container_of(work, struct syna_tcm_hcd,
 			work_read_info.work);
 
 	input_log_fix();
@@ -371,7 +371,6 @@ static void syna_tcm_dispatch_response(struct syna_tcm_hcd *tcm_hcd)
 	atomic_set(&tcm_hcd->command_status, CMD_IDLE);
 
 exit:
-//printk(KERN_ERR "%s response_complete 1\n",__func__);
 	complete(&response_complete);
 
 	return;
@@ -431,13 +430,11 @@ static void syna_tcm_dispatch_message(struct syna_tcm_hcd *tcm_hcd)
 			case CMD_ROMBOOT_RUN_BOOTLOADER_FIRMWARE:
 				tcm_hcd->response_code = STATUS_OK;
 				atomic_set(&tcm_hcd->command_status, CMD_IDLE);
-				//printk(KERN_ERR "%s response_complete 2\n",__func__);
 				complete(&response_complete);
 				break;
 			default:
 				input_info(true, tcm_hcd->pdev->dev.parent, "Device has been reset\n");
 				atomic_set(&tcm_hcd->command_status, CMD_ERROR);
-				//printk(KERN_ERR "%s response_complete 3\n",__func__);
 				complete(&response_complete);
 				break;
 			}
@@ -508,7 +505,7 @@ static int syna_tcm_continued_read(struct syna_tcm_hcd *tcm_hcd)
 	remaining_length = total_length - tcm_hcd->read_length;
 
 	LOCK_BUFFER(tcm_hcd->in);
-//printk(KERN_ERR "%s\n",__func__);
+
 	retval = syna_tcm_realloc_mem(tcm_hcd, &tcm_hcd->in, total_length + 1);
 	if (retval < 0) {
 		input_err(true, tcm_hcd->pdev->dev.parent,
@@ -811,8 +808,8 @@ static int syna_tcm_read_message(struct syna_tcm_hcd *tcm_hcd,
 	bool retry;
 	unsigned int total_length;
 	struct syna_tcm_message_header *header;
-//printk(KERN_ERR "%s\n",__func__);
-	if (tcm_hcd->in_suspend) {
+
+	if (tcm_hcd->lp_state == PWR_OFF) {
 		input_err(true, tcm_hcd->pdev->dev.parent, "power off in suspend\n");
 		return -EIO;
 	}
@@ -856,15 +853,16 @@ retry:
 		goto exit;
 	}
 
-	tcm_hcd->status_report_code =  header->code;
+	tcm_hcd->status_report_code = header->code;
 
 	tcm_hcd->payload_length = le2_to_uint(header->length);
 
-	if (atomic_read(&tcm_hcd->host_downloading)) 
+	if (atomic_read(&tcm_hcd->host_downloading))
 		input_info(true, tcm_hcd->pdev->dev.parent,
 				"Status report code = 0x%02x\n", tcm_hcd->status_report_code);
 	else
-		input_dbg(false, tcm_hcd->pdev->dev.parent,"Status report code = 0x%02x\n", tcm_hcd->status_report_code);
+		input_dbg(false, tcm_hcd->pdev->dev.parent,
+				"Status report code = 0x%02x\n", tcm_hcd->status_report_code);
 
 	input_dbg(false, tcm_hcd->pdev->dev.parent,
 				"Payload length = %d\n", tcm_hcd->payload_length);
@@ -954,7 +952,6 @@ exit:
 	if (retval < 0) {
 		if (atomic_read(&tcm_hcd->command_status) == CMD_BUSY) {
 			atomic_set(&tcm_hcd->command_status, CMD_ERROR);
-//			printk(KERN_ERR "%s response_complete 4\n",__func__);
 			complete(&response_complete);
 		}
 	}
@@ -996,8 +993,8 @@ static int syna_tcm_write_message(struct syna_tcm_hcd *tcm_hcd,
 	unsigned int command_status;
 	bool is_romboot_hdl = (command == CMD_ROMBOOT_DOWNLOAD) ? true : false;
 	bool is_hdl_reset = (command == CMD_RESET) && (tcm_hcd->in_hdl_mode);
-//printk(KERN_ERR "%s\n",__func__);
-	if (tcm_hcd->in_suspend) {
+
+	if (tcm_hcd->lp_state == PWR_OFF) {
 		input_err(true, tcm_hcd->pdev->dev.parent, "power off in suspend\n");
 		return -EIO;
 	}
@@ -1135,23 +1132,21 @@ static int syna_tcm_write_message(struct syna_tcm_hcd *tcm_hcd,
 
 	if (is_hdl_reset)
 		goto exit;
-	//printk(KERN_ERR "%s do_polling:%d,polling_delay_ms:%d\n",__func__,tcm_hcd->do_polling,polling_delay_ms);
+
 	if (tcm_hcd->do_polling && polling_delay_ms) {
-		printk(KERN_ERR "%s do_polling\n",__func__);
 		queue_delayed_work(tcm_hcd->polling_workqueue, &tcm_hcd->polling_work,
 			msecs_to_jiffies(polling_delay_ms));
 	}
-//printk(KERN_ERR "%s 2\n",__func__);
+
 	retval = wait_for_completion_timeout(&response_complete,
 					msecs_to_jiffies(RESPONSE_TIMEOUT_MS));
-//okga
 	if (retval == 0) {
 		input_err(true, tcm_hcd->pdev->dev.parent,
 			"Timed out waiting for response (command 0x%02x)\n", tcm_hcd->command);
 		retval = -ETIME;
 		goto exit;
 	}
-//printk(KERN_ERR "%s 3\n",__func__);
+
 	command_status = atomic_read(&tcm_hcd->command_status);
 	if (command_status != CMD_IDLE) {
 		input_err(true, tcm_hcd->pdev->dev.parent,
@@ -1159,7 +1154,7 @@ static int syna_tcm_write_message(struct syna_tcm_hcd *tcm_hcd,
 		retval = -EIO;
 		goto exit;
 	}
-//printk(KERN_ERR "%s 4\n",__func__);
+
 	LOCK_BUFFER(tcm_hcd->resp);
 
 	if (tcm_hcd->response_code != STATUS_OK) {
@@ -1181,7 +1176,7 @@ static int syna_tcm_write_message(struct syna_tcm_hcd *tcm_hcd,
 		*response_code = tcm_hcd->response_code;
 
 	UNLOCK_BUFFER(tcm_hcd->resp);
-//printk(KERN_ERR "%s 5\n",__func__);
+
 exit:
 	tcm_hcd->command = CMD_NONE;
 
@@ -1309,18 +1304,18 @@ static void syna_tcm_polling_work(struct work_struct *work)
 	struct delayed_work *delayed_work = container_of(work, struct delayed_work, work);
 	struct syna_tcm_hcd *tcm_hcd =
 						container_of(delayed_work, struct syna_tcm_hcd, polling_work);
-//printk(KERN_ERR "%s\n",__func__);
+
 	if (!tcm_hcd->do_polling)
 		return;
 
 	retval = tcm_hcd->read_message(tcm_hcd, NULL, 0);
 	if (retval < 0) {
-		input_err(true, tcm_hcd->pdev->dev.parent, "Failed to read message\n");
+		input_err(true, tcm_hcd->pdev->dev.parent, "%s Failed to read message\n", __func__);
 		if (retval == -ENXIO && tcm_hcd->hw_if->bus_io->type == BUS_SPI)
 			syna_tcm_check_hdl(tcm_hcd, REPORT_HDL_F35);
 	}
 
-	if (!(tcm_hcd->in_suspend && retval < 0)) {
+	if ((tcm_hcd->lp_state == PWR_ON) || (retval >= 0)) {
 		queue_delayed_work(tcm_hcd->polling_workqueue, &tcm_hcd->polling_work,
 				msecs_to_jiffies(POLLING_DELAY_MS));
 	}
@@ -1333,18 +1328,18 @@ static irqreturn_t syna_tcm_isr(int irq, void *data)
 	int retval;
 	struct syna_tcm_hcd *tcm_hcd = data;
 	const struct syna_tcm_board_data *bdata = tcm_hcd->hw_if->bdata;
-//printk(KERN_ERR "%s\n",__func__);
+
 	if (unlikely(gpio_get_value(bdata->irq_gpio) != bdata->irq_on_state))
 		goto exit;
 
 	tcm_hcd->isr_pid = current->pid;
-//printk(KERN_ERR "%s 2\n",__func__);
+
 	retval = tcm_hcd->read_message(tcm_hcd, NULL, 0);
 	if (retval < 0) {
 		if (tcm_hcd->sensor_type == TYPE_F35)
 			syna_tcm_check_hdl(tcm_hcd, REPORT_HDL_F35);
 		else
-			input_err(true, tcm_hcd->pdev->dev.parent, "Failed to read message\n");
+			input_err(true, tcm_hcd->pdev->dev.parent, "%s Failed to read message\n", __func__);
 	}
 
 exit:
@@ -1356,22 +1351,22 @@ static int syna_tcm_enable_irq(struct syna_tcm_hcd *tcm_hcd, bool en, bool ns)
 	int retval;
 	const struct syna_tcm_board_data *bdata = tcm_hcd->hw_if->bdata;
 	static bool irq_freed = true;
+
 	mutex_lock(&tcm_hcd->irq_en_mutex);
-//printk(KERN_ERR "%s, en=%ld,tcm_hcd->irq_enabled:%d,ns:%d,irq_freed:%d\n",__func__,en,tcm_hcd->irq_enabled,ns,irq_freed);
-//	printk(KERN_ERR "%s 1\n",__func__);
+
 	if (en) {
 		if (tcm_hcd->irq_enabled) {
 			input_dbg(true, tcm_hcd->pdev->dev.parent, "Interrupt already enabled\n");
 			retval = 0;
 			goto exit;
 		}
-//		printk(KERN_ERR "%s 2\n",__func__);
+
 		if (bdata->irq_gpio < 0) {
 			input_err(true, tcm_hcd->pdev->dev.parent, "Invalid IRQ GPIO\n");
 			retval = -EINVAL;
 			goto queue_polling_work;
 		}
-		//printk(KERN_ERR "%s 3\n",__func__);
+
 		if (irq_freed) {
 			retval = request_threaded_irq(tcm_hcd->irq, NULL, syna_tcm_isr, bdata->irq_flags,
 							PLATFORM_DRIVER_NAME, tcm_hcd);
@@ -1379,18 +1374,14 @@ static int syna_tcm_enable_irq(struct syna_tcm_hcd *tcm_hcd, bool en, bool ns)
 				input_err(true, tcm_hcd->pdev->dev.parent,
 					"Failed to create interrupt thread\n");
 			}
-			//printk(KERN_ERR "%s 4\n",__func__);
 		} else {
 			enable_irq(tcm_hcd->irq);
 			retval = 0;
-			//printk(KERN_ERR "%s 5\n",__func__);
 		}
 
 queue_polling_work:
 		if (retval < 0) {
-//printk(KERN_ERR "%s 6\n",__func__);
 #ifdef FALL_BACK_ON_POLLING
-//printk(KERN_ERR "%s 7\n",__func__);
 			queue_delayed_work(tcm_hcd->polling_workqueue, &tcm_hcd->polling_work,
 				msecs_to_jiffies(POLLING_DELAY_MS));
 			tcm_hcd->do_polling = true;
@@ -1398,22 +1389,17 @@ queue_polling_work:
 #endif
 		}
 
-		if (retval < 0){
+		if (retval < 0)
 			goto exit;
-//			printk(KERN_ERR "%s 8\n",__func__);
-		}
-		else{
-//			printk(KERN_ERR "%s 9\n",__func__);
+		else
 			msleep(ENABLE_IRQ_DELAY_MS);
-		}
 	} else {
-//printk(KERN_ERR "%s 10\n",__func__);
 		if (!tcm_hcd->irq_enabled) {
 			input_dbg(true, tcm_hcd->pdev->dev.parent, "Interrupt already disabled\n");
 			retval = 0;
 			goto exit;
 		}
-//printk(KERN_ERR "%s 11\n",__func__);
+
 		if (bdata->irq_gpio >= 0) {
 			if (ns) {
 				disable_irq_nosync(tcm_hcd->irq);
@@ -1423,21 +1409,20 @@ queue_polling_work:
 			}
 			irq_freed = !ns;
 		}
-//printk(KERN_ERR "%s 12 ns:%d\n",__func__,ns);
+
 		if (ns) {
 			cancel_delayed_work(&tcm_hcd->polling_work);
 		} else {
 			cancel_delayed_work_sync(&tcm_hcd->polling_work);
 			flush_workqueue(tcm_hcd->polling_workqueue);
 		}
-//printk(KERN_ERR "%s 13\n",__func__);
+
 		tcm_hcd->do_polling = false;
 	}
 
 	retval = 0;
-	//printk(KERN_ERR "%s, en=%ld,tcm_hcd->do_polling:%d\n",__func__,en,tcm_hcd->do_polling);
+
 exit:
-//printk(KERN_ERR "%s 14 retval:%d\n",__func__,retval);
 	if (retval == 0)
 		tcm_hcd->irq_enabled = en;
 
@@ -2320,11 +2305,11 @@ static int syna_tcm_reset_and_reinit(struct syna_tcm_hcd *tcm_hcd,
 	}
 
 get_features:
-	input_info(true, tcm_hcd->pdev->dev.parent, 
+	input_info(true, tcm_hcd->pdev->dev.parent,
 		"Firmware mode = 0x%02x\n", tcm_hcd->id_info.mode);
 
 	if (IS_NOT_FW_MODE(tcm_hcd->id_info.mode)) {
-		input_info(true, tcm_hcd->pdev->dev.parent, 
+		input_info(true, tcm_hcd->pdev->dev.parent,
 			"Boot status = 0x%02x\n", tcm_hcd->boot_info.status);
 	} else if (tcm_hcd->app_status != APP_STATUS_OK) {
 		input_info(true, tcm_hcd->pdev->dev.parent,
@@ -2520,17 +2505,18 @@ static int syna_tcm_resume(struct device *dev)
 {
 	int retval;
 	struct syna_tcm_hcd *tcm_hcd = dev_get_drvdata(dev);
-//printk(KERN_ERR "sec_input %s\n",__func__);
-	if (!tcm_hcd->in_suspend)
+
+	if (tcm_hcd->lp_state == PWR_ON)
 		return 0;
 
 	pinctrl_configure(tcm_hcd, true);
-//printk(KERN_ERR "sec_input %s 2 in_hdl_mode:%d,wakeup_gesture_enabled:%d\n",__func__,tcm_hcd->in_hdl_mode,tcm_hcd->wakeup_gesture_enabled);
-	tcm_hcd->in_suspend = false;
+
+	tcm_hcd->lp_state = PWR_ON;
+
+	tcm_hcd->prox_power_off = 0;
 
 	if (tcm_hcd->in_hdl_mode) {
 		if (!tcm_hcd->wakeup_gesture_enabled) {
-//printk(KERN_ERR "sec_input %s 3\n",__func__);
 			tcm_hcd->enable_irq(tcm_hcd, true, NULL);
 			retval = syna_tcm_wait_hdl(tcm_hcd);
 			if (retval < 0) {
@@ -2541,7 +2527,6 @@ static int syna_tcm_resume(struct device *dev)
 			goto mod_resume;
 		}
 	} else {
-//printk(KERN_ERR "sec_input %s 4\n",__func__);
 		if (!tcm_hcd->wakeup_gesture_enabled)
 			tcm_hcd->enable_irq(tcm_hcd, true, NULL);
 
@@ -2558,7 +2543,6 @@ static int syna_tcm_resume(struct device *dev)
 	}
 
 #ifdef USE_FLASH
-//printk(KERN_ERR "sec_input %s 5\n",__func__);
 	retval = tcm_hcd->sleep(tcm_hcd, false);
 	if (retval < 0) {
 		input_err(true, tcm_hcd->pdev->dev.parent, "Failed to exit deep sleep\n");
@@ -2612,18 +2596,44 @@ static int syna_tcm_suspend(struct device *dev)
 {
 	struct syna_tcm_hcd *tcm_hcd = dev_get_drvdata(dev);
 
-	if (tcm_hcd->in_suspend)
+	if (tcm_hcd->lp_state == PWR_OFF)
 		return 0;
+
+	input_info(true, tcm_hcd->pdev->dev.parent, "%s start\n", __func__);
 
 	touch_suspend(tcm_hcd);
 
-	tcm_hcd->in_suspend = true;
-	pinctrl_configure(tcm_hcd, false);
+	if (tcm_hcd->ear_detect_enable) {
+		tcm_hcd->lp_state = LP_MODE;
+		tcm_hcd->enable_irq(tcm_hcd, true, NULL);
+	} else {
+		tcm_hcd->lp_state = PWR_OFF;
+		pinctrl_configure(tcm_hcd, false);
+	}
 
 	input_info(true, tcm_hcd->pdev->dev.parent, "%s done\n", __func__);
 
 	return 0;
 }
+
+static int syna_tcm_pm_suspend(struct device *dev)
+{
+	struct syna_tcm_hcd *tcm_hcd = dev_get_drvdata(dev);
+
+	reinit_completion(&tcm_hcd->resume_done);
+
+	return 0;
+}
+
+static int syna_tcm_pm_resume(struct device *dev)
+{
+	struct syna_tcm_hcd *tcm_hcd = dev_get_drvdata(dev);
+
+	complete_all(&tcm_hcd->resume_done);
+
+	return 0;
+}
+
 #endif
 
 #ifdef CONFIG_FB
@@ -2634,14 +2644,16 @@ static int syna_tcm_early_suspend(struct device *dev)
 #endif
 	struct syna_tcm_hcd *tcm_hcd = dev_get_drvdata(dev);
 
-	if (tcm_hcd->in_suspend)
+	if (tcm_hcd->lp_state == PWR_OFF)
 		return 0;
+
+	input_info(true, tcm_hcd->pdev->dev.parent, "%s start\n", __func__);
 
 #ifdef WATCHDOG_SW
 	tcm_hcd->update_watchdog(tcm_hcd, false);
 #endif
 	if (!tcm_hcd->wakeup_gesture_enabled)
-		tcm_hcd->enable_irq(tcm_hcd, false, true);
+		tcm_hcd->enable_irq(tcm_hcd, false, false);
 
 	if (IS_NOT_FW_MODE(tcm_hcd->id_info.mode) || tcm_hcd->app_status != APP_STATUS_OK) {
 		input_info(true, tcm_hcd->pdev->dev.parent,
@@ -2676,13 +2688,13 @@ static int syna_tcm_fb_notifier_cb(struct notifier_block *nb,
 	int *transition;
 	struct fb_event *evdata = data;
 	struct syna_tcm_hcd *tcm_hcd = container_of(nb, struct syna_tcm_hcd, fb_notifier);
-	//printk(KERN_ERR "%s, action=%ld\n",__func__,action);
+
 	retval = 0;
 	if (evdata && evdata->data && tcm_hcd) {
 		transition = evdata->data;
 
 		if (atomic_read(&tcm_hcd->firmware_flashing) && *transition == FB_BLANK_POWERDOWN) {
-			//printk(KERN_ERR "%s, action=%ld,transition:%d\n",__func__,action,transition);
+
 			retval = wait_event_interruptible_timeout(tcm_hcd->reflash_wq,
 						!atomic_read(&tcm_hcd->firmware_flashing),
 						msecs_to_jiffies(RESPONSE_TIMEOUT_MS));
@@ -2703,18 +2715,14 @@ static int syna_tcm_fb_notifier_cb(struct notifier_block *nb,
 				retval = syna_tcm_suspend(&tcm_hcd->pdev->dev);
 				tcm_hcd->fb_ready = 0;
 			} else if (*transition == FB_BLANK_UNBLANK) {
-	//printk(KERN_ERR "%s 2\n",__func__);
 #ifndef RESUME_EARLY_UNBLANK
-//printk(KERN_ERR "%s 3\n",__func__);
 				retval = syna_tcm_resume(&tcm_hcd->pdev->dev);
 				tcm_hcd->fb_ready++;
 #endif
 			}
 		} else if (action == FB_EARLY_EVENT_BLANK &&
 				*transition == FB_BLANK_UNBLANK) {
-//printk(KERN_ERR "%s 4\n",__func__);
 #ifdef RESUME_EARLY_UNBLANK
-//printk(KERN_ERR "%s 5\n",__func__);
 				retval = syna_tcm_resume(&tcm_hcd->pdev->dev);
 				tcm_hcd->fb_ready++;
 #endif
@@ -2768,7 +2776,6 @@ static int syna_tcm_sensor_detection(struct syna_tcm_hcd *tcm_hcd)
 	tcm_hcd->sensor_type = TYPE_UNKNOWN;
 
 	/* read sensor info for identification */
-//printk(KERN_ERR "%s\n",__func__);
 	retval = tcm_hcd->read_message(tcm_hcd, NULL, 0);
 
 	/* once the tcm communication interface is not ready, */
@@ -2978,7 +2985,7 @@ static int syna_tcm_probe(struct platform_device *pdev)
 	retval = syna_tcm_sensor_detection(tcm_hcd);
 	if (retval < 0) {
 		input_err(true, tcm_hcd->pdev->dev.parent, "Failed to detect the sensor\n");
-		goto err_config_gpio;
+		goto err_detect_sensor;
 	}
 
 #ifdef CONFIG_FB
@@ -3067,6 +3074,9 @@ static int syna_tcm_probe(struct platform_device *pdev)
 	if (!shutdown_is_on_going_tsp)
 		schedule_delayed_work(&tcm_hcd->work_read_info, msecs_to_jiffies(50));
 
+	init_completion(&tcm_hcd->resume_done);
+	complete_all(&tcm_hcd->resume_done);
+
 	return 0;
 
 err_touch_init:
@@ -3099,6 +3109,9 @@ err_create_run_kthread:
 	fb_unregister_client(&tcm_hcd->fb_notifier);
 #endif
 
+err_detect_sensor:
+	if (tcm_hcd->pinctrl)
+		devm_pinctrl_put(tcm_hcd->pinctrl);
 	if (bdata->irq_gpio >= 0)
 		syna_tcm_set_gpio(tcm_hcd, bdata->irq_gpio, false, 0, 0);
 
@@ -3234,10 +3247,10 @@ static void syna_tcm_shutdown(struct platform_device *pdev)
 
 #ifdef CONFIG_PM
 static const struct dev_pm_ops syna_tcm_dev_pm_ops = {
-#ifndef CONFIG_FB
-	.suspend = syna_tcm_suspend,
-	.resume = syna_tcm_resume,
-#endif
+/*#ifndef CONFIG_FB*/
+	.suspend = syna_tcm_pm_suspend,
+	.resume = syna_tcm_pm_resume,
+/*#endif*/
 };
 #endif
 

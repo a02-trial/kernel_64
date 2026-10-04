@@ -25,33 +25,17 @@ enum {
 	CPU_KIR_PERFTOUCH,
 	CPU_KIR_USB,
 	CPU_KIR_AMMS,
-	CPU_KIR_GBE,
-	CPU_KIR_CCCI,
-	CPU_KIR_SYSLIM,
 #ifdef CONFIG_CPU_FREQ_LIMIT
 	CPU_KIR_SEC_LIMIT,
 	CPU_KIR_SEC_TOUCH,
 	CPU_KIR_SEC_FINGER,
-	CPU_KIR_SEC_OVERLIMIT,
 #endif
 	CPU_MAX_KIR
 };
-
-enum {
-	CPU_ISO_KIR_PERF = 0,
-	CPU_ISO_KIR_FPSGO,
-	CPU_ISO_KIR_CPU_CTRL,
-	CPU_ISO_MAX_KIR
-};
-
 extern unsigned int mt_cpufreq_get_freq_by_idx(int id, int idx);
 extern int update_userlimit_cpu_freq(int kicker, int num_cluster
 				, struct ppm_limit_data *freq_limit);
 extern int update_userlimit_cpu_core(int kicker, int num_cluster
 				, struct ppm_limit_data *core_limit);
-extern int sched_isolate_cpu(int cpu);
-extern int sched_deisolate_cpu(int cpu);
-
-int update_isolation_cpu(int kicker, int enable, int cpu);
 
 #endif /* _CPU_CTRL_H */
