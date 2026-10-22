@@ -15,7 +15,7 @@
 #include "mtk_cpufreq_config.h"
 
 /* for DVFS OPP table LL */
-#define CPU_DVFS_FREQ0_LL_FY		1274000		/* KHz */
+#define CPU_DVFS_FREQ0_LL_FY		1801000		/* KHz */
 #define CPU_DVFS_FREQ1_LL_FY		1235000		/* KHz */
 #define CPU_DVFS_FREQ2_LL_FY		1196000		/* KHz */
 #define CPU_DVFS_FREQ3_LL_FY		1170000		/* KHz */
@@ -32,7 +32,7 @@
 #define CPU_DVFS_FREQ14_LL_FY		962000		/* KHz */
 #define CPU_DVFS_FREQ15_LL_FY		962000		/* KHz */
 
-#define CPU_DVFS_FREQ0_LL_SB		1495000		/* KHz */
+#define CPU_DVFS_FREQ0_LL_SB		1801000		/* KHz */
 #define CPU_DVFS_FREQ1_LL_SB		1378000		/* KHz */
 #define CPU_DVFS_FREQ2_LL_SB		1274000		/* KHz */
 #define CPU_DVFS_FREQ3_LL_SB		1170000		/* KHz */
@@ -49,7 +49,7 @@
 #define CPU_DVFS_FREQ14_LL_SB		962000		/* KHz */
 #define CPU_DVFS_FREQ15_LL_SB		962000		/* KHz */
 
-#define CPU_DVFS_FREQ0_LL_FY2		1105000		/* KHz */
+#define CPU_DVFS_FREQ0_LL_FY2		1801000		/* KHz */
 #define CPU_DVFS_FREQ1_LL_FY2		1105000		/* KHz */
 #define CPU_DVFS_FREQ2_LL_FY2		1105000		/* KHz */
 #define CPU_DVFS_FREQ3_LL_FY2		1105000		/* KHz */
@@ -104,7 +104,7 @@
 #define CPU_DVFS_VOLT15_VPROC1_SB	 115625		/* 10uV */
 
 /* for DVFS OPP table LL */
-#define CPU_DVFS_VOLT0_VPROC1_FY2	 122500		/* 10uV */
+#define CPU_DVFS_VOLT0_VPROC1_FY2	 130625		/* 10uV */
 #define CPU_DVFS_VOLT1_VPROC1_FY2	 122500		/* 10uV */
 #define CPU_DVFS_VOLT2_VPROC1_FY2	 122500		/* 10uV */
 #define CPU_DVFS_VOLT3_VPROC1_FY2	 122500		/* 10uV */
