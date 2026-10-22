@@ -230,7 +230,7 @@ firmware_class.path=/vendor/firmware loop.max_part=7";
 		#size-cells = <2>;
 		ranges;
 		/*TODO: add reserved memory node here*/
-		consys-reserve-memory {
+		consys_reserve: consys-reserve-memory {
 			compatible = "mediatek,consys-reserve-memory";
 			#address-cells = <2>;
 			#size-cells = <2>;
@@ -2345,6 +2345,7 @@ firmware_class.path=/vendor/firmware loop.max_part=7";
 
 	consys: consys@18070000 {
 		compatible = "mediatek,mt6739-consys";
+                memory-region = <&consys_reserve>;
 		#address-cells = <2>;
 		#size-cells = <2>;
 		reg = <0 0x18070000 0 0x0200>,  /*CONN_MCU_CONFIG_BASE */
