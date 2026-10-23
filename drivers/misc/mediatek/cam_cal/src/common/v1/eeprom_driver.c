@@ -436,6 +436,9 @@ static int compat_put_cal_info_struct
 	err |= get_user(i, &data->deviceID);
 	err |= put_user(i, &data32->deviceID);
 
+	err |= get_user(i, (compat_uint_t __user *)&data->command);
+	err |= put_user(i, &data32->command);
+
 	/* Assume pointer is not change */
 #if 1
 	err |= get_user(p, (compat_uptr_t *) &data->pu1Params);
@@ -460,6 +463,9 @@ static int EEPROM_compat_get_info
 	err |= put_user(i, &data->sensorID);
 	err |= get_user(i, &data32->deviceID);
 	err |= put_user(i, &data->deviceID);
+
+	err |= get_user(i, &data32->command);
+	err |= put_user(i, (compat_uint_t __user *)&data->command);
 
 	err |= get_user(p, &data32->pu1Params);
 	err |= put_user(compat_ptr(p), &data->pu1Params);
