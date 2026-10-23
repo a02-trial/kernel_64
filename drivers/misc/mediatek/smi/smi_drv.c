@@ -1038,6 +1038,7 @@ static const struct file_operations smi_file_opers = {
 	.open = smi_open,
 	.release = smi_release,
 	.unlocked_ioctl = smi_ioctl,
+	.compat_ioctl = smi_ioctl,
 };
 
 static inline void smi_subsys_sspm_ipi(const bool ena, const u32 subsys)
