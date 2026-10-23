@@ -954,6 +954,18 @@ enum ISP_CMD_ENUM {
 
 #ifdef CONFIG_COMPAT
 
+struct compat_ISP_ED_BUFQUE_STRUCT {
+	enum ISP_ED_BUFQUE_CTRL_ENUM ctrl;
+	unsigned int processID;
+	compat_ulong_t callerID;
+	int p2burstQIdx;
+	int p2dupCQIdx;
+	int frameNum;
+	unsigned int timeoutUs;
+	int p2Scenario;
+};
+#define COMPAT_ISP_ED_QUEBUF_CTRL _IOWR(ISP_MAGIC, ISP_CMD_ED_QUEBUF_CTRL, struct compat_ISP_ED_BUFQUE_STRUCT)
+
 #define COMPAT_ISP_READ_REGISTER   _IOWR(ISP_MAGIC, ISP_CMD_READ_REG,      struct compat_ISP_REG_IO_STRUCT)
 #define COMPAT_ISP_WRITE_REGISTER  _IOWR(ISP_MAGIC, ISP_CMD_WRITE_REG,     struct compat_ISP_REG_IO_STRUCT)
 #define COMPAT_ISP_DEBUG_FLAG      _IOW(ISP_MAGIC, ISP_CMD_DEBUG_FLAG,    compat_uptr_t)
