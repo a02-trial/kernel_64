@@ -1,4 +1,4 @@
-make[1]: Entering directory '/workspaces/a02_64/out'
+make[1]: Entering directory '/workspaces/kernel_64/out'
   CHK     include/config/kernel.release
   GEN     ./Makefile
   CHK     include/generated/uapi/linux/version.h
@@ -10,7 +10,42 @@ make[1]: Entering directory '/workspaces/a02_64/out'
   CHK     include/generated/asm-offsets.h
   CALL    ../scripts/checksyscalls.sh
   CHK     include/generated/compile.h
+  UPD     include/generated/compile.h
+  CC      init/version.o
+  CC      arch/arm64/kernel/process.o
+  AR      init/built-in.o
+  CC      kernel/panic.o
+  CC      mm/slub.o
+  CC      arch/arm64/kernel/traps.o
+  CC      arch/arm64/kernel/smp.o
+  CC      fs/pstore/platform.o
   CHK     kernel/config_data.h
+  AR      kernel/built-in.o
+  AR      arch/arm64/kernel/built-in.o
+  AR      mm/built-in.o
+  CC      fs/pstore/ram_core.o
+  AR      fs/pstore/pstore.o
+  AR      fs/pstore/ramoops.o
+  AR      fs/pstore/built-in.o
+  CC      drivers/battery/fuelgauge/s2mu005_fuelgauge/s2mu005_fuelgauge.o
+  AR      fs/built-in.o
+  AR      drivers/battery/fuelgauge/s2mu005_fuelgauge/built-in.o
+  CC      lib/bug.o
+  AR      lib/lib.a
+  EXPORTS lib/lib-ksyms.o
+clang: warning: argument unused during compilation: '-MD' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-MF lib/.lib-ksyms.o.d' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-nostdinc' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /usr/lib/llvm-18/lib/clang/18/include' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-include ../include/linux/kconfig.h' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-D __KERNEL__' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-D KASAN_SHADOW_SCALE_SHIFT=3' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-D __ASSEMBLY__' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-Werror=unknown-warning-option' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-D CONFIG_AS_LSE=1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-D KASAN_SHADOW_SCALE_SHIFT=3' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-D CC_HAVE_ASM_GOTO' [-Wunused-command-line-argument]
+  AR      lib/built-in.o
 make[1]: Nothing to be done for 'dtbs'.
 kperfmon_DUMMY="CONFIG_KPERFMON is off."
 kperfmon_DUMMY="olog.pb.h file is missing... retrying"
@@ -34,12 +69,17 @@ kperfmon_DUMMY=""
 cp: cannot stat '../../system/core/liblog/include/log/perflog.h': No such file or directory
 kperfmon_DUMMY=""
 kperfmon_DUMMY="perflog.h file is missing."
+  CC      drivers/misc/mediatek/aee/mrdump/mrdump_full.o
+  CC      drivers/misc/mediatek/aee/mrdump/mrdump_panic.o
 ..
 ..
 ..
 ..
 cameraisp drv by platform 
 ..
+  AR      drivers/misc/mediatek/aee/mrdump/mrdump.o
+  AR      drivers/misc/mediatek/aee/mrdump/built-in.o
+  AR      drivers/misc/mediatek/aee/built-in.o
 $CONFIG_MTK_COMBO_CHIP is ["CONSYS_6739"]
 MTK_PLATFORM_ID is [6739]
 WIFI_IP_SET is 1
@@ -51,29 +91,43 @@ CFG_BUILD_CONNAC2 is [false]
 ../drivers/misc/mediatek/connectivity/bt/Makefile:30: yumin: bt 1
 ../drivers/misc/mediatek/connectivity/bt/Makefile:35: yumin: bt 2
 ../drivers/misc/mediatek/connectivity/wmt_chrdev_wifi/Makefile:53: wmt_chrdev_wifi build-in boot.img
+  CC      drivers/samsung/debug/sec_debug.o
 ../drivers/misc/mediatek/connectivity/wmt_drv/Makefile:46: yumin: common 1
 ../drivers/misc/mediatek/connectivity/wmt_drv/Makefile:48: yumin: common 2
 ../drivers/misc/mediatek/connectivity/wmt_drv/Makefile:113: wmt_drv build-in boot.img
-  CC      drivers/regulator/core.o
+  CC      drivers/scsi/scsi_logging.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/os/linux/plat/mt6739/plat_priv.o
-MTK_GPU_VERSION 1 = rgx
+  CC      drivers/samsung/debug/sec_debug_auto_comment.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/common/dump.o
-*MTK_GPU_VERSION = rgx auckland 1.8ED
-[GPU_DEBUG] MTK_PLATFORM = mt6739
-imgsensor drv by platform imx258_mipi_raw/ gc02m1_mipi_raw/
-imgsensor drv by project gc5035_mipi_raw/
+  AR      drivers/scsi/scsi_mod.o
+  AR      drivers/scsi/built-in.o
+  CC      drivers/samsung/misc/sec_log.o
+  CC      drivers/samsung/debug/sec_debug_softdog.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/common/wlan_lib.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/common/wlan_oid.o
+  AR      drivers/samsung/debug/built-in.o
+  CC      drivers/samsung/sec_reboot.o
+  AR      drivers/samsung/misc/built-in.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/common/wlan_bow.o
-  AR      drivers/regulator/built-in.o
+  CC      drivers/samsung/sec_fmm_lock.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/common/debug.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/common/wlan_p2p.o
+  CC      drivers/samsung/sec_key_notifier.o
+  CC      drivers/samsung/sec_crash_key.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/common/fwcfg.o
+  CC      drivers/samsung/sec_crash_key_user.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/nic/nic.o
+  CC      drivers/samsung/sec_hard_reset_hook.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/nic/nic_tx.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/nic/nic_rx.o
+  AR      drivers/samsung/built-in.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/nic/nic_pwr_mgt.o
+MTK_GPU_VERSION 1 = rgx
+*MTK_GPU_VERSION = rgx auckland 1.8ED
+[GPU_DEBUG] MTK_PLATFORM = mt6739
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/nic/cmd_buf.o
+imgsensor drv by platform imx258_mipi_raw/ gc02m1_mipi_raw/
+imgsensor drv by project gc5035_mipi_raw/
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/nic/que_mgt.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/nic/nic_cmd_event.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/nic/p2p_nic.o
@@ -82,8 +136,10 @@ imgsensor drv by project gc5035_mipi_raw/
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/os/linux/gl_bow.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/os/linux/gl_wext.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/os/linux/gl_wext_priv.o
+  CC      drivers/watchdog/softdog.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/os/linux/gl_rst.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/os/linux/gl_cfg80211.o
+  AR      drivers/watchdog/built-in.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/os/linux/gl_vendor.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/os/linux/platform.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/os/linux/gl_sys.o
@@ -98,14 +154,12 @@ imgsensor drv by project gc5035_mipi_raw/
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/mgmt/ais_fsm.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/mgmt/aaa_fsm.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/mgmt/assoc.o
+  CC      drivers/misc/mediatek/ram_console/mtk_ram_console.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/mgmt/auth.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/mgmt/bss.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/mgmt/cnm.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/mgmt/cnm_timer.o
-TCORE_UT_TESTS_SUPPORT = n
-TCORE_PROFILING_SUPPORT = n
-TCORE_PROFILING_AUTO_DUMP = n
-TCORE_MEMORY_LEAK_DETECTION_SUPPORT = n
+  AR      drivers/misc/mediatek/ram_console/built-in.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/mgmt/cnm_mem.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/mgmt/hem_mbox.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/mgmt/mib.o
@@ -114,6 +168,10 @@ TCORE_MEMORY_LEAK_DETECTION_SUPPORT = n
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/mgmt/rlm.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/mgmt/rlm_domain.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/mgmt/rlm_obss.o
+TCORE_UT_TESTS_SUPPORT = n
+TCORE_PROFILING_SUPPORT = n
+TCORE_PROFILING_AUTO_DUMP = n
+TCORE_MEMORY_LEAK_DETECTION_SUPPORT = n
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/mgmt/rlm_protection.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/mgmt/rsn.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/mgmt/saa_fsm.o
@@ -158,4 +216,4 @@ TCORE_MEMORY_LEAK_DETECTION_SUPPORT = n
   OBJCOPY arch/arm64/boot/Image
   GZIP    arch/arm64/boot/Image.gz
   CAT     arch/arm64/boot/Image.gz-dtb
-make[1]: Leaving directory '/workspaces/a02_64/out'
+make[1]: Leaving directory '/workspaces/kernel_64/out'

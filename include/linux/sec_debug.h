@@ -208,11 +208,11 @@ struct last_reboot_reason {
 	uint8_t ocp_enable;
 	uint32_t scp_pc;
 	uint32_t scp_lr;
-	unsigned long last_init_func;
+	uint32_t last_init_func;
 	uint8_t pmic_ext_buck;
 	uint32_t hang_detect_timeout_count;
-	unsigned long last_async_func;
-	unsigned long last_sync_func;
+	uint32_t last_async_func;
+	uint32_t last_sync_func;
 	uint32_t gz_irq;
 
 	/* + SEC Feature + */

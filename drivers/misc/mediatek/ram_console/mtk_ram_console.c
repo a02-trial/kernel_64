@@ -205,11 +205,11 @@ struct last_reboot_reason {
 	uint8_t ocp_enable;
 	uint32_t scp_pc;
 	uint32_t scp_lr;
-	unsigned long last_init_func;
+	uint32_t last_init_func;
 	uint8_t pmic_ext_buck;
 	uint32_t hang_detect_timeout_count;
-	unsigned long last_async_func;
-	unsigned long last_sync_func;
+	uint32_t last_async_func;
+	uint32_t last_sync_func;
 	uint32_t gz_irq;
 };
 #endif
@@ -557,7 +557,7 @@ static void aee_rr_show_in_log(void)
 				LAST_RRR_VAL(hps_cb_cpu_bitmask),
 				LAST_RRR_VAL(hps_cb_footprint),
 				LAST_RRR_VAL(hps_cb_fp_times));
-		pr_notice("ram_console: last init function: 0x%lx\n",
+		pr_notice("ram_console: last init function: 0x%x\n",
 				LAST_RRR_VAL(last_init_func));
 	}
 }
@@ -2405,7 +2405,7 @@ void aee_rr_rec_last_init_func(unsigned long val)
 {
 	if (!ram_console_init_done || !ram_console_buffer)
 		return;
-	if (LAST_RR_VAL(last_init_func) == ~(unsigned long)(0))
+	if (LAST_RR_VAL(last_init_func) == ~(uint32_t)(0))
 		return;
 	LAST_RR_SET(last_init_func, val);
 }
@@ -2414,7 +2414,7 @@ void aee_rr_rec_last_async_func(unsigned long val)
 {
 	if (!ram_console_init_done || !ram_console_buffer)
 		return;
-	if (LAST_RR_VAL(last_async_func) == ~(unsigned long)(0))
+	if (LAST_RR_VAL(last_async_func) == ~(uint32_t)(0))
 		return;
 	LAST_RR_SET(last_async_func, val);
 }
@@ -2423,7 +2423,7 @@ void aee_rr_rec_last_sync_func(unsigned long val)
 {
 	if (!ram_console_init_done || !ram_console_buffer)
 		return;
-	if (LAST_RR_VAL(last_sync_func) == ~(unsigned long)(0))
+	if (LAST_RR_VAL(last_sync_func) == ~(uint32_t)(0))
 		return;
 	LAST_RR_SET(last_sync_func, val);
 }
@@ -3314,19 +3314,19 @@ void aee_rr_show_scp_lr(struct seq_file *m)
 
 void aee_rr_show_last_init_func(struct seq_file *m)
 {
-	seq_printf(m, "last init function: 0x%lx\n",
+	seq_printf(m, "last init function: 0x%x\n",
 			LAST_RRR_VAL(last_init_func));
 }
 
 void aee_rr_show_last_sync_func(struct seq_file *m)
 {
-	seq_printf(m, "last sync function: 0x%lx\n",
+	seq_printf(m, "last sync function: 0x%x\n",
 			LAST_RRR_VAL(last_sync_func));
 }
 
 void aee_rr_show_last_async_func(struct seq_file *m)
 {
-	seq_printf(m, "last async function: 0x%lx\n",
+	seq_printf(m, "last async function: 0x%x\n",
 			LAST_RRR_VAL(last_async_func));
 }
 
