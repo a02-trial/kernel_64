@@ -10,7 +10,6 @@ make[1]: Entering directory '/workspaces/a02_64/out'
   CHK     include/generated/asm-offsets.h
   CALL    ../scripts/checksyscalls.sh
   CHK     include/generated/compile.h
-  GZIP    kernel/config_data.gz
   CHK     kernel/config_data.h
 make[1]: Nothing to be done for 'dtbs'.
 kperfmon_DUMMY="CONFIG_KPERFMON is off."
@@ -55,19 +54,21 @@ CFG_BUILD_CONNAC2 is [false]
 ../drivers/misc/mediatek/connectivity/wmt_drv/Makefile:46: yumin: common 1
 ../drivers/misc/mediatek/connectivity/wmt_drv/Makefile:48: yumin: common 2
 ../drivers/misc/mediatek/connectivity/wmt_drv/Makefile:113: wmt_drv build-in boot.img
+  CC      drivers/regulator/core.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/os/linux/plat/mt6739/plat_priv.o
+MTK_GPU_VERSION 1 = rgx
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/common/dump.o
+*MTK_GPU_VERSION = rgx auckland 1.8ED
+[GPU_DEBUG] MTK_PLATFORM = mt6739
+imgsensor drv by platform imx258_mipi_raw/ gc02m1_mipi_raw/
+imgsensor drv by project gc5035_mipi_raw/
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/common/wlan_lib.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/common/wlan_oid.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/common/wlan_bow.o
+  AR      drivers/regulator/built-in.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/common/debug.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/common/wlan_p2p.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/common/fwcfg.o
-MTK_GPU_VERSION 1 = rgx
-imgsensor drv by platform imx258_mipi_raw/ gc02m1_mipi_raw/
-*MTK_GPU_VERSION = rgx auckland 1.8ED
-[GPU_DEBUG] MTK_PLATFORM = mt6739
-imgsensor drv by project gc5035_mipi_raw/
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/nic/nic.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/nic/nic_tx.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/nic/nic_rx.o
@@ -101,15 +102,15 @@ imgsensor drv by project gc5035_mipi_raw/
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/mgmt/bss.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/mgmt/cnm.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/mgmt/cnm_timer.o
+TCORE_UT_TESTS_SUPPORT = n
+TCORE_PROFILING_SUPPORT = n
+TCORE_PROFILING_AUTO_DUMP = n
+TCORE_MEMORY_LEAK_DETECTION_SUPPORT = n
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/mgmt/cnm_mem.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/mgmt/hem_mbox.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/mgmt/mib.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/mgmt/privacy.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/mgmt/rate.o
-TCORE_UT_TESTS_SUPPORT = n
-TCORE_PROFILING_SUPPORT = n
-TCORE_PROFILING_AUTO_DUMP = n
-TCORE_MEMORY_LEAK_DETECTION_SUPPORT = n
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/mgmt/rlm.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/mgmt/rlm_domain.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/mgmt/rlm_obss.o

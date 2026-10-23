@@ -1,0 +1,26 @@
+--- drivers/spi/spi-mt65xx.c
++++ drivers/spi/spi-mt65xx.c
+@@ -273,18 +274,18 @@ static void mtk_spi_prepare_transfer(struct spi_master *master,
+ 	cs_time = sck_time * 2;
+ 
+ 	if (mdata->dev_comp->enhance_timing) {
++		reg_val = (((sck_time - 1) & 0xffff)
++			   << SPI_CFG2_SCK_HIGH_OFFSET);
+ 		reg_val |= (((sck_time - 1) & 0xffff)
+-			   << SPI_CFG0_SCK_HIGH_OFFSET);
+-		reg_val |= (((sck_time - 1) & 0xffff)
+-			   << SPI_ADJUST_CFG0_SCK_LOW_OFFSET);
++			   << SPI_CFG2_SCK_LOW_OFFSET);
+ 		writel(reg_val, mdata->base + SPI_CFG2_REG);
+-		reg_val |= (((cs_time - 1) & 0xffff)
++		reg_val = (((cs_time - 1) & 0xffff)
+ 			   << SPI_ADJUST_CFG0_CS_HOLD_OFFSET);
+ 		reg_val |= (((cs_time - 1) & 0xffff)
+ 			   << SPI_ADJUST_CFG0_CS_SETUP_OFFSET);
+ 		writel(reg_val, mdata->base + SPI_CFG0_REG);
+ 	} else {
+-		reg_val |= (((sck_time - 1) & 0xff)
++		reg_val = (((sck_time - 1) & 0xff)
+ 			   << SPI_CFG0_SCK_HIGH_OFFSET);
+ 		reg_val |= (((sck_time - 1) & 0xff) << SPI_CFG0_SCK_LOW_OFFSET);
+ 		reg_val |= (((cs_time - 1) & 0xff) << SPI_CFG0_CS_HOLD_OFFSET);
