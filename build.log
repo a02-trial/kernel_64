@@ -10,8 +10,9 @@ make[1]: Entering directory '/workspaces/kernel_64/out'
   CHK     include/generated/asm-offsets.h
   CALL    ../scripts/checksyscalls.sh
   CHK     include/generated/compile.h
+  CC      kernel/sys.o
   CHK     kernel/config_data.h
-make[1]: Nothing to be done for 'dtbs'.
+  AR      kernel/built-in.o
 kperfmon_DUMMY="CONFIG_KPERFMON is off."
 kperfmon_DUMMY="olog.pb.h file is missing... retrying"
 cp: cannot stat '../../../frameworks/base/proto/src/olog.proto': No such file or directory
@@ -34,6 +35,7 @@ kperfmon_DUMMY=""
 cp: cannot stat '../../system/core/liblog/include/log/perflog.h': No such file or directory
 kperfmon_DUMMY=""
 kperfmon_DUMMY="perflog.h file is missing."
+make[1]: Nothing to be done for 'dtbs'.
 ..
 ..
 ..
@@ -48,33 +50,28 @@ FM_CHIP_ID is [6739]
 CFG_FM_CHIP_ID is [6739]
 CFG_FM_CHIP is [mt6627]
 CFG_BUILD_CONNAC2 is [false]
-  CC      drivers/misc/mediatek/cmdq/v3/cmdq_driver.o
 ../drivers/misc/mediatek/connectivity/bt/Makefile:30: yumin: bt 1
 ../drivers/misc/mediatek/connectivity/bt/Makefile:35: yumin: bt 2
 ../drivers/misc/mediatek/connectivity/wmt_chrdev_wifi/Makefile:53: wmt_chrdev_wifi build-in boot.img
 ../drivers/misc/mediatek/connectivity/wmt_drv/Makefile:46: yumin: common 1
 ../drivers/misc/mediatek/connectivity/wmt_drv/Makefile:48: yumin: common 2
 ../drivers/misc/mediatek/connectivity/wmt_drv/Makefile:113: wmt_drv build-in boot.img
-  AR      drivers/misc/mediatek/cmdq/v3/built-in.o
-  AR      drivers/misc/mediatek/cmdq/built-in.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/os/linux/plat/mt6739/plat_priv.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/common/dump.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/common/wlan_lib.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/common/wlan_oid.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/common/wlan_bow.o
+  CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/common/debug.o
+  CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/common/wlan_p2p.o
 MTK_GPU_VERSION 1 = rgx
 *MTK_GPU_VERSION = rgx auckland 1.8ED
 [GPU_DEBUG] MTK_PLATFORM = mt6739
-imgsensor drv by platform imx258_mipi_raw/ gc02m1_mipi_raw/
-  CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/common/debug.o
-imgsensor drv by project gc5035_mipi_raw/
-  CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/common/wlan_p2p.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/common/fwcfg.o
+imgsensor drv by platform imx258_mipi_raw/ gc02m1_mipi_raw/
+imgsensor drv by project gc5035_mipi_raw/
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/nic/nic.o
-  CC      drivers/misc/mediatek/mdp/mdp_ioctl_ex.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/nic/nic_tx.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/nic/nic_rx.o
-  AR      drivers/misc/mediatek/mdp/built-in.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/nic/nic_pwr_mgt.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/nic/cmd_buf.o
   CC      drivers/misc/mediatek/connectivity/wlan_drv_gen2/nic/que_mgt.o
