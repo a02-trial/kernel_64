@@ -60,6 +60,7 @@ struct bpf_map {
 	u32 pages;
 	u32 id;
 	int numa_node;
+	char name[BPF_OBJ_NAME_LEN];
 	bool unpriv_array;
 	/* 7 bytes hole */
 
@@ -194,6 +195,7 @@ struct bpf_prog_aux {
 	u32 max_ctx_offset;
 	u32 stack_depth;
 	u32 id;
+	char name[BPF_OBJ_NAME_LEN];
 	struct latch_tree_node ksym_tnode;
 	struct list_head ksym_lnode;
 	const struct bpf_verifier_ops *ops;

@@ -602,6 +602,12 @@ static bool hal_in_tui(void)
 
 s32 mdp_ioctl_async_exec(struct file *pf, unsigned long param)
 {
+	return mdp_ioctl_async_exec_sz(pf, param, sizeof(struct mdp_submit));
+}
+
+s32 mdp_ioctl_async_exec_sz(struct file *pf, unsigned long param,
+	size_t usize)
+{
 	struct mdp_submit user_job = {0};
 	struct task_private desc_private = {0};
 	struct cmdqRecStruct *handle = NULL;
@@ -618,7 +624,15 @@ s32 mdp_ioctl_async_exec(struct file *pf, unsigned long param)
 		goto done;
 	}
 
-	if (copy_from_user(&user_job, (void *)param, sizeof(user_job))) {
+	if (usize > sizeof(user_job) ||
+		usize < offsetof(struct mdp_submit, job_id) + sizeof(u64)) {
+		CMDQ_ERR("invalid mdp_submit size %zu\n", usize);
+		kfree(mapping_job);
+		status = -EINVAL;
+		goto done;
+	}
+
+	if (copy_from_user(&user_job, (void *)param, usize)) {
 		CMDQ_ERR("copy mdp_submit from user fail\n");
 		kfree(mapping_job);
 		status = -EFAULT;
@@ -759,7 +773,19 @@ s32 mdp_ioctl_async_exec(struct file *pf, unsigned long param)
 	list_add_tail(&mapping_job->list_entry, &job_mapping_list);
 	mutex_unlock(&mdp_job_mapping_list_mutex);
 
-	if (copy_to_user((void *)param, &user_job, sizeof(user_job))) {
+	if (usize != sizeof(user_job)) {
+		static int dbg_cnt;
+
+		if (dbg_cnt++ < 5)
+			pr_info("[MDP344] usize=%zu meta_count=%u engine_flag=0x%llx prop_size=%u read_cnt=%u job_id=%llu is_secure=%d\n",
+				usize, user_job.meta_count,
+				(unsigned long long)user_job.engine_flag,
+				user_job.prop_size, user_job.read_count_v1,
+				(unsigned long long)user_job.job_id,
+				(int)user_job.secData.is_secure);
+	}
+
+	if (copy_to_user((void *)param, &user_job, usize)) {
 		CMDQ_ERR("CMDQ_IOCTL_ASYNC_EXEC copy_to_user failed\n");
 		status = -EFAULT;
 		goto done;
@@ -1210,6 +1236,9 @@ static long mdp_limit_ioctl(struct file *pf, unsigned int code,
 		status = mdp_ioctl_async_exec(pf, param);
 		CMDQ_SYSTRACE_END();
 		break;
+	case CMDQ_IOCTL_ASYNC_EXEC_344:
+		status = mdp_ioctl_async_exec_sz(pf, param, 344);
+		break;
 	case CMDQ_IOCTL_ASYNC_WAIT:
 		CMDQ_MSG("ioctl CMDQ_IOCTL_ASYNC_WAIT\n");
 		CMDQ_SYSTRACE_BEGIN("%s_async_wait\n", __func__);
@@ -1249,6 +1278,7 @@ static long mdp_limit_ioctl_compat(struct file *pFile, unsigned int code,
 	case CMDQ_IOCTL_QUERY_DTS:
 	case CMDQ_IOCTL_NOTIFY_ENGINE:
 	case CMDQ_IOCTL_ASYNC_EXEC:
+	case CMDQ_IOCTL_ASYNC_EXEC_344:
 	case CMDQ_IOCTL_ASYNC_WAIT:
 	case CMDQ_IOCTL_ALLOC_READBACK_SLOTS:
 	case CMDQ_IOCTL_FREE_READBACK_SLOTS:

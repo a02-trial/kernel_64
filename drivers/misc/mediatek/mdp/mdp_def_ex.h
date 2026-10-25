@@ -160,6 +160,9 @@ struct mdp_simulate {
 
 #define CMDQ_IOCTL_ASYNC_EXEC _IOW(CMDQ_IOCTL_MAGIC_NUMBER, 20, \
 	struct mdp_submit)
+/* userspace lib (A12 vendor) sends 344-byte mdp_submit */
+#define CMDQ_IOCTL_ASYNC_EXEC_344 _IOW(CMDQ_IOCTL_MAGIC_NUMBER, 20, \
+	char[344])
 #define CMDQ_IOCTL_ASYNC_WAIT _IOR(CMDQ_IOCTL_MAGIC_NUMBER, 21, \
 	struct mdp_wait)
 
