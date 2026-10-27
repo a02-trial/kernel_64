@@ -1,0 +1,115 @@
+name: Build Kernel
+
+on: workflow_dispatch
+
+jobs:
+  building-kernel:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Preparing
+        run: |
+          cd ${GITHUB_WORKSPACE}
+          sudo apt update && sudo apt upgrade -y
+          sudo apt-get install -y build-essential bc libssl-dev
+
+      - name: Patch epoll_pwait2 (syscall 441)
+        run: |
+          cd ${GITHUB_WORKSPACE}
+          python3 - <<'EOF'
+          import re
+          p = 'include/uapi/asm-generic/unistd.h'
+          s = open(p).read()
+          if '__NR_epoll_pwait2' not in s:
+              i = s.rfind('#undef __NR_syscalls')
+              assert i >= 0, 'marker __NR_syscalls tidak ketemu'
+              s = s[:i] + '#define __NR_epoll_pwait2 441\n__SYSCALL(__NR_epoll_pwait2, sys_epoll_pwait2)\n\n' + s[i:]
+              m = list(re.finditer(r'#define __NR_syscalls\s+\d+', s))[-1]
+              s = s[:m.start()] + '#define __NR_syscalls 442' + s[m.end():]
+              open(p, 'w').write(s)
+          print(s[-700:])
+          EOF
+          if ! grep -q "SYSCALL_DEFINE6(epoll_pwait2" fs/eventpoll.c; then
+          cat >> fs/eventpoll.c <<'EOF'
+
+          SYSCALL_DEFINE6(epoll_pwait2, int, epfd, struct epoll_event __user *, events,
+                  int, maxevents, const struct timespec __user *, timeout,
+                  const sigset_t __user *, sigmask, size_t, sigsetsize)
+          {
+                  struct timespec ts;
+                  long long ms;
+                  int timeout_ms = -1;
+
+                  if (timeout) {
+                          if (copy_from_user(&ts, timeout, sizeof(ts)))
+                                  return -EFAULT;
+                          if (ts.tv_sec < 0 || ts.tv_nsec < 0 || ts.tv_nsec >= 1000000000L)
+                                  return -EINVAL;
+                          ms = (long long)ts.tv_sec * 1000 + (ts.tv_nsec + 999999) / 1000000;
+                          timeout_ms = ms > INT_MAX ? INT_MAX : (int)ms;
+                  }
+                  return sys_epoll_pwait(epfd, events, maxevents, timeout_ms,
+                                         sigmask, sigsetsize);
+          }
+          EOF
+          fi
+          grep -n "epoll_pwait2" fs/eventpoll.c include/uapi/asm-generic/unistd.h
+
+      - name: Building
+        run: |
+          cd ${GITHUB_WORKSPACE}
+          cd toolchain && mkdir -p clang2 && cd clang2
+          wget https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/heads/android11-release.tar.gz
+          tar -xf android11-release.tar.gz && rm android11-release.tar.gz
+          ls
+          cd ${GITHUB_WORKSPACE}
+          export KBUILD_BUILD_USER="${{ github.actor }}"
+          export KBUILD_BUILD_HOST="${{ github.event.inputs.DEVICE_NAME }}"
+          chmod +x -R toolchain
+          chmod +x z64
+          ./z64
+
+      - name: Verify syscall ada di kernel
+        run: |
+          cd ${GITHUB_WORKSPACE}
+          grep -i "epoll_pwait" out/System.map
+          grep -q "sys_epoll_pwait2" out/System.map
+
+      - name: Set Properties
+        id: props
+        run: |
+          echo "date=$(TZ=Asia/Jakarta date +%Y%m%d-%I%M%p)" >> $GITHUB_OUTPUT
+       
+      - name: Make Zip
+        run: |
+          cd ${GITHUB_WORKSPACE}
+          cd out/arch/arm64/boot
+          export DEVICE_NAME=SM-A022F
+          mv Image.gz-dtb boot.img-kernel
+          zip -r9 ${DEVICE_NAME}-${{ steps.props.outputs.date }}.zip boot.img-kernel
+          cp *.zip ${{ github.workspace }}/.
+        
+      - name: Release
+        uses: ncipollo/release-action@v1.12.0
+        with:
+          artifacts: |
+            ${{ github.workspace }}/*.zip
+          name: Compiled Kernel for SM-A022F - ${{ steps.props.outputs.date }}
+          draft: false
+          prerelease: false
+          tag: ${{ github.run_id }}-${{ steps.props.outputs.date }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          body: |
+            ## Notes
+              - Extract ${DEVICE_NAME}-${{ steps.props.outputs.date }}.zip, look your newly-compiled kernel inside.
+              - Include building logs.
+              - Kernel ini sudah ditambah syscall epoll_pwait2 (441).
+      
+      - name: Link of Release
+        run: |
+          echo "Enjoy your Newly Built 64-bit Kernel"
+          echo "https://github.com/${GITHUB_REPOSITORY}/releases/tag/${{ github.run_id }}-${{ steps.props.outputs.date }}"     
