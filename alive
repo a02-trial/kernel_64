@@ -1,0 +1,1 @@
+clear && while true; do echo "Keep-alive: $(date)"; sleep 300; done

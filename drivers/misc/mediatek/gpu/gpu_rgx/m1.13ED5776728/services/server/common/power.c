@@ -1,3 +1,4 @@
+#include <linux/kernel.h>
 /*************************************************************************/ /*!
 @File           power.c
 @Title          Power management functions
@@ -170,7 +171,7 @@ PVRSRV_ERROR PVRSRVPowerLock(PPVRSRV_DEVICE_NODE psDeviceNode)
 
 	OSLockRelease(psDeviceNode->hPowerLock);
 
-	return PVRSRV_ERROR_SYSTEM_STATE_POWERED_OFF;
+	{ static int _pwrc; if (_pwrc++ < 5) { printk(KERN_ERR "[PWRDBG] sys power OFF\n"); dump_stack(); } return PVRSRV_ERROR_SYSTEM_STATE_POWERED_OFF; }
 }
 
 /*!
@@ -204,7 +205,7 @@ PVRSRV_ERROR PVRSRVPowerTryLock(PPVRSRV_DEVICE_NODE psDeviceNode)
 	{
 		/* System is powered OFF, release the lock and return error */
 		OSLockRelease(psDeviceNode->hPowerLock);
-		return PVRSRV_ERROR_SYSTEM_STATE_POWERED_OFF;
+		{ static int _pwrc; if (_pwrc++ < 5) { printk(KERN_ERR "[PWRDBG] sys power OFF\n"); dump_stack(); } return PVRSRV_ERROR_SYSTEM_STATE_POWERED_OFF; }
 	}
 }
 
@@ -670,6 +671,7 @@ PVRSRV_ERROR PVRSRVSetDeviceSystemPowerState(PPVRSRV_DEVICE_NODE psDeviceNode,
 		return PVRSRV_ERROR_INVALID_PARAMS;
 	}
 
+	printk(KERN_ERR "[PWRDBG] SetDeviceSystemPowerState new=%d cur=%d\n", (int)eNewSysPowerState, (int)psDeviceNode->eCurrentSysPowerState); dump_stack();
 	/* Prevent simultaneous SetPowerStateKM calls */
 	_PVRSRVForcedPowerLock(psDeviceNode);
 

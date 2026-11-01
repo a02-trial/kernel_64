@@ -683,6 +683,11 @@ struct ion_handle *__ion_alloc(struct ion_client *client, size_t len,
 	if (heap_id_mask == heap_mask)
 		heap_id_mask = ION_HEAP_MULTIMEDIA_MASK;
 
+	/* gralloc donor asks FB heap (id 11) which is not registered here, use MM heap */
+	if (heap_id_mask & (1U << ION_HEAP_TYPE_FB))
+		heap_id_mask = (heap_id_mask & ~(1U << ION_HEAP_TYPE_FB)) |
+			       ION_HEAP_MULTIMEDIA_MASK;
+
 #ifdef CONFIG_ION_RBIN_HEAP
 	if (heap_id_mask == ION_HEAP_CAMERA_MASK) {
 		rbin_try = true;
@@ -737,6 +742,15 @@ repeat:
 		goto repeat;
 	}
 #endif
+	if (!buffer) {
+		struct ion_heap *dbg_heap;
+
+		pr_err("[ION_DBG] alloc null: mask=0x%x len=%zu align=%zu flags=0x%x comm=%s\n",
+		       heap_id_mask, len, align, flags, current->comm);
+		plist_for_each_entry(dbg_heap, &dev->heaps, node)
+			pr_err("[ION_DBG] heap id=%u type=%u name=%s\n",
+			       dbg_heap->id, dbg_heap->type, dbg_heap->name);
+	}
 	up_read(&dev->lock);
 
 	if (!buffer) {
