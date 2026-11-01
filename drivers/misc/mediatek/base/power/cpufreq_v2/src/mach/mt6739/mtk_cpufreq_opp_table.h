@@ -15,7 +15,7 @@
 #include "mtk_cpufreq_config.h"
 
 /* for DVFS OPP table LL */
-#define CPU_DVFS_FREQ0_LL_FY		1274000		/* KHz */
+#define CPU_DVFS_FREQ0_LL_FY		1801000		/* KHz */
 #define CPU_DVFS_FREQ1_LL_FY		1235000		/* KHz */
 #define CPU_DVFS_FREQ2_LL_FY		1196000		/* KHz */
 #define CPU_DVFS_FREQ3_LL_FY		1170000		/* KHz */
@@ -49,7 +49,7 @@
 #define CPU_DVFS_FREQ14_LL_SB		 962000	/* KHz */
 #define CPU_DVFS_FREQ15_LL_SB		 962000	/* KHz */
 
-#define CPU_DVFS_FREQ0_LL_FY2		1105000		/* KHz */
+#define CPU_DVFS_FREQ0_LL_FY2		1801000		/* KHz */
 #define CPU_DVFS_FREQ1_LL_FY2		1105000		/* KHz */
 #define CPU_DVFS_FREQ2_LL_FY2		1105000		/* KHz */
 #define CPU_DVFS_FREQ3_LL_FY2		1105000		/* KHz */
