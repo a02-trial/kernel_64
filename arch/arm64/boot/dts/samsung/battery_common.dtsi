@@ -141,6 +141,9 @@
 		battery,pd_charging_charge_power = <15000>;
 		battery,max_charging_current = <2350>;
 
+		battery,store_mode_charging_max = <70>;
+		battery,store_mode_charging_min = <60>;
+
 		battery,wireless_cc_cv = <85>;
 		battery,wireless_otg_input_current = <900>;
 
@@ -242,7 +245,8 @@
 		};
 		current_group_4 {
 			cable_number = <SEC_BATTERY_CABLE_9V_TA SEC_BATTERY_CABLE_9V_ERR
-				SEC_BATTERY_CABLE_9V_UNKNOWN SEC_BATTERY_CABLE_QC20 SEC_BATTERY_CABLE_QC30>;
+				SEC_BATTERY_CABLE_9V_UNKNOWN SEC_BATTERY_CABLE_QC20
+				SEC_BATTERY_CABLE_QC30 SEC_BATTERY_CABLE_9V_POGO>;
 			input_current = <1650>;
 			charging_current = <2350>;
 		};

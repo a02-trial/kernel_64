@@ -746,7 +746,7 @@ scanP2pProcessBeaconAndProbeResp(IN P_ADAPTER_T prAdapter,
 				/* Only report Probe Response frame to supplicant. */
 				/* Probe response collect much more information. */
 
-				if (fgIsSkipThisBeacon || prBssDesc->eBand == BAND_2G4) {
+				if (fgIsSkipThisBeacon) {
 					DBGLOG(P2P, TRACE, "Skip beacon [" MACSTR "][%s][ch %d]\n",
 							MAC2STR(prWlanBeaconFrame->aucBSSID),
 							prBssDesc->aucSSID,
@@ -835,7 +835,8 @@ scanP2pSearchDesc(IN P_ADAPTER_T prAdapter, IN P_BSS_INFO_T prP2pBssInfo, IN P_P
 
 		DBGLOG(P2P, LOUD, "Connecting to BSSID: %pM\n", prConnReqInfo->aucBssid);
 		DBGLOG(P2P, LOUD, "Connecting to SSID:%s, length:%d\n",
-				   prConnReqInfo->rSsidStruct.aucSsid, prConnReqInfo->rSsidStruct.ucSsidLen);
+				   HIDE(prConnReqInfo->rSsidStruct.aucSsid),
+				   prConnReqInfo->rSsidStruct.ucSsidLen);
 
 		LINK_FOR_EACH_ENTRY(prBssDesc, prBssDescList, rLinkEntry, BSS_DESC_T) {
 			DBGLOG(P2P, LOUD, "Checking BSS: %pM\n", prBssDesc->aucBSSID);
@@ -858,10 +859,12 @@ scanP2pSearchDesc(IN P_ADAPTER_T prAdapter, IN P_BSS_INFO_T prP2pBssInfo, IN P_P
 				DBGLOG(P2P, TRACE,
 				       "Connecting to BSSID: %pM\n", prConnReqInfo->aucBssid);
 				DBGLOG(P2P, TRACE,
-				       "Connecting to SSID:%s, length:%d\n", prConnReqInfo->rSsidStruct.aucSsid,
+				       "Connecting to SSID:%s, length:%d\n",
+				       HIDE(prConnReqInfo->rSsidStruct.aucSsid),
 					prConnReqInfo->rSsidStruct.ucSsidLen);
 				DBGLOG(P2P, TRACE,
-				       "Checking SSID:%s, length:%d\n", prBssDesc->aucSSID, prBssDesc->ucSSIDLen);
+				       "Checking SSID:%s, length:%d\n",
+				       HIDE(prBssDesc->aucSSID), prBssDesc->ucSSIDLen);
 				DBGLOG(P2P, TRACE, "Ignore mismatch SSID, (But BSSID match).\n");
 				ASSERT(FALSE);
 				continue;

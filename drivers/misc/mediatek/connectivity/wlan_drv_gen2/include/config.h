@@ -35,6 +35,14 @@
 *                              C O N S T A N T S
 ********************************************************************************
 */
+
+/*------------------------------------------------------------------------------
+ * Flags for DBDC Feature
+ *------------------------------------------------------------------------------
+ */
+
+#define CFG_SUPPORT_DBDC	0
+
 /* 2 Flags for OS capability */
 
 #define MTK_WCN_SINGLE_MODULE		0	/* 1: without WMT */
@@ -152,6 +160,12 @@
 #else
 #define CFG_REFACTORY_PMKSA 0
 #endif
+
+/*------------------------------------------------------------------------------
+ * Flags of Random MAC support
+ *------------------------------------------------------------------------------
+ */
+#define CFG_SUPPORT_SCAN_RANDOM_MAC        1
 
 /*------------------------------------------------------------------------------
  * SLT Option
@@ -727,7 +741,7 @@
 #define CFG_NVRAM_EXISTENCE_CHECK               1
 #define CFG_SW_NVRAM_VERSION_CHECK              1
 #define CFG_SUPPORT_NIC_CAPABILITY              1
-
+#define CFG_FORCE_DISABLE_5G                    1
 /*------------------------------------------------------------------------------
  * CONFIG_TITLE : Stress Test Option
  * OWNER        : Puff Wen
@@ -818,7 +832,7 @@
 
 #define CFG_SUPPORT_TX_POWER_BACK_OFF       1
 
-#define CFG_SUPPORT_FCC_POWER_BACK_OFF             1
+#define CFG_SUPPORT_FCC_POWER_BACK_OFF             0
 
 
 #define CFG_SUPPORT_P2P_ECSA                       0
@@ -901,7 +915,7 @@
 #define WLAN_INCLUDE_SYS                   0
 #endif
 
-#define CFG_SUPPORT_DETECT_SECURITY_MODE_CHANGE 0
+#define CFG_SUPPORT_DETECT_SECURITY_MODE_CHANGE 1
 #define CFG_IGNORE_INVALID_AUTH_TSN		0
 /*------------------------------------------------------------------------------
  * Flags of drop multicast packet when device suspend
@@ -924,13 +938,6 @@
  *------------------------------------------------------------------------------
  */
 #define CFG_ENABLE_KEYWORD_EXCEPTION_MECHANISM  1
-
-/*------------------------------------------------------------------------------
- * Flags for DBDC Feature
- *------------------------------------------------------------------------------
- */
-
-#define CFG_SUPPORT_DBDC	0
 
 /*******************************************************************************
 *                             D A T A   T Y P E S

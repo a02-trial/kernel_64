@@ -502,23 +502,23 @@ static inline void musb_write_txfunaddr(void __iomem *mbase,
 {
 	u16 new_qh_addr_reg;
 	unsigned char power, txtype;
-	
+
 	power = musb_readb(mbase, MUSB_POWER);
 	txtype = musb_readb(mbase, MUSB_TXTYPE_EP0);
-	
-	DBG(4, "%s - ep%d,	power: 0x%X, txtype: 0x%X\n", __func__, epnum,
-									power, txtype);
+
+	DBG(4, "%s - ep%d,  power: 0x%X, txtype: 0x%X\n", __func__, epnum,
+								power, txtype);
 	if ((power & MUSB_POWER_HSMODE) &&
 		((txtype & MUSB_TXTYPE_TXSPEED) == MUSB_TXTYPE_TXSPEED_FULL)) {
-	
+
 		new_qh_addr_reg = (qh_addr_reg | 0x100);
-	
+
 		DBG(4, "%s SPLIT TRANS ep%d 0x%X 0x%X\n", __func__, epnum,
-						qh_addr_reg,
-						new_qh_addr_reg);
-	
+							qh_addr_reg,
+							new_qh_addr_reg);
+
 		musb_writew(mbase, MUSB_TXFUNCADDR + 8 * epnum,
-						new_qh_addr_reg);
+							new_qh_addr_reg);
 	} else {
 		musb_writew(mbase, MUSB_TXFUNCADDR + 8 * epnum, qh_addr_reg);
 	}

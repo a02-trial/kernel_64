@@ -2,7 +2,11 @@
 subdir-ccflags-$(CONFIG_POWER_SUPPLY_DEBUG) := -DDEBUG
 
 power_supply-y				:= power_supply_core.o
+ifeq ($(CONFIG_SSDEV_IN_MTK),y)
+power_supply-$(CONFIG_SYSFS)		+= mediatek/ssdev_in_mtk/power_supply_sysfs_a32_lte.o
+else
 power_supply-$(CONFIG_SYSFS)		+= power_supply_sysfs.o
+endif
 power_supply-$(CONFIG_LEDS_TRIGGERS)	+= power_supply_leds.o
 
 obj-$(CONFIG_POWER_SUPPLY)	+= power_supply.o
@@ -87,3 +91,8 @@ ifeq ($(CONFIG_MACH_MT8173),y)
 else
 	obj-y += mediatek/
 endif
+
+ifeq ($(CONFIG_CUSTOM_BATTERY_EXTERNAL_CHANNEL),y)
+	obj-y += k6885v1_64_alpha/
+endif
+

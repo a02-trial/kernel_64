@@ -35,7 +35,6 @@ static VOID aisFsmSetOkcTimeout(IN P_ADAPTER_T prAdapter, ULONG ulParam);
 #define CTIA_MAGIC_SSID                     "ctia_test_only_*#*#3646633#*#*"
 #define CTIA_MAGIC_SSID_LEN                 30
 
-#define AIS_RECONN_LIMIT		    AIS_ROAMING_CONNECTION_TRIAL_LIMIT
 #define AIS_JOIN_TIMEOUT                    7
 #define AIS_DEFAULT_ROAMING_THRESHOLD       -75 /* dbm */
 
@@ -344,7 +343,7 @@ VOID aisFsmInit(IN P_ADAPTER_T prAdapter)
 	kalMemZero(&prAisSpecificBssInfo->rBTMParam, sizeof(prAisSpecificBssInfo->rBTMParam));
 
 #if (CFG_REFACTORY_PMKSA == 1)
-	LINK_INITIALIZE(&prAisSpecificBssInfo->rPmkidCache);
+	LINK_INITIALIZE(&prAisBssInfo->rPmkidCache);
 #endif
 
 	/* DBGPRINTF("[2] ucBmpDeliveryAC:0x%x, ucBmpTriggerAC:0x%x, ucUapsdSp:0x%x", */
@@ -426,6 +425,9 @@ VOID aisFsmStateInit_JOIN(IN P_ADAPTER_T prAdapter, P_BSS_DESC_T prBssDesc)
 	P_CONNECTION_SETTINGS_T prConnSettings;
 	P_STA_RECORD_T prStaRec;
 	P_MSG_JOIN_REQ_T prJoinReqMsg;
+#if (CFG_REFACTORY_PMKSA == 0)
+	UINT_32 u4Entry = 0;
+#endif
 
 	DEBUGFUNC("aisFsmStateInit_JOIN()");
 
@@ -519,8 +521,20 @@ VOID aisFsmStateInit_JOIN(IN P_ADAPTER_T prAdapter, P_BSS_DESC_T prBssDesc)
 			    (uint8_t) AUTH_TYPE_FAST_BSS_TRANSITION;
 			break;
 		case AUTH_MODE_WPA3_SAE:
-			prAisFsmInfo->ucAvailableAuthTypes =
-			    (uint8_t) AUTH_TYPE_SAE;
+#if (CFG_REFACTORY_PMKSA == 0)
+			if (rsnSearchPmkidEntry(prAdapter, prBssDesc->aucBSSID,
+						&u4Entry)) {
+#else
+			if (rsnSearchPmkidEntry(prAdapter, prBssDesc->aucBSSID)) {
+#endif
+				prAisFsmInfo->ucAvailableAuthTypes =
+					(uint8_t) AUTH_TYPE_OPEN_SYSTEM;
+				DBGLOG(AIS, INFO,
+					"SAE: change AUTH to OPEN when roaming with PMK\n");
+			} else {
+				prAisFsmInfo->ucAvailableAuthTypes =
+					(uint8_t) AUTH_TYPE_SAE;
+			}
 			break;
 		default:
 			prAisFsmInfo->ucAvailableAuthTypes =
@@ -995,7 +1009,7 @@ VOID aisGetAndSetScanChannel(IN P_ADAPTER_T prAdapter)
 		if (ucChannelp[i] != 0) {
 			ucChannelNum = aisIndex2ChannelNum(i);
 			DBGLOG(AIS, TRACE, "Full2Partial i=%d, channel value=%d\n", i, ucChannelNum);
-			if (ucChannelNum != 0) {
+			if (ucChannelNum != 0 && t >= 0) {
 				if ((ucChannelNum >= 1) && (ucChannelNum <= 14))
 					PartialScanChannel->arChnlInfoList[t].eBand = BAND_2G4;
 				else
@@ -1658,6 +1672,8 @@ VOID aisFsmSteps(IN P_ADAPTER_T prAdapter, ENUM_AIS_STATE_T eNextState)
 					prScanReqMsg->ucSSIDNum = prAisFsmInfo->ucScanSSIDNum;
 					prScanReqMsg->prSsid = prAisFsmInfo->arScanSSID;
 				}
+				kalMemCopy(prScanReqMsg->aucRandomMac,
+					prAisFsmInfo->aucRandomMac, MAC_ADDR_LEN);
 			} else {
 				/* prScanReqMsg->eScanType = SCAN_TYPE_ACTIVE_SCAN; */
 
@@ -1878,8 +1894,8 @@ VOID aisFsmSteps(IN P_ADAPTER_T prAdapter, ENUM_AIS_STATE_T eNextState)
 
 			mboxSendMsg(prAdapter, MBOX_ID_0, (P_MSG_HDR_T) prScanReqMsg, MSG_SEND_METHOD_BUF);
 			DBGLOG(AIS, TRACE, "SendSR%d\n", prScanReqMsg->ucSeqNum);
-			if (prAisFsmInfo->ucConnTrialCount > AIS_RECONN_LIMIT)
-				prAisFsmInfo->fgTryScan = FALSE;
+			kalMemZero(prAisFsmInfo->aucRandomMac, MAC_ADDR_LEN);
+			prAisFsmInfo->fgTryScan = FALSE;	/* Will enable background sleep for infrastructure */
 			prAisFsmInfo->ucJoinFailCntAfterScan = 0;
 
 			prAdapter->ucScanTime++;
@@ -2271,7 +2287,7 @@ VOID aisFsmRunEventScanDone(IN P_ADAPTER_T prAdapter, IN P_MSG_HDR_T prMsgHdr)
 		cnmTimerStartTimer(prAdapter, &prAisFsmInfo->rScanDoneTimer,
 					SEC_TO_MSEC(AIS_SCN_DONE_TIMEOUT_SEC));
 		aisFsmScanRequestAdv(prAdapter, prParam->ucSsidNum, prParam->arSSID,
-					prParam->aucScanIEBuf, prParam->u4IELen);
+					prParam->aucScanIEBuf, prParam->u4IELen, prParam->aucRandomMac);
 	} else /* Radio Measurement is on-going, schedule to next Measurement Element */
 		rlmStartNextMeasurement(prAdapter, FALSE);
 
@@ -3472,8 +3488,7 @@ VOID aisPostponedEventOfDisconnTimeout(IN P_ADAPTER_T prAdapter, IN P_AIS_FSM_IN
 	fgIsBeaconTimeout &= !prAisBssInfo->fgDisConnReassoc;
 #endif
 	/* only retry connect once when beacon timeout */
-	if (!fgIsPostponeTimeout && !(fgIsBeaconTimeout &&
-	    prAisFsmInfo->ucConnTrialCount > AIS_RECONN_LIMIT)) {
+	if (!fgIsPostponeTimeout && !(fgIsBeaconTimeout && prAisFsmInfo->ucConnTrialCount > 1)) {
 		DBGLOG(AIS, INFO, "DelayTimeOfDisconnect, don't report disconnect\n");
 		return;
 	}
@@ -4470,7 +4485,7 @@ VOID aisFsmScanRequest(IN P_ADAPTER_T prAdapter, IN P_PARAM_SSID_T prSsid, IN PU
 */
 /*----------------------------------------------------------------------------*/
 VOID aisFsmScanRequestAdv(IN P_ADAPTER_T prAdapter, IN UINT_8 ucSsidNum, IN P_PARAM_SSID_T prSsid,
-				   IN PUINT_8 pucIe, IN UINT_32 u4IeLength)
+				   IN PUINT_8 pucIe, IN UINT_32 u4IeLength, IN PUINT_8 paucRandomMac)
 {
 	UINT_32 i;
 	P_CONNECTION_SETTINGS_T prConnSettings;
@@ -4506,6 +4521,9 @@ VOID aisFsmScanRequestAdv(IN P_ADAPTER_T prAdapter, IN UINT_8 ucSsidNum, IN P_PA
 						prSsid[i].u4SsidLen);
 			}
 		}
+
+		kalMemCopy(prAisFsmInfo->aucRandomMac, paucRandomMac,
+			MAC_ADDR_LEN);
 
 		if (u4IeLength > 0 && u4IeLength <= MAX_IE_LENGTH) {
 			prAisFsmInfo->u4ScanIELength = u4IeLength;

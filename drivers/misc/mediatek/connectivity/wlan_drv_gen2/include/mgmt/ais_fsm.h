@@ -240,6 +240,7 @@ typedef struct _AIS_FSM_INFO_T {
 
 	struct LINK_MGMT rBcnTimeout;
 	UINT_8 ucJoinFailCntAfterScan;
+	UINT_8 aucRandomMac[MAC_ADDR_LEN];
 
 	UINT_8 aucNeighborAPChnl[CFG_NEIGHBOR_AP_CHANNEL_NUM];
 #if CFG_SUPPORT_DYNAMIC_ROAM
@@ -416,7 +417,7 @@ VOID aisFsmScanRequest(IN P_ADAPTER_T prAdapter, IN P_PARAM_SSID_T prSsid, IN PU
 
 #if 1 /* MULTI SSID */
 VOID aisFsmScanRequestAdv(IN P_ADAPTER_T prAdapter, IN UINT_8 ucSsidNum, IN P_PARAM_SSID_T prSsid,
-			IN PUINT_8 pucIe, IN UINT_32 u4IeLength);
+			IN PUINT_8 pucIe, IN UINT_32 u4IeLength, IN PUINT_8 paucRandomMac);
 #endif
 /*----------------------------------------------------------------------------*/
 /* Internal State Checking                                                    */

@@ -39,7 +39,7 @@
 MODULE_LICENSE("Dual BSD/GPL");
 
 #define WIFI_DRIVER_NAME "mtk_wmt_wifi_chrdev"
-#define WIFI_DEV_MAJOR 153
+#define WIFI_DEV_MAJOR 0
 
 #define PFX                         "[MTK-WIFI] "
 #define WIFI_LOG_DBG                  3
@@ -47,31 +47,31 @@ MODULE_LICENSE("Dual BSD/GPL");
 #define WIFI_LOG_WARN                 1
 #define WIFI_LOG_ERR                  0
 
-uint32_t gDbgLevel = WIFI_LOG_DBG;
+uint32_t gWiFiDbgLevel = WIFI_LOG_DBG;
 
 #define WIFI_DBG_FUNC(fmt, arg...)	\
 	do { \
-		if (gDbgLevel >= WIFI_LOG_DBG) \
+		if (gWiFiDbgLevel >= WIFI_LOG_DBG) \
 			pr_info(PFX "%s[D]: " fmt, __func__, ##arg); \
 	} while (0)
 #define WIFI_INFO_FUNC(fmt, arg...)	\
 	do { \
-		if (gDbgLevel >= WIFI_LOG_INFO) \
+		if (gWiFiDbgLevel >= WIFI_LOG_INFO) \
 			pr_info(PFX "%s[I]: " fmt, __func__, ##arg); \
 	} while (0)
 #define WIFI_INFO_FUNC_LIMITED(fmt, arg...)	\
 	do { \
-		if (gDbgLevel >= WIFI_LOG_INFO) \
+		if (gWiFiDbgLevel >= WIFI_LOG_INFO) \
 			pr_info_ratelimited(PFX "%s[L]: " fmt, __func__, ##arg); \
 	} while (0)
 #define WIFI_WARN_FUNC(fmt, arg...)	\
 	do { \
-		if (gDbgLevel >= WIFI_LOG_WARN) \
+		if (gWiFiDbgLevel >= WIFI_LOG_WARN) \
 			pr_info(PFX "%s[W]: " fmt, __func__, ##arg); \
 	} while (0)
 #define WIFI_ERR_FUNC(fmt, arg...)	\
 	do { \
-		if (gDbgLevel >= WIFI_LOG_ERR) \
+		if (gWiFiDbgLevel >= WIFI_LOG_ERR) \
 			pr_info(PFX "%s[E]: " fmt, __func__, ##arg); \
 	} while (0)
 
@@ -79,6 +79,7 @@ uint32_t gDbgLevel = WIFI_LOG_DBG;
 
 static int32_t WIFI_devs = 1;
 static int32_t WIFI_major = WIFI_DEV_MAJOR;
+static dev_t wifi_devno;
 module_param(WIFI_major, uint, 0);
 static struct cdev WIFI_cdev;
 #if CREATE_NODE_DYNAMIC
@@ -103,7 +104,11 @@ static int32_t isconcurrent;
 static char *ifname = WLAN_IFACE_NAME;
 static uint32_t driver_loaded;
 static int32_t low_latency_mode;
-
+#if (CFG_ANDORID_CONNINFRA_SUPPORT == 1)
+static uint8_t  driver_resetting;
+static uint8_t  write_processing;
+static uint8_t  pre_cal_ongoing;
+#endif
 /*******************************************************************
  */
 enum ENUM_RESET_STATUS {
@@ -171,6 +176,38 @@ uint32_t get_low_latency_mode(void)
 }
 EXPORT_SYMBOL(get_low_latency_mode);
 
+#if (CFG_ANDORID_CONNINFRA_SUPPORT == 1)
+void update_driver_reset_status(uint8_t fgIsResetting)
+{
+	WIFI_INFO_FUNC("update_driver_reset_status: %d\n", fgIsResetting);
+	driver_resetting = fgIsResetting;
+}
+EXPORT_SYMBOL(update_driver_reset_status);
+int32_t get_wifi_powered_status(void)
+{
+	WIFI_INFO_FUNC("wifi power status : %d\n", powered);
+	return powered;
+}
+EXPORT_SYMBOL(get_wifi_powered_status);
+int32_t get_wifi_process_status(void)
+{
+	WIFI_INFO_FUNC("wifi write status: %d\n", write_processing);
+	return write_processing;
+}
+EXPORT_SYMBOL(get_wifi_process_status);
+void update_pre_cal_status(uint8_t fgIsPreCal)
+{
+	WIFI_INFO_FUNC("update_pre_cal_status: %d\n", fgIsPreCal);
+	pre_cal_ongoing = fgIsPreCal;
+}
+EXPORT_SYMBOL(update_pre_cal_status);
+uint8_t get_pre_cal_status(void)
+{
+	WIFI_INFO_FUNC("pre cal status: %d\n", pre_cal_ongoing);
+	return pre_cal_ongoing;
+}
+EXPORT_SYMBOL(get_pre_cal_status);
+#endif
 
 enum ENUM_WLAN_DRV_BUF_TYPE_T {
 	BUF_TYPE_NVRAM,
@@ -259,6 +296,12 @@ int32_t wifi_reset_end(enum ENUM_RESET_STATUS status)
 		if (powered == 1) {
 			/* WIFI is on before whole chip reset, reopen it now */
 #if (CFG_ANDORID_CONNINFRA_SUPPORT == 1)
+			/*
+			 * mtk_wland_thread_main will check this flag for current state.
+			 * if this flag is TRUE, mtk_wland_thread_main will not do power on again.
+			 * Set this flag to FALSE to finish the reset procedure
+			 */
+			g_fgIsWiFiOn = MTK_WCN_BOOL_FALSE;
 			if (mtk_wcn_wlan_func_ctrl(WLAN_OPID_FUNC_ON) == MTK_WCN_BOOL_FALSE) {
 #else
 			if (mtk_wcn_wmt_func_on(WMTDRV_TYPE_WIFI) == MTK_WCN_BOOL_FALSE) {
@@ -314,7 +357,8 @@ int32_t wifi_reset_end(enum ENUM_RESET_STATUS status)
 					WIFI_WARN_FUNC("Set wlan mode %d\n", WLAN_MODE_STA_AP_P2P);
 					ret = 0;
 				}
-			}
+			} else
+				ret = 0;
 done:
 			if (netdev != NULL)
 				dev_put(netdev);
@@ -357,14 +401,26 @@ ssize_t WIFI_write(struct file *filp, const char __user *buf, size_t count, loff
 		WIFI_ERR_FUNC("WIFI_write invalid param\n");
 		goto done;
 	}
-
+#if (CFG_ANDORID_CONNINFRA_SUPPORT == 1)
+	if (driver_resetting == 1) {
+		WIFI_ERR_FUNC("Wi-Fi is resetting\n");
+		goto done;
+	}
+#endif
 	copy_size = min(sizeof(local) - 1, count);
+	if (copy_size < 0) {
+		WIFI_ERR_FUNC("Invalid copy_size: %d\n", copy_size);
+		goto done;
+	}
 	if (copy_from_user(local, buf, copy_size) == 0) {
 		local[copy_size] = '\0';
 		WIFI_INFO_FUNC("WIFI_write %s, length %zu, copy_size %d\n",
 			local, count, copy_size);
 
 		if (local[0] == '0') {
+#if (CFG_ANDORID_CONNINFRA_SUPPORT == 1)
+			write_processing = 1;
+#endif
 			if (powered == 0) {
 				WIFI_INFO_FUNC("WIFI is already power off!\n");
 				retval = count;
@@ -404,6 +460,9 @@ ssize_t WIFI_write(struct file *filp, const char __user *buf, size_t count, loff
 				wlan_mode = WLAN_MODE_HALT;
 			}
 		} else if (local[0] == '1') {
+#if (CFG_ANDORID_CONNINFRA_SUPPORT == 1)
+			write_processing = 1;
+#endif
 			if (powered == 1) {
 				WIFI_INFO_FUNC("WIFI is already power on!\n");
 				retval = count;
@@ -624,7 +683,9 @@ ssize_t WIFI_write(struct file *filp, const char __user *buf, size_t count, loff
 done:
 	if (netdev != NULL)
 		dev_put(netdev);
-
+#if (CFG_ANDORID_CONNINFRA_SUPPORT == 1)
+	write_processing = 0;
+#endif
 	up(&wr_mtx);
 	return retval;
 }
@@ -637,14 +698,22 @@ const struct file_operations WIFI_fops = {
 
 static int WIFI_init(void)
 {
-	dev_t dev = MKDEV(WIFI_major, 0);
 	int32_t alloc_ret = 0;
 	int32_t cdev_err = 0;
 
 	low_latency_mode = 0;
 
+	sema_init(&wr_mtx, 1);
+
 	/* Allocate char device */
-	alloc_ret = register_chrdev_region(dev, WIFI_devs, WIFI_DRIVER_NAME);
+	if (WIFI_major) {
+		wifi_devno = MKDEV(WIFI_major, 0);
+		alloc_ret = register_chrdev_region(wifi_devno, WIFI_devs,
+				WIFI_DRIVER_NAME);
+	} else {
+		alloc_ret = alloc_chrdev_region(&wifi_devno, 0, WIFI_devs,
+				WIFI_DRIVER_NAME);
+	}
 	if (alloc_ret) {
 		WIFI_ERR_FUNC("Fail to register device numbers\n");
 		return alloc_ret;
@@ -653,7 +722,7 @@ static int WIFI_init(void)
 	cdev_init(&WIFI_cdev, &WIFI_fops);
 	WIFI_cdev.owner = THIS_MODULE;
 
-	cdev_err = cdev_add(&WIFI_cdev, dev, WIFI_devs);
+	cdev_err = cdev_add(&WIFI_cdev, wifi_devno, WIFI_devs);
 	if (cdev_err)
 		goto error;
 
@@ -661,19 +730,19 @@ static int WIFI_init(void)
 	wmtwifi_class = class_create(THIS_MODULE, "wmtWifi");
 	if (IS_ERR(wmtwifi_class))
 		goto error;
-	wmtwifi_dev = device_create(wmtwifi_class, NULL, dev, NULL, "wmtWifi");
+	wmtwifi_dev = device_create(wmtwifi_class, NULL, wifi_devno, NULL,
+			"wmtWifi");
 	if (IS_ERR(wmtwifi_dev))
 		goto error;
 #endif
 
-	sema_init(&wr_mtx, 1);
-
-	WIFI_INFO_FUNC("%s driver(major %d) installed\n", WIFI_DRIVER_NAME, WIFI_major);
+	WIFI_INFO_FUNC("%s driver(major %d %d) installed.\n", WIFI_DRIVER_NAME,
+			WIFI_major, MAJOR(wifi_devno));
 
 #ifdef CONFIG_MTK_CONNSYS_DEDICATED_LOG_PATH
 	if (fw_log_wifi_init() < 0) {
 		WIFI_INFO_FUNC("connsys debug node init failed!!\n");
-		return -1;
+		goto error;
 	}
 #endif
 #if (CFG_ANDORID_CONNINFRA_SUPPORT == 1)
@@ -684,7 +753,7 @@ static int WIFI_init(void)
 error:
 #if CREATE_NODE_DYNAMIC
 	if (wmtwifi_dev && !IS_ERR(wmtwifi_dev)) {
-		device_destroy(wmtwifi_class, dev);
+		device_destroy(wmtwifi_class, wifi_devno);
 		wmtwifi_dev = NULL;
 	}
 	if (wmtwifi_class && !IS_ERR(wmtwifi_class)) {
@@ -696,18 +765,16 @@ error:
 		cdev_del(&WIFI_cdev);
 
 	if (alloc_ret == 0)
-		unregister_chrdev_region(dev, WIFI_devs);
+		unregister_chrdev_region(wifi_devno, WIFI_devs);
 
 	return -1;
 }
 
 static void WIFI_exit(void)
 {
-	dev_t dev = MKDEV(WIFI_major, 0);
-
 #if CREATE_NODE_DYNAMIC
 	if (wmtwifi_dev && !IS_ERR(wmtwifi_dev)) {
-		device_destroy(wmtwifi_class, dev);
+		device_destroy(wmtwifi_class, wifi_devno);
 		wmtwifi_dev = NULL;
 	}
 	if (wmtwifi_class && !IS_ERR(wmtwifi_class)) {
@@ -717,7 +784,7 @@ static void WIFI_exit(void)
 #endif
 
 	cdev_del(&WIFI_cdev);
-	unregister_chrdev_region(dev, WIFI_devs);
+	unregister_chrdev_region(wifi_devno, WIFI_devs);
 
 	WIFI_INFO_FUNC("%s driver removed\n", WIFI_DRIVER_NAME);
 

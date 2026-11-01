@@ -159,6 +159,7 @@ int run_test(struct syna_tcm_hcd *tcm_hcd, struct sec_factory_test_mode *mode, e
 
 	input_dbg(true, tcm_hcd->pdev->dev.parent,
 			"Start testing\n");
+
 	memset(tcm_hcd->print_buf, 0, tcm_hcd->rows * tcm_hcd->cols * CMD_RESULT_WORD_LEN);
 
 	retval = testing_run_prod_test_item(sec_fn_test, test_code);
@@ -167,9 +168,11 @@ int run_test(struct syna_tcm_hcd *tcm_hcd, struct sec_factory_test_mode *mode, e
 				"Failed to run test\n");
 		goto exit;
 	}
+
 	buf = sec_fn_test->resp.buf;
 
 	sec_factory_print_frame(tcm_hcd, buf, mode);
+
 	if (mode->allnode) {
 		for (idx = 0; idx < tcm_hcd->rows * tcm_hcd->cols; idx++) {
 			tcm_hcd->pFrame[idx] = (short)le2_to_uint(&buf[idx * 2]);
@@ -181,6 +184,7 @@ int run_test(struct syna_tcm_hcd *tcm_hcd, struct sec_factory_test_mode *mode, e
 	} else {
 		snprintf(tcm_hcd->print_buf, SEC_CMD_STR_LEN, "%d,%d", mode->min, mode->max);
 	}
+
 	return retval;
 
 exit:
@@ -223,7 +227,7 @@ exit:
 
 int raw_data_gap_x(struct sec_cmd_data *sec, struct sec_factory_test_mode *mode)
 {
-	int retval;
+	int retval = 0;
 	unsigned int idx;
 	struct syna_tcm_hcd *tcm_hcd = sec_fn_test->tcm_hcd;
 	char *buff;
@@ -256,7 +260,7 @@ error_buff_alloc_mem:
 
 int raw_data_gap_y(struct sec_cmd_data *sec, struct sec_factory_test_mode *mode)
 {
-	int retval;
+	int retval = 0;
 	unsigned int idx;
 	struct syna_tcm_hcd *tcm_hcd = sec_fn_test->tcm_hcd;
 	char *buff;
@@ -291,25 +295,27 @@ int test_abs_cap(struct sec_cmd_data *sec, struct sec_factory_test_mode *mode)
 {
 	int retval = 0;
 	struct syna_tcm_hcd *tcm_hcd = sec_fn_test->tcm_hcd;
-	char buff[SEC_CMD_STR_LEN] = { 0 };
 
 	input_dbg(true, tcm_hcd->pdev->dev.parent, "Start testing\n");
+
 	retval = run_test(tcm_hcd, mode, TEST_PT7_DYNAMIC_RANGE);
 	if (retval < 0)
 		goto exit;
 
-	sec_cmd_set_cmd_result(sec, tcm_hcd->print_buf, strnlen(tcm_hcd->print_buf, tcm_hcd->rows * tcm_hcd->cols * CMD_RESULT_WORD_LEN));
+	sec_cmd_set_cmd_result(sec, tcm_hcd->print_buf, strlen(tcm_hcd->print_buf));
 	if (sec->cmd_all_factory_state == SEC_CMD_STATUS_RUNNING)
-		sec_cmd_set_cmd_result_all(sec, tcm_hcd->print_buf, strnlen(tcm_hcd->print_buf, tcm_hcd->rows * tcm_hcd->cols * CMD_RESULT_WORD_LEN), "ABS_CAP");
+		sec_cmd_set_cmd_result_all(sec, tcm_hcd->print_buf, strnlen(tcm_hcd->print_buf, sizeof(tcm_hcd->print_buf)), "ABS_CAP");
 
 	sec->cmd_state = SEC_CMD_STATUS_OK;
+
 	return retval;
 
 exit:
-	snprintf(buff, sizeof(buff), "NG");
-	sec_cmd_set_cmd_result(sec, tcm_hcd->print_buf, strnlen(tcm_hcd->print_buf, tcm_hcd->rows * tcm_hcd->cols * CMD_RESULT_WORD_LEN));
+	snprintf(tcm_hcd->print_buf, sizeof(tcm_hcd->print_buf), "NG");
+	sec_cmd_set_cmd_result(sec, tcm_hcd->print_buf, strnlen(tcm_hcd->print_buf, sizeof(tcm_hcd->print_buf)));
+
 	if (sec->cmd_all_factory_state == SEC_CMD_STATUS_RUNNING)
-		sec_cmd_set_cmd_result_all(sec, tcm_hcd->print_buf, strnlen(tcm_hcd->print_buf, tcm_hcd->rows * tcm_hcd->cols * CMD_RESULT_WORD_LEN), "ABS_CAP");
+		sec_cmd_set_cmd_result_all(sec, tcm_hcd->print_buf, strnlen(tcm_hcd->print_buf, sizeof(tcm_hcd->print_buf)), "ABS_CAP");
 	sec->cmd_state = SEC_CMD_STATUS_FAIL;
 
 	return retval;
@@ -319,7 +325,6 @@ int test_noise(struct sec_cmd_data *sec, struct sec_factory_test_mode *mode)
 {
 	int retval = 0;
 	struct syna_tcm_hcd *tcm_hcd = sec_fn_test->tcm_hcd;
-	char buff[SEC_CMD_STR_LEN] = { 0 };
 
 	input_dbg(true, tcm_hcd->pdev->dev.parent, "Start testing\n");
 
@@ -327,20 +332,20 @@ int test_noise(struct sec_cmd_data *sec, struct sec_factory_test_mode *mode)
 	if (retval < 0)
 		goto exit;
 
-	sec_cmd_set_cmd_result(sec, tcm_hcd->print_buf, strnlen(tcm_hcd->print_buf, tcm_hcd->rows * tcm_hcd->cols * CMD_RESULT_WORD_LEN));
+	sec_cmd_set_cmd_result(sec, tcm_hcd->print_buf, strlen(tcm_hcd->print_buf));
 	if (sec->cmd_all_factory_state == SEC_CMD_STATUS_RUNNING)
-		sec_cmd_set_cmd_result_all(sec, tcm_hcd->print_buf, strnlen(tcm_hcd->print_buf, tcm_hcd->rows * tcm_hcd->cols * CMD_RESULT_WORD_LEN), "NOISE");
+		sec_cmd_set_cmd_result_all(sec, tcm_hcd->print_buf, strnlen(tcm_hcd->print_buf, sizeof(tcm_hcd->print_buf)), "NOISE");
 
 	sec->cmd_state = SEC_CMD_STATUS_OK;
 
 	return retval;
 
 exit:
-	snprintf(buff, sizeof(buff), "NG");
-	sec_cmd_set_cmd_result(sec, tcm_hcd->print_buf, strnlen(tcm_hcd->print_buf, tcm_hcd->rows * tcm_hcd->cols * CMD_RESULT_WORD_LEN));
+	snprintf(tcm_hcd->print_buf, sizeof(tcm_hcd->print_buf), "NG");
+	sec_cmd_set_cmd_result(sec, tcm_hcd->print_buf, strnlen(tcm_hcd->print_buf, sizeof(tcm_hcd->print_buf)));
 
 	if (sec->cmd_all_factory_state == SEC_CMD_STATUS_RUNNING)
-		sec_cmd_set_cmd_result_all(sec, tcm_hcd->print_buf, strnlen(tcm_hcd->print_buf, tcm_hcd->rows * tcm_hcd->cols * CMD_RESULT_WORD_LEN), "NOISE");
+		sec_cmd_set_cmd_result_all(sec, tcm_hcd->print_buf, strnlen(tcm_hcd->print_buf, sizeof(tcm_hcd->print_buf)), "NOISE");
 	sec->cmd_state = SEC_CMD_STATUS_FAIL;
 
 	return retval;
@@ -350,7 +355,6 @@ int test_open_short(struct sec_cmd_data *sec, struct sec_factory_test_mode *mode
 {
 	int retval = 0;
 	struct syna_tcm_hcd *tcm_hcd = sec_fn_test->tcm_hcd;
-	char buff[SEC_CMD_STR_LEN] = { 0 };
 
 	input_dbg(true, tcm_hcd->pdev->dev.parent, "Start testing\n");
 
@@ -358,20 +362,20 @@ int test_open_short(struct sec_cmd_data *sec, struct sec_factory_test_mode *mode
 	if (retval < 0)
 		goto exit;
 
-	sec_cmd_set_cmd_result(sec, tcm_hcd->print_buf, strnlen(tcm_hcd->print_buf, tcm_hcd->rows * tcm_hcd->cols * CMD_RESULT_WORD_LEN));
+	sec_cmd_set_cmd_result(sec, tcm_hcd->print_buf, strlen(tcm_hcd->print_buf));
 	if (sec->cmd_all_factory_state == SEC_CMD_STATUS_RUNNING)
-		sec_cmd_set_cmd_result_all(sec, tcm_hcd->print_buf, strnlen(tcm_hcd->print_buf, tcm_hcd->rows * tcm_hcd->cols * CMD_RESULT_WORD_LEN), "OPEN_SHORT");
+		sec_cmd_set_cmd_result_all(sec, tcm_hcd->print_buf, strnlen(tcm_hcd->print_buf, sizeof(tcm_hcd->print_buf)), "OPEN_SHORT");
 
 	sec->cmd_state = SEC_CMD_STATUS_OK;
 
 	return retval;
 
 exit:
-	snprintf(buff, sizeof(buff), "NG");
-	sec_cmd_set_cmd_result(sec, tcm_hcd->print_buf, strnlen(tcm_hcd->print_buf, tcm_hcd->rows * tcm_hcd->cols * CMD_RESULT_WORD_LEN));
+	snprintf(tcm_hcd->print_buf, sizeof(tcm_hcd->print_buf), "NG");
+	sec_cmd_set_cmd_result(sec, tcm_hcd->print_buf, strnlen(tcm_hcd->print_buf, sizeof(tcm_hcd->print_buf)));
 
 	if (sec->cmd_all_factory_state == SEC_CMD_STATUS_RUNNING)
-		sec_cmd_set_cmd_result_all(sec, tcm_hcd->print_buf, strnlen(tcm_hcd->print_buf, tcm_hcd->rows * tcm_hcd->cols * CMD_RESULT_WORD_LEN), "OPEN_SHORT");
+		sec_cmd_set_cmd_result_all(sec, tcm_hcd->print_buf, strnlen(tcm_hcd->print_buf, sizeof(tcm_hcd->print_buf)), "OPEN_SHORT");
 	sec->cmd_state = SEC_CMD_STATUS_FAIL;
 
 	return retval;
@@ -444,127 +448,6 @@ exit:
 	sec->cmd_state = SEC_CMD_STATUS_FAIL;
 
 	return retval;
-}
-
-#define NOISE_DELTA_MAX 100
-static int syna_tcm_get_face_area(int *data_sum)
-{
-	int retval;
-	unsigned char *resp_buf;
-	unsigned int resp_buf_size;
-	unsigned int resp_length;
-	unsigned char out_buf;
-    int row_start, row_end, col_start, col_end, rows, cols;
-    int r, c, idx;
-	struct syna_tcm_app_info *app_info;
-	struct syna_tcm_hcd *tcm_hcd = sec_fn_test->tcm_hcd;
-
-	app_info = &tcm_hcd->app_info;
-	printk("[sec_input] %s %d\n",__func__,__LINE__);
-	rows = le2_to_uint(app_info->num_of_image_rows);
-	cols = le2_to_uint(app_info->num_of_image_cols);
-
-	resp_buf = NULL;
-	resp_buf_size = 0;
-	
-	printk("[sec_input] %s %d\n",__func__,__LINE__);
-
-	retval = tcm_hcd->write_message(tcm_hcd,
-			CMD_GET_FACE_AREA,
-			NULL,
-            0,
-			&resp_buf,
-			&resp_buf_size,
-			&resp_length,
-			NULL,
-			0);
-	if (retval < 0) {
-		LOGE(tcm_hcd->pdev->dev.parent,
-				"Failed to write command %s\n",
-				STR(CMD_GET_FACE_AREA));
-		goto exit;
-	}
-
-	if (resp_length < 4) {
-		LOGE(tcm_hcd->pdev->dev.parent,
-				"Invalid data length\n");
-		retval = -EINVAL;
-		goto exit;
-	}
-
-    row_start = resp_buf[0];
-    row_end = resp_buf[1];
-    col_start = resp_buf[2];
-    col_end = resp_buf[3];
-	printk("[sec_input] %s %d\n",__func__,__LINE__);
-    if ((row_start > row_end) || (row_end > rows)) {
-		LOGE(tcm_hcd->pdev->dev.parent,
-				"Invalid row parameter:%d %d %d %d\n", row_start, row_end, col_start, col_end);
-    }
-    if ((col_start > col_end) || (col_end > cols)) {
-		LOGE(tcm_hcd->pdev->dev.parent,
-				"Invalid cols parameter:%d %d %d %d\n", row_start, row_end, col_start, col_end);
-    }
-
-    out_buf = 195;
-	retval = tcm_hcd->write_message(tcm_hcd,
-			CMD_PRODUCTION_TEST,
-			&out_buf,
-            1,
-			&resp_buf,
-			&resp_buf_size,
-			&resp_length,
-			NULL,
-			0);
-	if (retval < 0) {
-		LOGE(tcm_hcd->pdev->dev.parent,
-				"Failed to write command %s\n",
-				STR(CMD_PRODUCTION_TEST));
-		goto exit;
-	}
-
-	if (resp_length != rows * cols * 2) {
-		LOGE(tcm_hcd->pdev->dev.parent,
-				"Invalid face delta length:%d\n", resp_length);
-		retval = -EINVAL;
-		goto exit;
-	}
-    idx = row_start * cols + col_start;
-    *data_sum = 0;
-    for (r = row_start; r <= row_end; r++) {
-      for (c = col_start; c <= col_end; c++) {
-            int data;
-            data = (short)le2_to_uint(&resp_buf[idx * 2]);
-            *data_sum += data;
-            if (data > NOISE_DELTA_MAX) {
-                retval = -EINVAL;
-                goto exit;
-            }
-            idx++;
-      }
-
-    }
-	printk("[sec_input] %s %d\n",__func__,__LINE__);
-    retval = 0;
-exit:
-	kfree(resp_buf);
-	
-	printk("[sec_input] %s %d\n",__func__,__LINE__);
-
-    LOGE(tcm_hcd->pdev->dev.parent,
-            "success to do face test\n");
-	return retval;
-}
-
-int get_proximity() {
-	
-	int sum, ret;
-	printk("[sec_input] %s %d\n",__func__,__LINE__);
-	ret = syna_tcm_get_face_area(&sum);
-	if(ret == 0) {
-		return sum;
-	}
-	return -1;	
 }
 
 int test_init(struct syna_tcm_hcd *tcm_hcd)

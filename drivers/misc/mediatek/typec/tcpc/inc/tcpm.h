@@ -266,6 +266,9 @@ enum {
 	/* HardReset failed because detach or error recovery */
 	TCP_HRESET_RESULT_FAIL,
 
+	/* ERROR Recovery because in power off charge not receive source cap*/
+	TCP_ERROR_RECOVERY_KPOC,
+
 	/* HardReset signal from Local Policy Engine */
 	TCP_HRESET_SIGNAL_SEND,
 
@@ -413,7 +416,8 @@ enum pd_cable_current_limit {
 
 #define DPM_FLAGS_RESET_PARTNER_MASK	\
 	(DPM_FLAGS_PARTNER_DR_POWER | DPM_FLAGS_PARTNER_DR_DATA|\
-	DPM_FLAGS_PARTNER_EXTPOWER | DPM_FLAGS_PARTNER_USB_COMM)
+	DPM_FLAGS_PARTNER_EXTPOWER | DPM_FLAGS_PARTNER_USB_COMM |\
+	DPM_FLAGS_PARTNER_USB_SUSPEND)
 
 /* DPM_CAPS */
 
@@ -544,6 +548,8 @@ enum tcp_dpm_return_code {
 	TCP_DPM_RET_DROP_ERROR_REOCVERY,
 	TCP_DPM_RET_DROP_SEND_BIST,
 	TCP_DPM_RET_DROP_PE_BUSY,	/* SinkTXNg*/
+	TCP_DPM_RET_DROP_DISCARD,
+	TCP_DPM_RET_DROP_UNEXPECTED,
 
 	TCP_DPM_RET_WAIT,
 	TCP_DPM_RET_REJECT,
@@ -903,6 +909,12 @@ extern uint8_t tcpm_inquire_cable_current(
 extern uint32_t tcpm_inquire_dpm_flags(
 	struct tcpc_device *tcpc_dev);
 
+extern bool tcpm_is_src_usb_suspend_support(
+	struct tcpc_device *tcpc_dev);
+
+extern bool tcpm_is_src_usb_communication_capable(
+	struct tcpc_device *tcpc_dev);
+
 extern uint32_t tcpm_inquire_dpm_caps(
 	struct tcpc_device *tcpc_dev);
 
@@ -1132,10 +1144,10 @@ extern int tcpm_update_bat_status_wh_no_mutex(struct tcpc_device *tcpc,
 	enum pd_battery_reference ref, uint8_t status, uint16_t wh);
 
 extern int tcpm_update_bat_status_soc(struct tcpc_device *tcpc,
-	uint8_t status, uint16_t soc);
+	enum pd_battery_reference ref, uint8_t status, uint16_t soc);
 
 extern int tcpm_update_bat_status_soc_no_mutex(struct tcpc_device *tcpc,
-	uint8_t status, uint16_t soc);
+	enum pd_battery_reference ref, uint8_t status, uint16_t soc);
 
 /**
  * tcpm_update_bat_last_full
@@ -1412,6 +1424,18 @@ static inline uint8_t tcpm_inquire_cable_current(
 }
 
 static inline uint32_t tcpm_inquire_dpm_flags(
+	struct tcpc_device *tcpc_dev)
+{
+	return 0;
+}
+
+static inline bool tcpm_is_src_usb_suspend_support(
+	struct tcpc_device *tcpc_dev)
+{
+	return 0;
+}
+
+static inline bool tcpm_is_src_usb_communication_capable(
 	struct tcpc_device *tcpc_dev)
 {
 	return 0;

@@ -91,7 +91,7 @@ const struct imgsensor_vendor_rom_addr rear_imx258_cal_addr = {
 
 	.rom_pdaf_module_info_start_addr        = -1,
 	.rom_pdaf_checksum_addr                 = 0x11AC,
-	.rom_pdaf_checksum_len                  = REAR_PDAF_CHECKSUM_LEN,
+	.rom_pdaf_checksum_len                  = -1,
 
 	.rom_sub_oem_af_inf_position_addr       = -1,
 	.rom_sub_oem_af_macro_position_addr     = -1,

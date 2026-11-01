@@ -2531,12 +2531,6 @@ static int mtkfb_probe(struct platform_device *pdev)
 	if (disp_helper_get_stage() != DISP_HELPER_STAGE_NORMAL)
 		primary_display_diagnose();
 
-	/*
-	 * this function will get fb_heap base address to ion
-	 * for management frame buffer
-	 */
-	ion_drv_create_FB_heap(mtkfb_get_fb_base(), mtkfb_get_fb_size());
-
 	fbdev->state = MTKFB_ACTIVE;
 
 	MSG_FUNC_LEAVE();
@@ -2570,12 +2564,70 @@ static int mtkfb_suspend(struct platform_device *pdev, pm_message_t mesg)
 {
 	NOT_REFERENCED(pdev);
 	MSG_FUNC_ENTER();
-	MTKFB_LOG("[FB Driver] mtkfb_suspend(): 0x%x\n", mesg.event);
+	MTKFB_LOG("[FB Driver] %s(): 0x%x\n", __func__, mesg.event);
 	ovl2mem_wait_done();
 
 	MSG_FUNC_LEAVE();
 	return 0;
 }
+
+/* PM resume */
+static int mtkfb_resume(struct platform_device *pdev)
+{
+	NOT_REFERENCED(pdev);
+	MSG_FUNC_ENTER();
+	MTKFB_LOG("[FB Driver] %s()\n", __func__);
+	MSG_FUNC_LEAVE();
+	return 0;
+}
+
+#if defined(CONFIG_SMCDSD_PANEL)
+static void mtkfb_shutdown(struct platform_device *pdev)
+{
+	struct mtkfb_device *fbdev = dev_get_drvdata(&pdev->dev);
+
+	MTKFB_LOG("[FB Driver] %s()\n", __func__);
+	pr_info("%s: ++\n", __func__);
+
+	if (!lock_fb_info((fbdev->fb_info))) {
+		pr_info("%s: fblock is failed\n", __func__);
+		return;
+	}
+
+	if (primary_display_is_sleepd()) {
+		MTKFB_LOG("mtkfb has been power off\n");
+		unlock_fb_info(fbdev->fb_info);
+		return;
+	}
+	smcdsd_simple_notifier_call_chain(FB_EARLY_EVENT_BLANK, FB_BLANK_POWERDOWN);
+	primary_display_set_power_mode(FB_SUSPEND);
+	primary_display_suspend();
+
+	smcdsd_simple_notifier_call_chain(FB_EVENT_BLANK, FB_BLANK_POWERDOWN);
+	unlock_fb_info(fbdev->fb_info);
+
+	MTKFB_LOG("[FB Driver] leave %s\n", __func__);
+	pr_info("%s: --\n", __func__);
+}
+#else
+static void mtkfb_shutdown(struct platform_device *pdev)
+{
+	MTKFB_LOG("[FB Driver] %s()\n", __func__);
+	/* mt65xx_leds_brightness_set(MT65XX_LED_TYPE_LCD, LED_OFF); */
+	if (!lcd_fps)
+		msleep(30);
+	else
+		msleep(2 * 100000 / lcd_fps);	/* Delay 2 frames. */
+
+	if (primary_display_is_sleepd()) {
+		MTKFB_LOG("mtkfb has been power off\n");
+		return;
+	}
+	primary_display_set_power_mode(FB_SUSPEND);
+	primary_display_suspend();
+	MTKFB_LOG("[FB Driver] leave %s\n", __func__);
+}
+#endif
 
 bool mtkfb_is_suspend(void)
 {
@@ -2609,53 +2661,6 @@ int mtkfb_ipo_init(void)
 	return 0;
 }
 
-#if defined(CONFIG_SMCDSD_PANEL)
-static void mtkfb_shutdown(struct platform_device *pdev)
-{
-	struct mtkfb_device *fbdev = dev_get_drvdata(&pdev->dev);
-
-	MTKFB_LOG("[FB Driver] mtkfb_shutdown()\n");
-	pr_info("%s: ++\n", __func__);
-
-	if (!lock_fb_info((fbdev->fb_info))) {
-		MTKFB_LOG("%s: fblock is failed\n", __func__);
-		return;
-	}
-
-	if (primary_display_is_sleepd()) {
-		MTKFB_LOG("mtkfb has been power off\n");
-		unlock_fb_info(fbdev->fb_info);
-		return;
-	}
-	smcdsd_simple_notifier_call_chain(FB_EARLY_EVENT_BLANK, FB_BLANK_POWERDOWN);
-	primary_display_set_power_mode(FB_SUSPEND);
-	primary_display_suspend();
-
-	smcdsd_simple_notifier_call_chain(FB_EVENT_BLANK, FB_BLANK_POWERDOWN);
-	unlock_fb_info(fbdev->fb_info);
-
-	MTKFB_LOG("[FB Driver] leave mtkfb_shutdown\n");
-	pr_info("%s: --\n", __func__);
-}
-#else
-static void mtkfb_shutdown(struct device *pdev)
-{
-	MTKFB_LOG("[FB Driver] mtkfb_shutdown()\n");
-	/* mt65xx_leds_brightness_set(MT65XX_LED_TYPE_LCD, LED_OFF); */
-	if (!lcd_fps)
-		msleep(30);
-	else
-		msleep(2 * 100000 / lcd_fps); /* Delay 2 frames. */
-
-	if (primary_display_is_sleepd()) {
-		MTKFB_LOG("mtkfb has been power off\n");
-		return;
-	}
-	primary_display_suspend();
-	MTKFB_LOG("[FB Driver] leave mtkfb_shutdown\n");
-}
-#endif
-
 void mtkfb_clear_lcm(void)
 {
 }
@@ -2681,16 +2686,6 @@ static void mtkfb_early_suspend(void)
 	}
 
 	DISPMSG("[FB Driver] leave early_suspend\n");
-}
-
-/* PM resume */
-static int mtkfb_resume(struct platform_device *pdev)
-{
-	NOT_REFERENCED(pdev);
-	MSG_FUNC_ENTER();
-	MTKFB_LOG("[FB Driver] mtkfb_resume()\n");
-	MSG_FUNC_LEAVE();
-	return 0;
 }
 
 static void mtkfb_late_resume(void)
@@ -2799,6 +2794,7 @@ static struct platform_driver mtkfb_driver = {
 	.suspend = mtkfb_suspend,
 	.resume = mtkfb_resume,
 	.shutdown = mtkfb_shutdown,
+
 	.driver = {
 			.name = MTKFB_DRIVER,
 #ifdef CONFIG_PM

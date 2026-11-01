@@ -85,10 +85,8 @@
 /*  */
 /* #include "smi_common.h" */
 
-#ifdef CONFIG_PM_WAKELOCKS
+#ifdef CONFIG_PM_SLEEP
 #include <linux/pm_wakeup.h>
-#else
-#include <linux/wakelock.h>
 #endif
 
 #ifdef CONFIG_OF
@@ -322,11 +320,8 @@ static struct DIP_MEM_INFO_STRUCT g_TpipeBaseAddrInfo = {0x0, 0x0, NULL, 0x0};
 static struct DIP_MEM_INFO_STRUCT g_CmdqBaseAddrInfo = {0x0, 0x0, NULL, 0x0};
 static unsigned int m_CurrentPPB;
 
-#ifdef CONFIG_PM_WAKELOCKS
+#ifdef CONFIG_PM_SLEEP
 struct wakeup_source dip_wake_lock;
-struct wakeup_source isp_mdp_wake_lock;
-#else
-struct wake_lock dip_wake_lock;
 struct wakeup_source isp_mdp_wake_lock;
 #endif
 static int g_bWaitLock;
@@ -688,8 +683,8 @@ pr_debug(IRQTag fmt,  ##args)
 	struct SV_LOG_STR *pSrc = &gSvLog[irq];\
 	char *ptr;\
 	unsigned int i;\
-	signed int ppb = 0;\
-	signed int logT = 0;\
+	unsigned int ppb = 0;\
+	unsigned int logT = 0;\
 	if (ppb_in > 1) {\
 		ppb = 1;\
 	} else{\
@@ -1008,11 +1003,21 @@ static signed int DIP_DumpDIPReg(void)
 		DIP_RD32(DIP_A_BASE + 0x00D8), DIP_RD32(DIP_A_BASE + 0x00DC));
 	CMDQ_ERR("dip: 150220F4(0x%x)-150220F8(0x%x)\n",
 		DIP_RD32(DIP_A_BASE + 0x00F4), DIP_RD32(DIP_A_BASE + 0x00F8));
-	CMDQ_ERR("dip: 0x150220A4(0x%x)-0x150220A8(0x%x)\n",
+
+
+	CMDQ_ERR("dcm: 15022090(0x%x)-15022094(0x%x)-15022098(0x%x)\n",
+		DIP_RD32(DIP_A_BASE + 0x0090), DIP_RD32(DIP_A_BASE + 0x0094),
+		DIP_RD32(DIP_A_BASE + 0x0098));
+	CMDQ_ERR("dcm: 1502209C(0x%x)-150220A0(0x%x)\n",
+		DIP_RD32(DIP_A_BASE + 0x009C), DIP_RD32(DIP_A_BASE + 0x00A0));
+	CMDQ_ERR("dcm: 0x150220A4(0x%x)-0x150220A8(0x%x)\n",
 		DIP_RD32(DIP_A_BASE + 0x00A4), DIP_RD32(DIP_A_BASE + 0x00A8));
-	CMDQ_ERR("dip: 0x150220AC(0x%x)-0x150220B0(0x%x)\n",
+	CMDQ_ERR("dcm: 0x150220AC(0x%x)-0x150220B0(0x%x)\n",
 		DIP_RD32(DIP_A_BASE + 0x00AC), DIP_RD32(DIP_A_BASE + 0x00B0));
-	CMDQ_ERR("dip: 0x150220B4(0x%x)\n", DIP_RD32(DIP_A_BASE + 0x00B4));
+	CMDQ_ERR("dcm: 0x150220B4(0x%x)-0x150220F0(0x%x)\n",
+		DIP_RD32(DIP_A_BASE + 0x00B4), DIP_RD32(DIP_A_BASE + 0x00F0));
+
+
 	/*CQ_THR info*/
 	CMDQ_ERR("dip: 15022204(0x%x)-15022208(0x%x)-1502220C(0x%x)\n",
 		DIP_RD32(DIP_A_BASE + 0x0204), DIP_RD32(DIP_A_BASE + 0x0208),
@@ -1022,6 +1027,24 @@ static signed int DIP_DumpDIPReg(void)
 	CMDQ_ERR("dip: 15022218(0x%x)-0x1502231C(0x%x)\n",
 		DIP_RD32(DIP_A_BASE + 0x0218), DIP_RD32(DIP_A_BASE + 0x031C));
 
+	CMDQ_ERR("nbc2: 15026800(0x%x)-15026804(0x%x)-15026808(0x%x)\n",
+		DIP_RD32(DIP_A_BASE + 0x4800), DIP_RD32(DIP_A_BASE + 0x4804),
+		DIP_RD32(DIP_A_BASE + 0x4808));
+	CMDQ_ERR("nbc2: 15026810(0x%x)-15026814(0x%x)-15026818(0x%x)\n",
+		DIP_RD32(DIP_A_BASE + 0x4810), DIP_RD32(DIP_A_BASE + 0x4814),
+		DIP_RD32(DIP_A_BASE + 0x4818));
+	CMDQ_ERR("nbc2: 15026830(0x%x)-15026834(0x%x)-15026838(0x%x)\n",
+		DIP_RD32(DIP_A_BASE + 0x4830), DIP_RD32(DIP_A_BASE + 0x4834),
+		DIP_RD32(DIP_A_BASE + 0x4838));
+	CMDQ_ERR("nbc2: 15026840(0x%x)-15026844(0x%x)-15026848(0x%x)\n",
+		DIP_RD32(DIP_A_BASE + 0x4840), DIP_RD32(DIP_A_BASE + 0x4844),
+		DIP_RD32(DIP_A_BASE + 0x4848));
+	CMDQ_ERR("nbc2: 1502684C(0x%x)-15026850(0x%x)-15026854(0x%x)\n",
+		DIP_RD32(DIP_A_BASE + 0x484C), DIP_RD32(DIP_A_BASE + 0x4850),
+		DIP_RD32(DIP_A_BASE + 0x4854));
+	CMDQ_ERR("nbc2: 15026858(0x%x)-1502685C(0x%x)-15026874(0x%x)\n",
+		DIP_RD32(DIP_A_BASE + 0x4858), DIP_RD32(DIP_A_BASE + 0x485C),
+		DIP_RD32(DIP_A_BASE + 0x4874));
 	/* 0080, 0x15022080, DIP_A_CTL_DBG_SET */
 	DIP_WR32(DIP_A_BASE + 0x80, 0x0);
 	CMDQ_ERR("0x0007BC : dip: 0x150227BC(0x%x)\n",
@@ -1150,12 +1173,6 @@ static signed int DIP_DumpDIPReg(void)
 	CMDQ_ERR("hfg crop: 0x150272B0(0x%x)-0x150272B4(0x%x)\n",
 		DIP_RD32(DIP_A_BASE + 0x52B0), DIP_RD32(DIP_A_BASE + 0x52B4));
 
-	CMDQ_ERR("dcm: 0x150220A4(0x%x)-0x150220A8(0x%x)\n",
-		DIP_RD32(DIP_A_BASE + 0x0A4), DIP_RD32(DIP_A_BASE + 0x0A8));
-	CMDQ_ERR("dcm: 0x150220AC(0x%x)-0x150220B0(0x%x)\n",
-		DIP_RD32(DIP_A_BASE + 0x0AC), DIP_RD32(DIP_A_BASE + 0x0B0));
-	CMDQ_ERR("dcm: 0x150220B4(0x%x)-0x150220F0(0x%x)\n",
-		DIP_RD32(DIP_A_BASE + 0x0B4), DIP_RD32(DIP_A_BASE + 0x0F0));
 	/* IMG3O DMA*/
 	CMDQ_ERR("img3o: 0x15022390(0x%x)-0x15022398(0x%x)\n",
 		DIP_RD32(DIP_A_BASE + 0x390), DIP_RD32(DIP_A_BASE + 0x0398));
@@ -2319,11 +2336,14 @@ static signed int DIP_P2_BufQue_Update_ListCIdx
 	enum DIP_P2_BUFQUE_LIST_TAG listTag)
 {
 	signed int ret = 0;
-	signed int tmpIdx = 0;
+	unsigned int tmpIdx = 0;
 	signed int cnt = 0;
 	bool stop = false;
 	int i = 0;
 	enum DIP_P2_BUF_STATE_ENUM cIdxSts = DIP_P2_BUF_STATE_NONE;
+
+	if (property < 0)
+		return MFALSE;
 
 	switch (listTag) {
 	case DIP_P2_BUFQUE_LIST_TAG_UNIT:
@@ -2429,10 +2449,20 @@ static signed int DIP_P2_BufQue_Erase
 	int i = 0;
 	signed int cnt = 0;
 	int tmpIdx = 0;
+	unsigned int tmpIdx = 0;
+	unsigned int property = 0;
+
+
+	if (property < 0)
+		return MFALSE;
 
 	switch (listTag) {
 	case DIP_P2_BUFQUE_LIST_TAG_PACKAGE:
 	tmpIdx = P2_FramePack_List_Idx[property].start;
+	if (tmpIdx < 0) {
+		LOG_ERR("tmpIdx is negative\n");
+		return MFALSE;
+	}
 	/* [1] clear buffer status */
 	P2_FramePackage_List[property][idx].processID = 0x0;
 	P2_FramePackage_List[property][idx].callerID = 0x0;
@@ -2479,6 +2509,10 @@ static signed int DIP_P2_BufQue_Erase
 	break;
 	case DIP_P2_BUFQUE_LIST_TAG_UNIT:
 	tmpIdx = P2_FrameUnit_List_Idx[property].start;
+	if (tmpIdx < 0) {
+		LOG_ERR("tmpIdx is negative\n");
+		return MFALSE;
+	}
 	/* [1] clear buffer status */
 	P2_FrameUnit_List[property][idx].processID = 0x0;
 	P2_FrameUnit_List[property][idx].callerID = 0x0;
@@ -2545,7 +2579,7 @@ static signed int DIP_P2_BufQue_GetMatchIdx
 {
 	int idx = -1;
 	int i = 0;
-	int property;
+	unsigned int property;
 
 	if (param.property >= DIP_P2_BUFQUE_PROPERTY_NUM) {
 		LOG_ERR("property err(%d)\n", param.property);
@@ -2760,6 +2794,8 @@ static inline unsigned int DIP_P2_BufQue_WaitEventState(
 		return ret;
 	}
 	property = param.property;
+	if (property < 0)
+		return MFALSE;
 	/*  */
 	switch (type) {
 	case DIP_P2_BUFQUE_MATCH_TYPE_WAITDQ:
@@ -2774,6 +2810,8 @@ static inline unsigned int DIP_P2_BufQue_WaitEventState(
 	case DIP_P2_BUFQUE_MATCH_TYPE_WAITFM:
 		spin_lock(&(SpinLock_P2FrameList));
 		index = *idx;
+		if (index < 0)
+			return MFALSE;
 		if (P2_FramePackage_List[property][index].dequedNum ==
 			P2_FramePackage_List[property][index].frameNum)
 			ret = MTRUE;
@@ -2830,7 +2868,7 @@ static signed int DIP_P2_BufQue_CTRL_FUNC(
 	int i = 0, q = 0;
 	int idx =  -1, idx2 =  -1;
 	signed int restTime = 0;
-	int property;
+	unsigned int property;
 
 	if (param.property >= DIP_P2_BUFQUE_PROPERTY_NUM) {
 		LOG_ERR("property err(%d)\n", param.property);
@@ -3362,20 +3400,16 @@ static long DIP_ioctl(
 		} else {
 			if (wakelock_ctrl == 1) {    /* Enable     wakelock */
 				if (g_bWaitLock == 0) {
-#ifdef CONFIG_PM_WAKELOCKS
+#ifdef CONFIG_PM_SLEEP
 					__pm_stay_awake(&dip_wake_lock);
-#else
-					wake_lock(&dip_wake_lock);
 #endif
 					g_bWaitLock = 1;
 					LOG_DBG("wakelock enable!!\n");
 				}
 			} else {        /* Disable wakelock */
 				if (g_bWaitLock == 1) {
-#ifdef CONFIG_PM_WAKELOCKS
+#ifdef CONFIG_PM_SLEEP
 					__pm_relax(&dip_wake_lock);
-#else
-					wake_unlock(&dip_wake_lock);
 #endif
 					g_bWaitLock = 0;
 					LOG_DBG("wakelock disable!!\n");
@@ -4005,17 +4039,13 @@ static signed int DIP_open(
 	}
 
 	/* Enable clock */
-#ifdef CONFIG_PM_WAKELOCKS
+#ifdef CONFIG_PM_SLEEP
 	__pm_stay_awake(&dip_wake_lock);
-#else
-	wake_lock(&dip_wake_lock);
 #endif
 	DIP_EnableClock(MTRUE);
 	g_u4DipCnt = 0;
-#ifdef CONFIG_PM_WAKELOCKS
+#ifdef CONFIG_PM_SLEEP
 	__pm_relax(&dip_wake_lock);
-#else
-	wake_unlock(&dip_wake_lock);
 #endif
 	LOG_DBG("dip open G_u4DipEnClkCnt: %d\n", G_u4DipEnClkCnt);
 #ifdef KERNEL_LOG
@@ -4086,10 +4116,8 @@ static signed int DIP_release(
 		DIP_pr_detect_count);
 
 	if (g_bWaitLock == 1) {
-#ifdef CONFIG_PM_WAKELOCKS
+#ifdef CONFIG_PM_SLEEP
 		__pm_relax(&dip_wake_lock);
-#else
-		wake_unlock(&dip_wake_lock);
 #endif
 		g_bWaitLock = 0;
 	}
@@ -4169,16 +4197,12 @@ static signed int DIP_release(
 	}
 #endif
 
-#ifdef CONFIG_PM_WAKELOCKS
+#ifdef CONFIG_PM_SLEEP
 	__pm_stay_awake(&dip_wake_lock);
-#else
-	wake_lock(&dip_wake_lock);
 #endif
 	DIP_EnableClock(MFALSE);
-#ifdef CONFIG_PM_WAKELOCKS
+#ifdef CONFIG_PM_SLEEP
 	__pm_relax(&dip_wake_lock);
-#else
-	wake_unlock(&dip_wake_lock);
 #endif
 	LOG_DBG("dip release G_u4DipEnClkCnt: %d", G_u4DipEnClkCnt);
 EXIT:
@@ -4509,16 +4533,9 @@ static signed int DIP_probe(struct platform_device *pDev)
 		for (i = 0 ; i < DIP_IRQ_TYPE_AMOUNT; i++)
 			init_waitqueue_head(&IspInfo.WaitQueueHead[i]);
 
-#ifdef CONFIG_PM_WAKELOCKS
+#ifdef CONFIG_PM_SLEEP
 		wakeup_source_init(&dip_wake_lock, "dip_lock_wakelock");
 		wakeup_source_init(&isp_mdp_wake_lock, "isp_mdp_wakelock");
-#else
-		wake_lock_init(&dip_wake_lock,
-			WAKE_LOCK_SUSPEND,
-			"dip_lock_wakelock");
-		wake_lock_init(&isp_mdp_wake_lock,
-			WAKE_LOCK_SUSPEND,
-			"isp_mdp_wakelock");
 #endif
 
 		/* enqueue/dequeue control in ihalpipe wrapper */
@@ -4829,6 +4846,7 @@ static const struct file_operations dip_p2_ke_dump_proc_fops = {
 	.owner = THIS_MODULE,
 	.open = proc_dip_p2_ke_dump_open,
 	.read = seq_read,
+	.release = single_release,
 };
 
 /**************************************************************
@@ -4945,6 +4963,7 @@ static const struct file_operations dip_p2_dump_proc_fops = {
 	.owner = THIS_MODULE,
 	.open = proc_dip_p2_dump_open,
 	.read = seq_read,
+	.release = single_release,
 };
 /**************************************************************
  *
@@ -4953,6 +4972,13 @@ static int dip_dump_read(struct seq_file *m, void *v)
 {
 
 	int i;
+
+	spin_lock(&(IspInfo.SpinLockClock));
+	if (G_u4DipEnClkCnt == 0) {
+		spin_unlock(&(IspInfo.SpinLockClock));
+		return 0;
+	}
+	spin_unlock(&(IspInfo.SpinLockClock));
 
 	seq_puts(m, "\n============ dip dump register============\n");
 	seq_puts(m, "dip top control\n");
@@ -5022,6 +5048,7 @@ static const struct file_operations dip_dump_proc_fops = {
 	.owner = THIS_MODULE,
 	.open = proc_dip_dump_open,
 	.read = seq_read,
+	.release = single_release,
 };
 /**************************************************************
  *
@@ -5194,10 +5221,8 @@ int32_t DIP_MDPClockOnCallback(uint64_t engineFlag)
 {
 	/* LOG_DBG("DIP_MDPClockOnCallback"); */
 	/*LOG_DBG("+MDPEn:%d", G_u4DipEnClkCnt);*/
-#ifdef CONFIG_PM_WAKELOCKS
+#ifdef CONFIG_PM_SLEEP
 	__pm_stay_awake(&isp_mdp_wake_lock);
-#else
-	wake_lock(&isp_mdp_wake_lock);
 #endif
 	DIP_EnableClock(MTRUE);
 
@@ -5225,10 +5250,8 @@ int32_t DIP_MDPClockOffCallback(uint64_t engineFlag)
 {
 	/* LOG_DBG("DIP_MDPClockOffCallback"); */
 	DIP_EnableClock(MFALSE);
-#ifdef CONFIG_PM_WAKELOCKS
+#ifdef CONFIG_PM_SLEEP
 	__pm_relax(&isp_mdp_wake_lock);
-#else
-	wake_unlock(&isp_mdp_wake_lock);
 #endif
 	/*LOG_DBG("-MDPEn:%d", G_u4DipEnClkCnt);*/
 	return 0;

@@ -91,3 +91,26 @@ ccflags-y += -I$(srctree)/drivers/mmc/host/mediatek/ComboA/mt6885
 obj-$(CONFIG_MMC_MTK_PRO) += ComboA/
 endif
 
+ifeq ($(CONFIG_MTK_PLATFORM), "mt6893")
+ccflags-y += -I$(srctree)/drivers/mmc/host/mediatek/ComboA
+ccflags-y += -I$(srctree)/drivers/mmc/host/mediatek/ComboA/mt6893
+obj-$(CONFIG_MMC_MTK_PRO) += ComboA/
+endif
+
+ifeq ($(CONFIG_MTK_PLATFORM), "mt6873")
+ccflags-y += -I$(srctree)/drivers/mmc/host/mediatek/ComboA
+ccflags-y += -I$(srctree)/drivers/mmc/host/mediatek/ComboA/mt6873
+obj-$(CONFIG_MMC_MTK_PRO) += ComboA/
+endif
+
+ifeq ($(CONFIG_MTK_PLATFORM), "mt6853")
+ccflags-y += -I$(srctree)/drivers/mmc/host/mediatek/ComboA
+ccflags-y += -I$(srctree)/drivers/mmc/host/mediatek/ComboA/mt6853
+obj-$(CONFIG_MMC_MTK_PRO) += ComboA/
+endif
+
+ifneq (,$(filter $(CONFIG_MTK_PLATFORM), "mt6833"))
+ccflags-y += -I$(srctree)/drivers/mmc/host/mediatek/ComboA
+ccflags-y += -I$(srctree)/drivers/mmc/host/mediatek/ComboA/$(MTK_PLATFORM)
+obj-$(CONFIG_MMC_MTK_PRO) += ComboA/
+endif

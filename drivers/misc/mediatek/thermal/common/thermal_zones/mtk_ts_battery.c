@@ -49,7 +49,9 @@ static void tsbattery_exit(void);
 int __attribute__ ((weak))
 read_tbat_value(void)
 {
-	pr_notice("[Thermal] E_WF: %s doesn't exist\n", __func__);
+#if !defined(CONFIG_POWER_EXT)
+	pr_debug("[Thermal] E_WF: %s doesn't exist\n", __func__);
+#endif
 	return 30;
 }
 
@@ -203,6 +205,8 @@ static int get_hw_battery_temp(void)
 	ret = -1270;
 #else
 	/* Phone */
+
+	return 250;
 
 #if (CONFIG_MTK_GAUGE_VERSION == 30)
 	ret = battery_get_bat_temperature();

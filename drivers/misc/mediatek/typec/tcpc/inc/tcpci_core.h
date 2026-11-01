@@ -22,6 +22,9 @@
 #include <linux/notifier.h>
 #include <linux/semaphore.h>
 #include <linux/spinlock.h>
+#ifdef CONFIG_TYPEC
+#include <linux/usb/typec.h>
+#endif /* CONFIG_TYPEC */
 
 #include "tcpm.h"
 #include "tcpci_timer.h"
@@ -29,6 +32,15 @@
 
 #ifdef CONFIG_USB_POWER_DELIVERY
 #include "pd_core.h"
+#ifdef CONFIG_TYPEC_WAIT_BC12
+#include <mt-plat/charger_type.h>
+#endif /* CONFIG_TYPEC_WAIT_BC12 */
+#endif
+
+#if IS_ENABLED(CONFIG_PDIC_NOTIFIER)
+#include <linux/usb/typec/common/pdic_core.h>
+#include <linux/usb/typec/common/pdic_sysfs.h>
+#include <linux/usb/typec/common/pdic_notifier.h>
 #endif
 
 /* The switch of log message */
@@ -44,7 +56,7 @@
 #define TCPC_DBG2_ENABLE	0
 #define DPM_INFO_ENABLE		1
 #define DPM_INFO2_ENABLE	1
-#define DPM_DBG_ENABLE		0
+#define DPM_DBG_ENABLE		1
 #define PD_ERR_ENABLE		1
 #define PE_DBG_ENABLE		0
 #define TYPEC_DBG_ENABLE	0
@@ -87,6 +99,18 @@ struct tcpc_desc {
 	uint8_t vconn_supply;
 	int notifier_supply_num;
 	char *name;
+#ifdef CONFIG_WATER_DETECTION
+	u32 wd_sbu_calib_init;
+	u32 wd_sbu_pl_bound;
+	u32 wd_sbu_pl_lbound_c2c;
+	u32 wd_sbu_pl_ubound_c2c;
+	u32 wd_sbu_ph_auddev;
+	u32 wd_sbu_ph_lbound;
+	u32 wd_sbu_ph_lbound1_c2c;
+	u32 wd_sbu_ph_ubound1_c2c;
+	u32 wd_sbu_ph_ubound2_c2c;
+	u32 wd_sbu_aud_ubound;
+#endif /* CONFIG_WATER_DETECTION */
 };
 
 /*---------------------------------------------------------------------------*/
@@ -196,6 +220,7 @@ struct tcpc_ops {
 	int (*init_alert_mask)(struct tcpc_device *tcpc);
 	int (*alert_status_clear)(struct tcpc_device *tcpc, uint32_t mask);
 	int (*fault_status_clear)(struct tcpc_device *tcpc, uint8_t status);
+	int (*set_alert_mask)(struct tcpc_device *tcpc, uint32_t mask);
 	int (*get_alert_mask)(struct tcpc_device *tcpc, uint32_t *mask);
 	int (*get_alert_status)(struct tcpc_device *tcpc, uint32_t *alert);
 	int (*get_power_status)(struct tcpc_device *tcpc, uint16_t *pwr_status);
@@ -207,6 +232,7 @@ struct tcpc_ops {
 	int (*set_vconn)(struct tcpc_device *tcpc, int enable);
 	int (*deinit)(struct tcpc_device *tcpc);
 	int (*alert_vendor_defined_handler)(struct tcpc_device *tcpc);
+	int (*ss_factory)(struct tcpc_device *tcpc);
 
 #ifdef CONFIG_TCPC_VSAFE0V_DETECT_IC
 	int (*is_vsafe0v)(struct tcpc_device *tcpc);
@@ -330,9 +356,13 @@ struct tcpc_device {
 
 	struct delayed_work	init_work;
 	struct delayed_work	event_init_work;
+	struct workqueue_struct *evt_wq;
 	struct srcu_notifier_head evt_nh[TCP_NOTIFY_IDX_NR];
 	struct tcpc_managed_res *mr_head;
 	struct mutex mr_lock;
+#if IS_ENABLED(CONFIG_PDIC_NOTIFIER)
+	ppdic_data_t ppdic_data;
+#endif
 
 	/* For TCPC TypeC */
 	uint8_t typec_state;
@@ -351,6 +381,7 @@ struct tcpc_device {
 	bool typec_power_ctrl;
 	bool typec_watchdog;
 	bool typec_reach_vsafe0v;
+	bool typec_is_attached_src;
 
 	int typec_usb_sink_curr;
 
@@ -409,6 +440,14 @@ struct tcpc_device {
 	uint8_t dual_role_dr;
 	uint8_t dual_role_vconn;
 #endif /* CONFIG_DUAL_ROLE_USB_INTF */
+#ifdef CONFIG_TYPEC
+	struct typec_port *port;
+	struct typec_partner *partner;
+	struct typec_capability typec_cap;
+	int typec_power_role;
+	int typec_data_role;
+	int pwr_opmode;
+#endif /* CONFIG_TYPEC */
 
 #ifdef CONFIG_USB_POWER_DELIVERY
 	/* Event */
@@ -475,6 +514,9 @@ struct tcpc_device {
 	uint8_t charging_status;
 	int bat_soc;
 #endif /* CONFIG_USB_PD_REV30 */
+#ifdef CONFIG_TYPEC_WAIT_BC12
+	uint8_t sink_wait_bc12_count;
+#endif /* CONFIG_TYPEC_WAIT_BC12 */
 #endif /* CONFIG_USB_POWER_DELIVERY */
 	u8 vbus_level:2;
 	bool vbus_safe0v;
@@ -485,10 +527,22 @@ struct tcpc_device {
 	/* TypeC Shield Protection */
 #ifdef CONFIG_WATER_DETECTION
 	int usbid_calib;
+	bool water_state;
+#ifdef CONFIG_WD_INIT_POWER_OFF_CHARGE
+	bool init_pwroff_check;
+	bool init_pwroff_hiccup;
+#endif /* CONFIG_WD_INIT_POWER_OFF_CHARGE */
 #endif /* CONFIG_WATER_DETECTION */
 #ifdef CONFIG_CABLE_TYPE_DETECTION
 	enum tcpc_cable_type typec_cable_type;
+	enum tcpc_cable_type pre_typec_cable_type;
 #endif /* CONFIG_CABLE_TYPE_DETECTION */
+#ifdef CONFIG_CC_BOUNCE_DETECTION
+	u32 cc_bounce_cnt;
+	ktime_t last_cc_change_time;
+	bool cc_bounce_detected;
+#endif /* CONFIG_CC_BOUNCE_DETECTION */
+	bool ss_factory;
 };
 
 

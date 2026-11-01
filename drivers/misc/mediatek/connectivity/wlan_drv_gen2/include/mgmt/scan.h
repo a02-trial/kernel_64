@@ -343,7 +343,7 @@ typedef struct _SCAN_PARAM_T {	/* Used by SCAN FSM */
 	/* Information Element */
 	UINT_16 u2IELen;
 	UINT_8 aucIE[MAX_IE_LENGTH];
-
+	UINT_8 aucRandomMac[MAC_ADDR_LEN];
 } SCAN_PARAM_T, *P_SCAN_PARAM_T;
 
 typedef struct _NLO_PARAM_T {	/* Used by SCAN FSM */
@@ -550,6 +550,7 @@ typedef struct _MSG_SCN_SCAN_REQ_V2_T {
 	RF_CHANNEL_INFO_T arChnlInfoList[MAXIMUM_OPERATION_CHANNEL_LIST];
 	UINT_16 u2IELen;
 	UINT_8 aucIE[MAX_IE_LENGTH];
+	UINT_8 aucRandomMac[MAC_ADDR_LEN];
 } MSG_SCN_SCAN_REQ_V2, *P_MSG_SCN_SCAN_REQ_V2;
 
 typedef struct _MSG_SCN_SCAN_CANCEL_T {

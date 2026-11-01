@@ -24,6 +24,7 @@
 #include "core/iwsock.h"
 #include "core/log.h"
 #include "core/mem.h"
+#include "core/subsystem.h"
 #include "teec/iw_messages.h"
 
 #define MAX_CONNECTION_ATTEMPTS 20
@@ -32,7 +33,7 @@
 __asm__ (
   ".section .init.data,\"aw\"\n"
   "tzdev_tzar_begin:\n"
-  ".incbin \"" KBUILD_SRC "/drivers/misc/tzdev/" TZAR_FILE_NAME "\"\n"
+  ".incbin \"" KBUILD_SRC "/drivers/misc/tzdev/startup.tzar\"\n"
   "tzdev_tzar_end:\n"
   ".previous\n"
 );
@@ -77,8 +78,8 @@ static __ref int tz_deploy_handler(void *arg)
 
 	memcpy(tzar, tzdev_tzar_begin, size);
 
-	size = DIV_ROUND_UP(size, PAGE_SIZE) * PAGE_SIZE;
-	ret = tzdev_mem_register(tzar, size, 0, NULL, NULL);
+	ret = tzdev_mem_register(tzar, DIV_ROUND_UP(size, PAGE_SIZE) * PAGE_SIZE, 0, NULL,
+			NULL);
 	if (ret < 0) {
 		log_error(tzdev_deploy_tzar, "Failed to register shared memory, error=%d\n", ret);
 		goto out_tzar;
@@ -148,11 +149,11 @@ int tzdev_deploy_tzar(void)
 	return 0;
 }
 
-static int __init tz_deploy_tzar_init(void)
+int tz_deploy_tzar_init(void)
 {
 	tzdev_set_nwd_sysconf_flag(SYSCONF_NWD_TZDEV_DEPLOY_TZAR);
 
 	return 0;
 }
 
-early_initcall(tz_deploy_tzar_init);
+tzdev_early_initcall(tz_deploy_tzar_init);

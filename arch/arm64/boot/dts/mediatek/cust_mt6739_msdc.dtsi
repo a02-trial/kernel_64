@@ -25,7 +25,6 @@
 	mmc-hs200-1_8v;
 	mmc-hs400-1_8v;
 	non-removable;
-	emmc_power_ao;
 	pinctl = <&msdc0_pins_default>;
 	pinctl_hs400 = <&msdc0_pins_default>;
 	pinctl_hs200 = <&msdc0_pins_default>;

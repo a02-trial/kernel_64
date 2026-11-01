@@ -404,7 +404,7 @@ __acquires(&port->port_lock)
 
 		req->length = len;
 		list_del(&req->list);
-		req->zero = (gs_buf_data_avail(&port->port_write_buf) == 0);
+		req->zero = (len % in->maxpacket == 0);
 
 		pr_vdebug("ttyGS%d: tx len=%d, 0x%02x 0x%02x 0x%02x ...\n",
 			  port->port_num, len, *((u8 *)req->buf),
@@ -414,8 +414,8 @@ __acquires(&port->port_lock)
 			static DEFINE_RATELIMIT_STATE(ratelimit, 1 * HZ, 10);
 
 			if (__ratelimit(&ratelimit)) {
-				USERIAL_LOG("%s:ttyGS%d:w=%d,0x%x0x%x0x%x\n",
-						__func__, port->port_num, len,
+				USERIAL_LOG("%s:ttyGS%d:w=%d, req->buf=0x%pK 0x%x0x%x0x%x\n",
+						__func__, port->port_num, len, req->buf,
 						*((u8 *)req->buf),
 						*((u8 *)req->buf+1),
 						*((u8 *)req->buf+2));
@@ -670,6 +670,22 @@ static void gs_write_complete(struct usb_ep *ep, struct usb_request *req)
 		/* FALL THROUGH */
 	case 0:
 		/* normal completion */
+		{
+			static unsigned int	skip;
+			static DEFINE_RATELIMIT_STATE(ratelimit, 1 * HZ, 10);
+
+			if (__ratelimit(&ratelimit)) {
+				USERIAL_LOG("%s:ttyGS%d:w=%d, req->buf=0x%pK\n",
+						__func__, port->port_num, req->actual, req->buf);
+				if (skip > 0) {
+					USERIAL_LOG("%s skipped %d bytes\n",
+							__func__, skip);
+					skip = 0;
+				}
+			} else
+				skip += req->actual;
+		}
+
 		gs_start_tx(port);
 		break;
 
@@ -758,9 +774,12 @@ static int gs_start_io(struct gs_port *port)
 	port->n_read = 0;
 	started = gs_start_rx(port);
 
-	/* unblock any pending writes into our circular buffer */
-	if (started && port->port.tty) {
-		tty_wakeup(port->port.tty);
+	if (started) {
+		gs_start_tx(port);
+		/* Unblock any pending writes into our circular buffer, in case
+		 * we didn't in gs_start_tx() */
+		if (port->port.tty)
+			tty_wakeup(port->port.tty);
 	} else {
 		gs_free_requests(ep, head, &port->read_allocated);
 		gs_free_requests(port->port_usb->in, &port->write_pool,
@@ -1445,8 +1464,10 @@ int gserial_alloc_line(unsigned char *line_num)
 				__func__, port_num, PTR_ERR(tty_dev));
 
 		ret = PTR_ERR(tty_dev);
+		mutex_lock(&ports[port_num].lock);
 		port = ports[port_num].port;
 		ports[port_num].port = NULL;
+		mutex_unlock(&ports[port_num].lock);
 		gserial_free_port(port);
 		goto err;
 	}

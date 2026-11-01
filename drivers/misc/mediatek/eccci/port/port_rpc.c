@@ -69,6 +69,8 @@ static struct gpio_item gpio_mapping_table[] = {
 		"GPIO_FDD_BAND_SUPPORT_DETECT_9TH_PIN",},
 	{"GPIO_FDD_Band_Support_Detection_A",
 		"GPIO_FDD_BAND_SUPPORT_DETECT_ATH_PIN",},
+	{"GPIO_RF_PWREN_RST_PIN",
+		"GPIO_RF_PWREN_RST_PIN",},
 };
 
 static int get_md_gpio_val(unsigned int num)
@@ -418,11 +420,17 @@ static void get_md_dtsi_debug(void)
 {
 	struct ccci_rpc_md_dtsi_input input;
 	struct ccci_rpc_md_dtsi_output output;
+	int ret = 0;
 
 	input.req = RPC_REQ_PROP_VALUE;
 	output.retValue = 0;
-	snprintf(input.strName, sizeof(input.strName), "%s",
+	ret = snprintf(input.strName, sizeof(input.strName), "%s",
 		"mediatek,md_drdi_rf_set_idx");
+	if (ret < 0 || ret >= sizeof(input.strName)) {
+		CCCI_ERROR_LOG(-1, RPC,
+			"%s-%d:snprintf fail,ret = %d\n", __func__, __LINE__, ret);
+		return;
+	}
 	get_md_dtsi_val(&input, &output);
 }
 
@@ -1133,6 +1141,10 @@ static void ccci_rpc_work_helper(struct port_t *port, struct rpc_pkt *pkt,
 			get_md_dtsi_val(input, output);
 			break;
 		}
+	case IPC_RPC_QUERY_CARD_TYPE:
+		CCCI_NORMAL_LOG(md_id, RPC,
+			"enter QUERY CARD_TYPE operation in ccci_rpc_work\n");
+		break;
 	case IPC_RPC_TRNG:
 		{
 			unsigned int trng;
@@ -1410,6 +1422,7 @@ int port_rpc_recv_match(struct port_t *port, struct sk_buff *skb)
 			break;
 
 		case IPC_RPC_QUERY_AP_SYS_PROPERTY:
+		case IPC_RPC_SAR_TABLE_IDX_QUERY_OP:
 			is_userspace_msg = 1;
 			break;
 		default:

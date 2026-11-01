@@ -286,20 +286,17 @@ static int parse_dt(struct device *dev, struct syna_tcm_board_data *bdata)
 		input_err(true, dev, "%s: could not get pinctrl\n", __func__);
 
 	if (of_property_read_u32_array(np, "synaptics,area-size", px_zone, 3)) {
-		input_info(true, dev, "Failed to get zone's size\n");
-		bdata->area_indicator = 48;
-		bdata->area_navigation = 96;
-		bdata->area_edge = 60;
-	} else {
-		bdata->area_indicator = px_zone[0];
-		bdata->area_navigation = px_zone[1];
-		bdata->area_edge = px_zone[2];
-	}
-	input_info(true, dev, "%s : zone's size - indicator:%d, navigation:%d, edge:%d\n",
-		__func__, bdata->area_indicator, bdata->area_navigation ,bdata->area_edge);
-
-	bdata->support_ear_detect = of_property_read_bool(np, "support_ear_detect_mode");
-	input_info(true, dev, "%s: ED:%d\n", __func__, bdata->support_ear_detect);
+			input_info(true, dev, "Failed to get zone's size\n");
+			bdata->area_indicator = 48;
+			bdata->area_navigation = 96;
+			bdata->area_edge = 60;
+		} else {
+			bdata->area_indicator = px_zone[0];
+			bdata->area_navigation = px_zone[1];
+			bdata->area_edge = px_zone[2];
+		}
+		input_info(true, dev, "%s : zone's size - indicator:%d, navigation:%d, edge:%d\n",
+			__func__, bdata->area_indicator, bdata->area_navigation ,bdata->area_edge);
 
 	return 0;
 }
@@ -350,7 +347,7 @@ static int syna_tcm_spi_rmi_read(struct syna_tcm_hcd *tcm_hcd,
 	struct spi_device *spi = to_spi_device(tcm_hcd->pdev->dev.parent);
 	const struct syna_tcm_board_data *bdata = tcm_hcd->hw_if->bdata;
 
-	if (tcm_hcd->lp_state == PWR_OFF) {
+	if (tcm_hcd->in_suspend) {
 		input_err(true, tcm_hcd->pdev->dev.parent, "power off in suspend\n");
 		return -EIO;
 	}
@@ -439,7 +436,7 @@ static int syna_tcm_spi_rmi_write(struct syna_tcm_hcd *tcm_hcd,
 	struct spi_device *spi = to_spi_device(tcm_hcd->pdev->dev.parent);
 	const struct syna_tcm_board_data *bdata = tcm_hcd->hw_if->bdata;
 
-	if (tcm_hcd->lp_state == PWR_OFF) {
+	if (tcm_hcd->in_suspend) {
 		input_err(true, tcm_hcd->pdev->dev.parent, "power off in suspend\n");
 		return -EIO;
 	}
@@ -503,7 +500,7 @@ static int syna_tcm_spi_read(struct syna_tcm_hcd *tcm_hcd, unsigned char *data,
 	struct spi_device *spi = to_spi_device(tcm_hcd->pdev->dev.parent);
 	const struct syna_tcm_board_data *bdata = tcm_hcd->hw_if->bdata;
 
-	if (tcm_hcd->lp_state == PWR_OFF) {
+	if (tcm_hcd->in_suspend) {
 		input_err(true, tcm_hcd->pdev->dev.parent, "power off in suspend\n");
 		return -EIO;
 	}
@@ -570,7 +567,7 @@ static int syna_tcm_spi_write(struct syna_tcm_hcd *tcm_hcd, unsigned char *data,
 	struct spi_device *spi = to_spi_device(tcm_hcd->pdev->dev.parent);
 	const struct syna_tcm_board_data *bdata = tcm_hcd->hw_if->bdata;
 
-	if (tcm_hcd->lp_state == PWR_OFF) {
+	if (tcm_hcd->in_suspend) {
 		input_err(true, tcm_hcd->pdev->dev.parent, "power off in suspend\n");
 		return -EIO;
 	}
@@ -625,22 +622,12 @@ exit:
 	return retval;
 }
 
-static unsigned int lcdtype;
-static int __init get_lcd_type(char *arg)
-{
-	get_option(&arg, &lcdtype);
-
-	printk("%s: lcdtype: %6X\n", __func__, lcdtype);
-
-	return 0;
-}
-early_param("lcdtype", get_lcd_type);
-
 static int syna_tcm_spi_probe(struct spi_device *spi)
 {
 	int retval;
 #if defined(CONFIG_EXYNOS_DPU30)
 	int connected;
+	int lcdtype = 0;
 
 	connected = get_lcd_info("connected");
 	if (connected < 0) {
@@ -652,40 +639,23 @@ static int syna_tcm_spi_probe(struct spi_device *spi)
 		input_err(true, &spi->dev, "%s: lcd is disconnected\n", __func__);
 		return -ENODEV;
 	}
-	
+
 	input_info(true, &spi->dev, "%s: lcd is connected\n", __func__);
-#endif
 
-	input_info(true, &spi->dev, "%s: lcdtype 0x%06X\n", __func__, lcdtype);
-
+	lcdtype = get_lcd_info("id");
 	if (lcdtype < 0) {
 		input_err(true, &spi->dev, "%s: Failed to get lcd info\n", __func__);
 		return -EINVAL;
 	}
-	
-	if (lcdtype == 0) {
-		input_err(true, &spi->dev, "%s: lcd is disconnected\n", __func__);
-		return -EINVAL;
-	}
-	
-	if (lcdtype == 0x8AD221) {
-		input_info(true, &spi->dev, "%s: PANEL is BOE\n", __func__);
-	}
-	
-	if (lcdtype == 0x8AA240) {
-		input_info(true, &spi->dev, "%s: PANEL is CSOT\n", __func__);
-		return -EINVAL;
-	}
 
-	if (lcdtype == 0x0AA240) {
-		input_info(true, &spi->dev, "%s: PANEL is CSOT & NVT\n", __func__);
+	input_err(true, &spi->dev, "%s: lcdtype 0x%06X\n", __func__, lcdtype);
+
+	/* only for a21s */
+	if ((lcdtype & 0x00FF00) != 0x006200) { 
+		input_err(true, &spi->dev, "%s: not support panel\n", __func__);
 		return -EINVAL;
-	}
-	
-	if (lcdtype == 0x1AF240) {
-		input_info(true, &spi->dev, "%s: PANEL is CSOT & LTPS & NVT\n", __func__);
-		return -EINVAL;
-	}
+	}	
+#endif
 
 	if (spi->master->flags & SPI_MASTER_HALF_DUPLEX) {
 		input_err(true, &spi->dev, "Full duplex not supported by host\n");

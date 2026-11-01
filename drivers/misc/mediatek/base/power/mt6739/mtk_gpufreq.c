@@ -192,7 +192,7 @@ static void __iomem *g_apmixed_base;
 #define UNIVPLL_FREQ	(416000) /* KHz */
 
 /* MT6739TW Use VCORE DVFS and need on/off VCORE & frequency control only */
-#define GPU_DVFS_FREQ0_6739TW	 (570000)	/* KHz */
+#define GPU_DVFS_FREQ0_6739TW	 (624000)	/* KHz, OC (stock 570000) */
 #define GPU_DVFS_FREQ1_6739TW	 (482500)	/* KHz */
 #define GPU_DVFS_FREQ2_6739TW	 (395000)	/* KHz */
 #define GPU_DVFS_FREQ3_6739TW	 (290000)	/* KHz */
@@ -378,6 +378,13 @@ static bool mt_gpufreq_debug;
 static bool mt_gpufreq_pause;
 static bool mt_gpufreq_keep_max_frequency_state;
 static bool mt_gpufreq_keep_opp_frequency_state;
+
+/* GPU governor: 0 = balance (default DVFS), 1 = performance, 2 = battery */
+#define GPUFREQ_GOV_BALANCE		0
+#define GPUFREQ_GOV_PERFORMANCE		1
+#define GPUFREQ_GOV_BATTERY		2
+#define GPUFREQ_GOV_BATTERY_MAX_IDX	2	/* battery: cap at OPP index 2 */
+static int g_gpufreq_governor = GPUFREQ_GOV_BALANCE;
 static unsigned int mt_gpufreq_keep_opp_frequency;
 static unsigned int mt_gpufreq_keep_opp_index;
 static bool mt_gpufreq_fixed_freq_volt_state;
@@ -1579,6 +1586,27 @@ unsigned int mt_gpufreq_target(unsigned int idx)
 	}
 
 	/************************************************
+	 * GPU governor (/proc/gpufreq/gpufreq_governor)
+	 * performance: always highest OPP, battery: cap OPP
+	 *************************************************/
+	if (g_gpufreq_governor == GPUFREQ_GOV_PERFORMANCE) {
+		target_freq = mt_gpufreqs[0].gpufreq_khz;
+		target_volt = mt_gpufreqs[0].gpufreq_volt;
+		target_idx = mt_gpufreqs[0].gpufreq_idx;
+		target_OPPidx = 0;
+	} else if (g_gpufreq_governor == GPUFREQ_GOV_BATTERY) {
+		unsigned int cap = (mt_gpufreqs_num > GPUFREQ_GOV_BATTERY_MAX_IDX) ?
+			GPUFREQ_GOV_BATTERY_MAX_IDX : (mt_gpufreqs_num - 1);
+
+		if (target_OPPidx < cap) {
+			target_freq = mt_gpufreqs[cap].gpufreq_khz;
+			target_volt = mt_gpufreqs[cap].gpufreq_volt;
+			target_idx = mt_gpufreqs[cap].gpufreq_idx;
+			target_OPPidx = cap;
+		}
+	}
+
+	/************************************************
 	 * If /proc command keep opp frequency.
 	 *************************************************/
 	if (mt_gpufreq_keep_opp_frequency_state == true) {
@@ -2193,6 +2221,15 @@ unsigned int mt_gpufreq_get_leakage_mw(void)
 #endif
 }
 
+/*
+ * API : get current segment max opp index
+ */
+unsigned int mt_gpufreq_get_seg_max_opp_index(void)
+{
+	return g_gpufreq_max_id;
+}
+
+
 /************************************************
  * return current GPU thermal limit index
  *************************************************/
@@ -2559,16 +2596,37 @@ static int mt_gpufreq_pdrv_probe(struct platform_device *pdev)
 /***************************************
  * this function should never be called
  ****************************************/
+// Memory Leaks Fix
 static int mt_gpufreq_pdrv_remove(struct platform_device *pdev)
 {
 #ifdef MT_GPUFREQ_INPUT_BOOST
 	input_unregister_handler(&mt_gpufreq_input_handler);
-
-	kthread_stop(mt_gpufreq_up_task);
-	put_task_struct(mt_gpufreq_up_task);
+    if (mt_gpufreq_up_task) {
+        kthread_stop(mt_gpufreq_up_task);
+        put_task_struct(mt_gpufreq_up_task);
+    }
 #endif
 
-	return 0;
+    if (mt_gpufreq_pmic && !IS_ERR(mt_gpufreq_pmic->reg_vcore)) {
+        regulator_put(mt_gpufreq_pmic->reg_vcore);
+    }
+	
+    if (g_apmixed_base) {
+        iounmap(g_apmixed_base);
+        g_apmixed_base = NULL;
+    }
+	
+    kfree(mt_gpufreqs_power);
+    kfree(mt_gpufreqs);
+    kfree(mt_gpufreqs_default);
+    kfree(mt_gpufreq_clk);
+    kfree(mt_gpufreq_pmic);
+    mt_gpufreqs_power = NULL;
+    mt_gpufreqs = NULL;
+    mt_gpufreqs_default = NULL;
+    mt_gpufreq_clk = NULL;
+    mt_gpufreq_pmic = NULL;
+    return 0;
 }
 
 static const struct dev_pm_ops mt_gpufreq_pm_ops = {
@@ -2622,7 +2680,7 @@ static ssize_t mt_gpufreq_debug_proc_write(struct file *file, const char __user 
 					   size_t count, loff_t *data)
 {
 	char desc[32];
-	int len = 0;
+	unsigned int len = 0;
 
 	int debug = 0;
 
@@ -2663,7 +2721,7 @@ static ssize_t mt_gpufreq_limited_oc_ignore_proc_write(struct file *file,
 							   loff_t *data)
 {
 	char desc[32];
-	int len = 0;
+	unsigned int len = 0;
 	unsigned int ignore = 0;
 
 	len = (count < (sizeof(desc) - 1)) ? count : (sizeof(desc) - 1);
@@ -2706,7 +2764,7 @@ static ssize_t mt_gpufreq_limited_low_batt_volume_ignore_proc_write(struct file 
 									size_t count, loff_t *data)
 {
 	char desc[32];
-	int len = 0;
+	unsigned int len = 0;
 
 	unsigned int ignore = 0;
 
@@ -2751,7 +2809,7 @@ static ssize_t mt_gpufreq_limited_low_batt_volt_ignore_proc_write(struct file *f
 								  size_t count, loff_t *data)
 {
 	char desc[32];
-	int len = 0;
+	unsigned int len = 0;
 
 	unsigned int ignore = 0;
 
@@ -2795,7 +2853,7 @@ static ssize_t mt_gpufreq_limited_thermal_ignore_proc_write(struct file *file,
 								size_t count, loff_t *data)
 {
 	char desc[32];
-	int len = 0;
+	unsigned int len = 0;
 
 	unsigned int ignore = 0;
 
@@ -2839,7 +2897,7 @@ static ssize_t mt_gpufreq_limited_pbm_ignore_proc_write(struct file *file,
 							loff_t *data)
 {
 	char desc[32];
-	int len = 0;
+	unsigned int len = 0;
 
 	unsigned int ignore = 0;
 
@@ -2881,7 +2939,7 @@ static ssize_t mt_gpufreq_limited_power_proc_write(struct file *file,
 						   size_t count, loff_t *data)
 {
 	char desc[32];
-	int len = 0;
+	unsigned int len = 0;
 
 	unsigned int power = 0;
 
@@ -2917,7 +2975,7 @@ static ssize_t mt_gpufreq_limited_by_pbm_proc_write(struct file *file, const cha
 							size_t count, loff_t *data)
 {
 	char desc[32];
-	int len = 0;
+	unsigned int len = 0;
 
 	unsigned int power = 0;
 
@@ -2955,7 +3013,7 @@ static ssize_t mt_gpufreq_state_proc_write(struct file *file,
 					   const char __user *buffer, size_t count, loff_t *data)
 {
 	char desc[32];
-	int len = 0;
+	unsigned int len = 0;
 
 	int enabled = 0;
 
@@ -3041,7 +3099,7 @@ static ssize_t mt_gpufreq_opp_freq_proc_write(struct file *file, const char __us
 						  size_t count, loff_t *data)
 {
 	char desc[32];
-	int len = 0;
+	unsigned int len = 0;
 
 	int fixed_freq = 0;
 	int i = 0;
@@ -3103,7 +3161,7 @@ static ssize_t mt_gpufreq_opp_max_freq_proc_write(struct file *file, const char 
 						  size_t count, loff_t *data)
 {
 	char desc[32];
-	int len = 0;
+	unsigned int len = 0;
 
 	int max_freq = 0;
 	int i = 0;
@@ -3139,6 +3197,53 @@ static ssize_t mt_gpufreq_opp_max_freq_proc_write(struct file *file, const char 
 		}
 	} else
 	gpufreq_pr_warn("bad argument!! please provide the maximum limited frequency\n");
+
+	return count;
+}
+
+/***************************
+ * show GPU governor
+ ****************************/
+static int mt_gpufreq_governor_proc_show(struct seq_file *m, void *v)
+{
+	static const char * const names[] = {"balance", "performance", "battery"};
+
+	seq_printf(m, "%s\n", names[g_gpufreq_governor]);
+	seq_puts(m, "available: balance performance battery\n");
+
+	return 0;
+}
+
+/***********************
+ * set GPU governor
+ ************************/
+static ssize_t mt_gpufreq_governor_proc_write(struct file *file, const char __user *buffer,
+						  size_t count, loff_t *data)
+{
+	char desc[32];
+	unsigned int len = 0;
+	char *name;
+
+	len = (count < (sizeof(desc) - 1)) ? count : (sizeof(desc) - 1);
+	if (copy_from_user(desc, buffer, len))
+		return 0;
+	desc[len] = '\0';
+	name = strim(desc);
+
+	if (!strcmp(name, "balance"))
+		g_gpufreq_governor = GPUFREQ_GOV_BALANCE;
+	else if (!strcmp(name, "performance"))
+		g_gpufreq_governor = GPUFREQ_GOV_PERFORMANCE;
+	else if (!strcmp(name, "battery"))
+		g_gpufreq_governor = GPUFREQ_GOV_BATTERY;
+	else {
+		gpufreq_pr_warn("bad argument!! use: balance | performance | battery\n");
+		return count;
+	}
+
+	/* apply right away (ignored if GPU is not powered/ready) */
+	if (g_cur_gpu_OPPidx < mt_gpufreqs_num)
+		mt_gpufreq_target(g_cur_gpu_OPPidx);
 
 	return count;
 }
@@ -3191,7 +3296,7 @@ static ssize_t mt_gpufreq_volt_enable_proc_write(struct file *file, const char _
 						 size_t count, loff_t *data)
 {
 	char desc[32];
-	int len = 0;
+	unsigned int len = 0;
 
 	int enable = 0;
 
@@ -3307,7 +3412,7 @@ static ssize_t mt_gpufreq_fixed_freq_volt_proc_write(struct file *file, const ch
 							 size_t count, loff_t *data)
 {
 	char desc[32];
-	int len = 0;
+	unsigned int len = 0;
 
 	int fixed_freq = 0;
 	int fixed_volt = 0;
@@ -3401,7 +3506,7 @@ static ssize_t mt_gpufreq_lpt_enable_proc_write(struct file *file, const char __
 	gpufreq_pr_warn("not implemented\n");
 #if 0
 	char desc[32];
-	int len = 0;
+	unsigned int len = 0;
 
 	int enable = 0;
 
@@ -3476,6 +3581,7 @@ PROC_FOPS_RO(gpufreq_opp_dump);
 PROC_FOPS_RO(gpufreq_power_dump);
 PROC_FOPS_RW(gpufreq_opp_freq);
 PROC_FOPS_RW(gpufreq_opp_max_freq);
+PROC_FOPS_RW(gpufreq_governor);
 PROC_FOPS_RO(gpufreq_var_dump);
 PROC_FOPS_RW(gpufreq_volt_enable);
 PROC_FOPS_RW(gpufreq_fixed_freq_volt);
@@ -3516,6 +3622,7 @@ static int mt_gpufreq_create_procfs(void)
 		PROC_ENTRY(gpufreq_power_dump),
 		PROC_ENTRY(gpufreq_opp_freq),
 		PROC_ENTRY(gpufreq_opp_max_freq),
+		PROC_ENTRY(gpufreq_governor),
 		PROC_ENTRY(gpufreq_var_dump),
 		PROC_ENTRY(gpufreq_volt_enable),
 		PROC_ENTRY(gpufreq_fixed_freq_volt),
@@ -3589,9 +3696,12 @@ out:
 #endif
 static void __exit mt_gpufreq_exit(void)
 {
-	platform_driver_unregister(&mt_gpufreq_pdrv);
+#ifdef CONFIG_PROC_FS
+    remove_proc_subtree("gpufreq", NULL); 
+#endif
+    platform_driver_unregister(&mt_gpufreq_pdrv);
 #if !defined(CONFIG_OF)
-	platform_device_unregister(&mt_gpufreq_pdev);
+    platform_device_unregister(&mt_gpufreq_pdev);
 #endif
 }
 

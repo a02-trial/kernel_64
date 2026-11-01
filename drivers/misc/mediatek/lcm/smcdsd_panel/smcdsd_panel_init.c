@@ -83,6 +83,9 @@ int __smcdsd_panel_get_params_from_dt(struct LCM_PARAMS *lcm_params)
 	struct device_node *np = NULL;
 	struct mipi_dsi_lcd_common *plcd = get_lcd_common(0);
 	int ret = 0;
+#ifdef CONFIG_MTK_HIGH_FRAME_RATE
+	int i = 0;
+#endif
 
 	np = of_find_recommend_lcd_info(NULL);
 	if (!np) {
@@ -442,6 +445,48 @@ int __smcdsd_panel_get_params_from_dt(struct LCM_PARAMS *lcm_params)
 
 	smcdsd_of_property_read_u32(np, "lcm_params-hbm_enable_wait_frame", &lcm_params->hbm_enable_wait_frame);
 	smcdsd_of_property_read_u32(np, "lcm_params-hbm_disable_wait_frame", &lcm_params->hbm_disable_wait_frame);
+
+#ifdef CONFIG_MTK_HIGH_FRAME_RATE
+	smcdsd_of_property_read_u32(np, "lcm_params-dfps_enable",
+			&(lcm_params->dsi.dfps_enable));
+	if (lcm_params->dsi.dfps_enable) {
+		smcdsd_of_property_read_u32(np, "lcm_params-fps_cnt",
+				&(lcm_params->dsi.dfps_num));
+		for (i = 0; i < lcm_params->dsi.dfps_num; i++) {
+			of_property_read_u32_index(np, "lcm_params-available_fps",
+				i, &(lcm_params->dsi.dfps_params[i].fps));
+			of_property_read_u32_index(np, "lcm_params-vact_timing_fps",
+				i, &(lcm_params->dsi.dfps_params[i].vact_timing_fps));
+			of_property_read_u32_index(np, "lcm_params-dfps_level",
+				i, &(lcm_params->dsi.dfps_params[i].level));
+			of_property_read_u32_index(np, "lcm_params-dfps_date_rate",
+				i, &(lcm_params->dsi.dfps_params[i].PLL_CLOCK));
+			lcm_params->dsi.dfps_params[i].PLL_CLOCK =
+				lcm_params->dsi.dfps_params[i].PLL_CLOCK >> 1;
+		}
+	}
+	/*
+		default fps is first index, 60hz
+		default vact timing is last index, because biggest value
+	*/
+	lcm_params->dsi.dfps_enable = !!islcmconnected;
+	lcm_params->dsi.dfps_default_fps = lcm_params->dsi.dfps_params[0].fps;
+	lcm_params->dsi.dfps_def_vact_tim_fps= lcm_params->dsi.dfps_params[lcm_params->dsi.dfps_num - 1].vact_timing_fps;
+#if 0
+	pr_info("%s %d %d %d\n", __func__,
+		lcm_params->dsi.dfps_enable, lcm_params->dsi.dfps_default_fps, lcm_params->dsi.dfps_def_vact_tim_fps);
+	pr_info("%s fps : %d %d\n", __func__,
+		lcm_params->dsi.dfps_params[0].fps, lcm_params->dsi.dfps_params[1].fps);
+	pr_info("%s avail vact : %d %d\n", __func__,
+		lcm_params->dsi.dfps_params[0].vact_timing_fps, lcm_params->dsi.dfps_params[1].vact_timing_fps);
+	pr_info("%s dfps level : %d %d\n", __func__,
+		lcm_params->dsi.dfps_params[0].level, lcm_params->dsi.dfps_params[1].level);
+	pr_info("%s PLL clock : %d %d\n", __func__,
+		lcm_params->dsi.dfps_params[0].PLL_CLOCK, lcm_params->dsi.dfps_params[1].PLL_CLOCK);
+#endif
+#endif
+
+	smcdsd_of_property_read_u32(np, "lcd_params-gpara-len", &gpara_len);
 
 	return ret;
 }

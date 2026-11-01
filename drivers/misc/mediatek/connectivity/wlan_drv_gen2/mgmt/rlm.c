@@ -2671,7 +2671,7 @@ VOID rlmFillRrmCapa(PUINT_8 pucCapa)
 	UINT_8 ucIndex = 0;
 	UINT_8 aucEnabledBits[] = {RRM_CAP_INFO_LINK_MEASURE_BIT, RRM_CAP_INFO_NEIGHBOR_REPORT_BIT,
 			RRM_CAP_INFO_BEACON_PASSIVE_MEASURE_BIT, RRM_CAP_INFO_BEACON_ACTIVE_MEASURE_BIT,
-			RRM_CAP_INFO_BEACON_TABLE_BIT, RRM_CAP_INFO_RRM_BIT};
+			RRM_CAP_INFO_BEACON_TABLE_BIT, RRM_CAP_INFO_TSM_BIT, RRM_CAP_INFO_RRM_BIT};
 
 	for (; ucIndex < sizeof(aucEnabledBits); ucIndex++)
 		SET_EXT_CAP(pucCapa, ELEM_MAX_LEN_RRM_CAP, aucEnabledBits[ucIndex]);
@@ -2796,7 +2796,13 @@ VOID rlmActivateNetwork(P_ADAPTER_T prAdapter, ENUM_NETWORK_TYPE_INDEX_T eNetwor
 	bool isActive = false;
 
 	ASSERT(prAdapter);
-	ASSERT(eNetworkTypeIdx < NETWORK_TYPE_INDEX_NUM);
+
+	if (eNetworkTypeIdx < NETWORK_TYPE_AIS_INDEX ||
+		eNetworkTypeIdx >= NETWORK_TYPE_INDEX_NUM) {
+		DBGLOG(NIC, WARN, "rlmActivateNetwork, Idx=%d\n",
+		eNetworkTypeIdx);
+		return;
+	}
 
 	prAdapter->rWifiVar.arBssInfo[eNetworkTypeIdx].ucNetActiveSrc |= eNetActiveSrcIdx;
 
@@ -2817,7 +2823,13 @@ VOID rlmDeactivateNetwork(P_ADAPTER_T prAdapter, ENUM_NETWORK_TYPE_INDEX_T eNetw
 			ENUM_NET_ACTIVE_SRC_T eNetActiveSrcIdx)
 {
 	ASSERT(prAdapter);
-	ASSERT(eNetworkTypeIdx < NETWORK_TYPE_INDEX_NUM);
+
+	if (eNetworkTypeIdx < NETWORK_TYPE_AIS_INDEX ||
+		eNetworkTypeIdx >= NETWORK_TYPE_INDEX_NUM) {
+		DBGLOG(NIC, WARN, "rlmDeactivateNetwork, Idx=%d\n",
+		eNetworkTypeIdx);
+		return;
+	}
 
 	prAdapter->rWifiVar.arBssInfo[eNetworkTypeIdx].ucNetActiveSrc &= ~eNetActiveSrcIdx;
 

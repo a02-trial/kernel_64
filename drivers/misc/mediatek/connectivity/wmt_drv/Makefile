@@ -1,15 +1,25 @@
+ifeq ($(MTK_PLATFORM),)
+ifneq ($(MTK_PLATFORM_WMT),)
+MTK_PLATFORM := $(shell echo $(MTK_PLATFORM_WMT) | tr A-Z a-z)
+endif
+endif
+
+ifeq ($(MTK_PLATFORM),)
+ifneq ($(CONFIG_MTK_PLATFORM),)
+MTK_PLATFORM := $(subst ",,$(CONFIG_MTK_PLATFORM))
+endif
+endif
 ###############################################################################
 # Necessary Check
 
 ifneq ($(CONFIG_MTK_COMBO),)
-  ifeq ($(CONFIG_WLAN_DRV_BUILD_IN),)
-    ifeq ($(AUTOCONF_H),)
-       $(error AUTOCONF_H is not defined)
-    else
-       ccflags-y += -imacros $(AUTOCONF_H)
-   endif
-  endif
-endif
+	ifeq ($(CONFIG_WLAN_DRV_BUILD_IN),)
+		ifeq ($(AUTOCONF_H),)
+			$(error AUTOCONF_H is not defined)
+		else
+			ccflags-y += -imacros $(AUTOCONF_H)
+		endif
+	endif
 
 ifeq ($(CONFIG_MTK_COMBO_CHIP),)
     $(error CONFIG_MTK_COMBO_CHIP not defined)
@@ -33,7 +43,9 @@ ifeq ($(CONFIG_MTK_CONN_LTE_IDC_SUPPORT),y)
 else
     ccflags-y += -D WMT_IDC_SUPPORT=0
 endif
+$(warning yumin: common 1)
 ccflags-y += -D MTK_WCN_WMT_STP_EXP_SYMBOL_ABSTRACT
+$(warning yumin: common 2)
 
 ccflags-y += -I$(srctree)/drivers/misc/mediatek/include
 ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
@@ -44,8 +56,13 @@ ccflags-y += -I$(srctree)/drivers/misc/mediatek/base/power/include
 ccflags-y += -I$(srctree)/drivers/misc/mediatek/base/power/include/clkbuf_v1
 ccflags-y += -I$(srctree)/drivers/misc/mediatek/base/power/include/clkbuf_v1/$(MTK_PLATFORM)
 ccflags-y += -I$(srctree)/drivers/misc/mediatek/btif/common/inc
+ifeq ($(strip $(MTK_PLATFORM)), mt6735)
+ccflags-y += -I$(srctree)/drivers/misc/mediatek/eccci1
+ccflags-y += -I$(srctree)/drivers/misc/mediatek/eccci1/$(MTK_PLATFORM)
+else
 ccflags-y += -I$(srctree)/drivers/misc/mediatek/eccci
 ccflags-y += -I$(srctree)/drivers/misc/mediatek/eccci/$(MTK_PLATFORM)
+endif
 ccflags-y += -I$(srctree)/drivers/misc/mediatek/eemcs
 ccflags-y += -I$(srctree)/drivers/misc/mediatek/conn_md/include
 ccflags-y += -I$(srctree)/drivers/misc/mediatek/mach/$(MTK_PLATFORM)/include/mach
@@ -53,6 +70,9 @@ ccflags-y += -I$(srctree)/drivers/misc/mediatek/emi/submodule
 ccflags-y += -I$(srctree)/drivers/misc/mediatek/emi/$(MTK_PLATFORM)
 ifeq ($(CONFIG_MTK_PMIC_CHIP_MT6359),y)
 ccflags-y += -I$(srctree)/drivers/misc/mediatek/pmic/include/mt6359
+endif
+ifeq ($(CONFIG_MTK_PMIC_CHIP_MT6359P),y)
+ccflags-y += -I$(srctree)/drivers/misc/mediatek/pmic/include/mt6359p
 endif
 ccflags-y += -I$(srctree)/drivers/mmc/core
 ccflags-y += -I$(srctree)/drivers/misc/mediatek/connectivity/common
@@ -199,12 +219,8 @@ endif
 # Customer eng/userdebug load: Support
 # Customer user load: Not support
 
-ifeq ($(wildcard vendor/mediatek/proprietary/external/aee_config_internal/init.aee.mtk.system.rc),)
+ifneq ($(TARGET_BUILD_VARIANT),user)
 	ccflags-y += -D CFG_WMT_STEP
-else
-	ifneq ($(TARGET_BUILD_VARIANT),user)
-		ccflags-y += -D CFG_WMT_STEP
-	endif
 endif
 
 ifeq ($(findstring evb, $(MTK_PROJECT)), evb)
@@ -247,12 +263,17 @@ $(MODULE_NAME)-objs += common_main/linux/wmt_idc.o
 $(MODULE_NAME)-objs += common_main/linux/stp_uart.o
 $(MODULE_NAME)-objs += common_main/linux/wmt_dbg.o
 $(MODULE_NAME)-objs += common_main/linux/stp_dbg.o
+$(MODULE_NAME)-objs += common_main/linux/wmt_user_proc.o
+
+$(MODULE_NAME)-objs += common_main/linux/wmt_proc_dbg.o
+$(MODULE_NAME)-objs += common_main/linux/wmt_alarm.o
+
 ifneq ($(CONFIG_MTK_CONNSYS_DEDICATED_LOG_PATH),)
 $(MODULE_NAME)-objs += common_main/linux/fw_log_wmt.o
 endif
 $(MODULE_NAME)-objs += common_main/linux/wmt_step.o
 
-ifeq ($(CONFIG_MTK_BTIF), y)
+ifeq ($(CONFIG_MTK_BTIF),$(filter $(CONFIG_MTK_BTIF),y m))
 $(MODULE_NAME)-objs += common_main/linux/stp_btif.o
 endif
 
@@ -270,3 +291,4 @@ ifeq ($(TARGET_BUILD_VARIANT),eng)
 $(MODULE_NAME)-objs += test/wmt_step_test.o
 endif
 
+endif

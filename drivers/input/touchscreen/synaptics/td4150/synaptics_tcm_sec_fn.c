@@ -38,7 +38,7 @@
 
 #define TSP_PATH_EXTERNAL_FW		"/sdcard/Firmware/TSP/tsp.bin"
 #define TSP_PATH_EXTERNAL_FW_SIGNED	"/sdcard/Firmware/TSP/tsp_signed.bin"
-#define TSP_PATH_SPU_FW_SIGNED		"/spu/TSP/ffu_tsp.bin"
+//#define TSP_PATH_SPU_FW_SIGNED		"/spu/TSP/ffu_tsp.bin"
 
 enum {
 	BUILT_IN = 0,
@@ -50,7 +50,7 @@ enum {
 void sec_run_rawdata(struct syna_tcm_hcd *tcm_hcd)
 {
 	struct sec_factory_test_mode mode;
-
+	
 	memset(&mode, 0x00, sizeof(struct sec_factory_test_mode));
 	tcm_hcd->tsp_dump_lock = true;
 
@@ -78,17 +78,17 @@ out:
 	tcm_hcd->tsp_dump_lock = false;
 }
 
-extern int long spu_firmware_signature_verify(const char* fw_name, const u8* fw_data, const long fw_size);
+//extern int long spu_firmware_signature_verify(const char* fw_name, const u8* fw_data, const long fw_size);
 
-static int sec_fn_load_fw(struct syna_tcm_hcd *tcm_hcd, bool signing, const char *file_path)
+static int sec_fn_load_fw(struct syna_tcm_hcd *tcm_hcd,  bool signing, const char *file_path)
 {
 	struct file *fp;
 	mm_segment_t old_fs;
 	int fw_size, nread;
 	int error = 0;
 	unsigned char *fw_data;
-	size_t spu_fw_size;
-	size_t spu_ret = 0;
+//	size_t spu_fw_size;
+	//size_t spu_ret = 0;
 
 	old_fs = get_fs();
 	set_fs(KERNEL_DS);
@@ -102,13 +102,13 @@ static int sec_fn_load_fw(struct syna_tcm_hcd *tcm_hcd, bool signing, const char
 	}
 
 	fw_size = fp->f_path.dentry->d_inode->i_size;
-
+#if 0
 	if (signing) {
 		/* name 3, digest 32, signature 512 */
 		spu_fw_size = fw_size;
 		fw_size -= SPU_METADATA_SIZE(TSP);
 	}
-
+#endif
 	if (fw_size > 0) {
 		fw_data = vzalloc(fw_size);
 		if (!fw_data) {
@@ -116,7 +116,7 @@ static int sec_fn_load_fw(struct syna_tcm_hcd *tcm_hcd, bool signing, const char
 			error = -ENOMEM;
 			goto open_err;
 		}
-
+#if 0
 		if (signing) {
 			unsigned char *spu_fw_data;
 
@@ -141,6 +141,7 @@ static int sec_fn_load_fw(struct syna_tcm_hcd *tcm_hcd, bool signing, const char
 				vfree(spu_fw_data);
 				goto open_err;
 			}
+
 			spu_ret = spu_firmware_signature_verify("TSP", spu_fw_data, spu_fw_size);
 			if (spu_ret != fw_size) {
 				input_err(true, tcm_hcd->pdev->dev.parent, "%s: signature verify failed, %zu\n",
@@ -153,7 +154,9 @@ static int sec_fn_load_fw(struct syna_tcm_hcd *tcm_hcd, bool signing, const char
 
 			memcpy(fw_data, spu_fw_data, fw_size);
 			vfree(spu_fw_data);
+
 		} else {
+#endif
 			nread = vfs_read(fp, (char __user *)fw_data,
 				fw_size, &fp->f_pos);
 
@@ -168,7 +171,7 @@ static int sec_fn_load_fw(struct syna_tcm_hcd *tcm_hcd, bool signing, const char
 				vfree(fw_data);
 				goto open_err;
 			}
-		}
+//		}
 
 		if (tcm_hcd->image)
 			vfree(tcm_hcd->image);
@@ -275,16 +278,16 @@ static void get_fw_ver_bin(void *device_data)
 	char buff[16] = { 0 };
 
 	sec_cmd_set_default_result(sec);
-
+	
 	snprintf(buff, sizeof(buff), "SY%02X%02X%02X%02X",
 			tcm_hcd->img_version[0], tcm_hcd->img_version[1],
-			tcm_hcd->img_version[2],tcm_hcd->img_version[3]);
+			tcm_hcd->img_version[2],tcm_hcd->img_version[3]); 
 
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
 	if (sec->cmd_all_factory_state == SEC_CMD_STATUS_RUNNING)
 		sec_cmd_set_cmd_result_all(sec, buff, strnlen(buff, sizeof(buff)), "FW_VER_BIN");
 	sec->cmd_state = SEC_CMD_STATUS_OK;
-
+ 
 	input_info(true, tcm_hcd->pdev->dev.parent, "%s: %s\n", __func__, buff);
 }
 
@@ -296,7 +299,7 @@ static void get_fw_ver_ic(void *device_data)
 	char model[16] = { 0 };
 
 	sec_cmd_set_default_result(sec);
-
+	
 	snprintf(buff, sizeof(buff), "SY%02X%02X%02X%02X",
 			tcm_hcd->app_info.customer_config_id[0], tcm_hcd->app_info.customer_config_id[1],
 			tcm_hcd->app_info.customer_config_id[2], tcm_hcd->app_info.customer_config_id[3]);
@@ -319,7 +322,7 @@ static void get_threshold(void *device_data)
 	struct syna_tcm_hcd *tcm_hcd = container_of(sec, struct syna_tcm_hcd, sec);
 	char buff[16] = { 0 };
 
-	strncpy(buff, "120", sizeof(buff));
+	strncpy(buff, "120", sizeof(buff)); /* for a21s */
 
 	sec_cmd_set_default_result(sec);
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
@@ -504,7 +507,7 @@ static void set_grip_data(void *device_data)
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
 	struct syna_tcm_hcd *tcm_hcd = container_of(sec, struct syna_tcm_hcd, sec);
 	int retval;
-	unsigned char out_buf[3] = { 0 };
+	unsigned char out_buf[3] = { 0 }; 
 	unsigned char *resp_buf;
 	unsigned int resp_buf_size;
 	unsigned int resp_length;
@@ -515,13 +518,13 @@ static void set_grip_data(void *device_data)
 	resp_buf = NULL;
 	resp_buf_size = 0;
 
-	if (tcm_hcd->lp_state == PWR_OFF) {
+	if (tcm_hcd->in_suspend) {
 		input_err(true, tcm_hcd->pdev->dev.parent, "%s: power off\n", __func__);
 		goto exit;
 	}
 
 	if (sec->cmd_param[0] == 2) {	// landscape mode
-		if (sec->cmd_param[1] == 0) {	// normal mode
+		if (sec->cmd_param[1] == 0) {	// normal mode 
 			out_buf[0] = (unsigned char)sec->cmd_param[1];
 			out_buf[1] = 0;
 			out_buf[2] = 0;
@@ -560,7 +563,8 @@ exit:
 	return;
 }
 
-static void ear_detect_enable(void *device_data)
+#if !defined(CONFIG_SEC_FACTORY)
+static void dead_zone_enable(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
 	struct syna_tcm_hcd *tcm_hcd = container_of(sec, struct syna_tcm_hcd, sec);
@@ -573,12 +577,11 @@ static void ear_detect_enable(void *device_data)
 		snprintf(buff, sizeof(buff), "NG");
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
 	} else {
-		tcm_hcd->ear_detect_enable = sec->cmd_param[0];
-		ret = tcm_hcd->set_dynamic_config(tcm_hcd, DC_ENABLE_FACE_DETECT,
-			tcm_hcd->ear_detect_enable);
+		ret = tcm_hcd->set_dynamic_config(tcm_hcd, DC_ENABLE_DEADZONE,
+			sec->cmd_param[0]);
 		if (ret < 0) {
 			input_err(true, tcm_hcd->pdev->dev.parent,
-					"%s: Failed to enable ear detect mode\n", __func__);
+					"Failed to enable dead zone\n");
 			snprintf(buff, sizeof(buff), "NG");
 			sec->cmd_state = SEC_CMD_STATUS_FAIL;
 		} else {
@@ -588,52 +591,9 @@ static void ear_detect_enable(void *device_data)
 	}
 
 	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec->cmd_state = SEC_CMD_STATUS_OK;
 	sec_cmd_set_cmd_exit(sec);
-
-	input_info(true, tcm_hcd->pdev->dev.parent,
-		"%s: %s,%d\n", __func__, buff, tcm_hcd->ear_detect_enable);
 }
-
-static void cmd_run_prox_intensity_read_all(void *device_data)
-{
-	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
-	struct syna_tcm_hcd *tcm_hcd = container_of(sec, struct syna_tcm_hcd, sec);
-	char buff[SEC_CMD_STR_LEN] = { 0 };
-	int ret;
-
-	sec_cmd_set_default_result(sec);
-	input_info(true, tcm_hcd->pdev->dev.parent,
-		"%s: start\n", __func__);
-
-	ret = get_proximity();
-
-	input_info(true, tcm_hcd->pdev->dev.parent,
-		"%s: sum = %d\n", __func__, ret);
-
-	if(ret == -1)
-		goto exit;
-
-	snprintf(buff, sizeof(buff), "SUM_X:%d THD_X:%d", ret, 0);
-
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec->cmd_state = SEC_CMD_STATUS_OK;
-	sec_cmd_set_cmd_exit(sec);
-
-	input_info(true, tcm_hcd->pdev->dev.parent,
-		"%s: total end\n", __func__);
-
-	return;
-
-exit:
-	snprintf(buff, sizeof(buff), "%s", "NG");
-	sec->cmd_state = SEC_CMD_STATUS_FAIL;
-	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
-	sec_cmd_set_cmd_exit(sec);
-
-	return;
-}
-
+#endif
 static void not_support_cmd(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
@@ -666,8 +626,9 @@ static struct sec_cmd sec_cmds[] = {
 	{SEC_CMD("check_connection", check_connection),},
 	{SEC_CMD("get_crc_check", get_crc_check),},
 	{SEC_CMD("set_grip_data", set_grip_data),},
-	{SEC_CMD_H("ear_detect_enable", ear_detect_enable),},
-	{SEC_CMD("run_prox_intensity_read_all", cmd_run_prox_intensity_read_all),},
+#if !defined(CONFIG_SEC_FACTORY)	
+	{SEC_CMD("dead_zone_enable", dead_zone_enable),},
+#endif
 	{SEC_CMD("not_support_cmd", not_support_cmd),},
 };
 
@@ -701,90 +662,10 @@ static ssize_t sensitivity_mode_store(struct device *dev,
 	return count;
 }
 
-static ssize_t prox_power_off_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	struct sec_cmd_data *sec = dev_get_drvdata(dev);
-	struct syna_tcm_hcd *tcm_hcd = container_of(sec, struct syna_tcm_hcd, sec);
-
-	input_info(true, tcm_hcd->pdev->dev.parent, "%s: %d\n", __func__,
-			tcm_hcd->prox_power_off);
-
-	return snprintf(buf, SEC_CMD_BUF_SIZE, "%ld", tcm_hcd->prox_power_off);
-}
-
-static ssize_t prox_power_off_store(struct device *dev,
-		struct device_attribute *attr,
-		const char *buf, size_t count)
-{
-	struct sec_cmd_data *sec = dev_get_drvdata(dev);
-	struct syna_tcm_hcd *tcm_hcd = container_of(sec, struct syna_tcm_hcd, sec);
-	long data;
-	int ret;
-
-	ret = kstrtol(buf, 10, &data);
-	if (ret < 0)
-		return ret;
-
-	input_info(true, tcm_hcd->pdev->dev.parent, "%s: %ld\n", __func__, data);
-
-	tcm_hcd->prox_power_off = data;
-
-	return count;
-}
-
-/** virtual_prox **/
-static ssize_t protos_event_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	struct sec_cmd_data *sec = dev_get_drvdata(dev);
-	struct syna_tcm_hcd *tcm_hcd = container_of(sec, struct syna_tcm_hcd, sec);
-
-	input_info(true, tcm_hcd->pdev->dev.parent, "%s: %d\n", __func__,
-			tcm_hcd->hover_event);
-
-	return snprintf(buf, SEC_CMD_BUF_SIZE, "%d", tcm_hcd->hover_event != 3 ? 0 : 3);
-}
-
-static ssize_t protos_event_store(struct device *dev,
-		struct device_attribute *attr,
-		const char *buf, size_t count)
-{
-	struct sec_cmd_data *sec = dev_get_drvdata(dev);
-	struct syna_tcm_hcd *tcm_hcd = container_of(sec, struct syna_tcm_hcd, sec);
-	u8 data;
-	int ret;
-
-	ret = kstrtou8(buf, 10, &data);
-	if (ret < 0)
-		return ret;
-
-	input_info(true, tcm_hcd->pdev->dev.parent, "%s: %d\n", __func__, data);
-
-	if (data != 0 && data != 1) {
-		input_err(true, tcm_hcd->pdev->dev.parent, "%s: incorrect data\n", __func__);
-		return -EINVAL;
-	}
-	
-	tcm_hcd->ear_detect_enable = data;
-	ret = tcm_hcd->set_dynamic_config(tcm_hcd, DC_ENABLE_FACE_DETECT,
-		tcm_hcd->ear_detect_enable);
-	if (ret < 0) {
-		input_err(true, tcm_hcd->pdev->dev.parent,
-				"%s: Failed to enable ear detect mode\n", __func__);
-	}
-
-	return count;
-}
-
-static DEVICE_ATTR(prox_power_off, 0664, prox_power_off_show, prox_power_off_store);
 static DEVICE_ATTR(sensitivity_mode, 0664, sensitivity_mode_show, sensitivity_mode_store);
-static DEVICE_ATTR(virtual_prox, 0664, protos_event_show, protos_event_store);
 
 static struct attribute *cmd_attributes[] = {
 	&dev_attr_sensitivity_mode.attr,
-	&dev_attr_prox_power_off.attr,
-	&dev_attr_virtual_prox.attr,
 	NULL,
 };
 

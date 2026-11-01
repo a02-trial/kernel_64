@@ -15,6 +15,7 @@
 #define __TZ_WAIT_H__
 
 #include <linux/freezer.h>
+#include <linux/version.h>
 #include <linux/wait.h>
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 10, 0)

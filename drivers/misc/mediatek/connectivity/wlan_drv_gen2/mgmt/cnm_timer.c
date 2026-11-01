@@ -82,7 +82,7 @@ static BOOLEAN cnmTimerSetTimer(IN P_ADAPTER_T prAdapter, IN OS_SYSTIME rTimeout
 		fgNeedWakeLock = TRUE;
 
 		if (!prRootTimer->fgWakeLocked) {
-			KAL_WAKE_LOCK(prAdapter, &prRootTimer->rWakeLock);
+			KAL_WAKE_LOCK(prAdapter, prRootTimer->rWakeLock);
 			prRootTimer->fgWakeLocked = TRUE;
 		}
 	} else {
@@ -117,7 +117,7 @@ VOID cnmTimerInitialize(IN P_ADAPTER_T prAdapter)
 	LINK_INITIALIZE(&prRootTimer->rLinkHead);
 	KAL_RELEASE_SPIN_LOCK(prAdapter, SPIN_LOCK_TIMER);
 
-	KAL_WAKE_LOCK_INIT(prAdapter, &prRootTimer->rWakeLock, "WLAN Timer");
+	KAL_WAKE_LOCK_INIT(prAdapter, prRootTimer->rWakeLock, "WLAN Timer");
 	prRootTimer->fgWakeLocked = FALSE;
 }
 
@@ -142,10 +142,10 @@ VOID cnmTimerDestroy(IN P_ADAPTER_T prAdapter)
 	prRootTimer = &prAdapter->rRootTimer;
 
 	if (prRootTimer->fgWakeLocked) {
-		KAL_WAKE_UNLOCK(prAdapter, &prRootTimer->rWakeLock);
+		KAL_WAKE_UNLOCK(prAdapter, prRootTimer->rWakeLock);
 		prRootTimer->fgWakeLocked = FALSE;
 	}
-	KAL_WAKE_LOCK_DESTROY(prAdapter, &prRootTimer->rWakeLock);
+	KAL_WAKE_LOCK_DESTROY(prAdapter, prRootTimer->rWakeLock);
 
 	KAL_ACQUIRE_SPIN_LOCK(prAdapter, SPIN_LOCK_TIMER);
 	LINK_INITIALIZE(&prRootTimer->rLinkHead);
@@ -236,7 +236,7 @@ static VOID cnmTimerStopTimer_impl(IN P_ADAPTER_T prAdapter, IN P_TIMER_T prTime
 			kalCancelTimer(prAdapter->prGlueInfo);
 
 			if (fgAcquireSpinlock && prRootTimer->fgWakeLocked) {
-				KAL_WAKE_UNLOCK(prAdapter, &prRootTimer->rWakeLock);
+				KAL_WAKE_UNLOCK(prAdapter, prRootTimer->rWakeLock);
 				prRootTimer->fgWakeLocked = FALSE;
 			}
 		}
@@ -364,30 +364,39 @@ VOID cnmTimerDoTimeOutCheck(IN P_ADAPTER_T prAdapter)
 	prRootTimer->rNextExpiredSysTime = rCurSysTime + MGMT_MAX_TIMEOUT_INTERVAL;
 
 	LINK_FOR_EACH(prLinkEntry, prTimerList) {
+		if (prLinkEntry == NULL)
+			break;
 		prTimer = LINK_ENTRY(prLinkEntry, TIMER_T, rLinkEntry);
 		ASSERT(prTimer);
 
 		/* Check if this entry is timeout. */
 		if (!TIME_BEFORE(rCurSysTime, prTimer->rExpiredSysTime)) {
-			cnmTimerStopTimer_impl(prAdapter, prTimer, FALSE);
+			if (timerPendingTimer(prTimer)) {
+				cnmTimerStopTimer_impl(prAdapter, prTimer, FALSE);
 
-			pfMgmtTimeOutFunc = prTimer->pfMgmtTimeOutFunc;
-			ulTimeoutData = prTimer->ulData;
+				pfMgmtTimeOutFunc = prTimer->pfMgmtTimeOutFunc;
+				ulTimeoutData = prTimer->ulData;
 
-			if (prTimer->u2Minutes > 0) {
-				prTimer->u2Minutes--;
-				prTimer->rExpiredSysTime = rCurSysTime + MSEC_TO_SYSTIME(MSEC_PER_MIN);
-				LINK_INSERT_TAIL(prTimerList, &prTimer->rLinkEntry);
-			} else if (pfMgmtTimeOutFunc) {
-				KAL_RELEASE_SPIN_LOCK(prAdapter, SPIN_LOCK_TIMER);
-				(pfMgmtTimeOutFunc) (prAdapter, ulTimeoutData);
-				KAL_ACQUIRE_SPIN_LOCK(prAdapter, SPIN_LOCK_TIMER);
+				if (prTimer->u2Minutes > 0) {
+					prTimer->u2Minutes--;
+					prTimer->rExpiredSysTime = rCurSysTime + MSEC_TO_SYSTIME(MSEC_PER_MIN);
+					LINK_INSERT_TAIL(prTimerList, &prTimer->rLinkEntry);
+				} else if (pfMgmtTimeOutFunc) {
+					KAL_RELEASE_SPIN_LOCK(prAdapter, SPIN_LOCK_TIMER);
+					(pfMgmtTimeOutFunc) (prAdapter, ulTimeoutData);
+					KAL_ACQUIRE_SPIN_LOCK(prAdapter, SPIN_LOCK_TIMER);
+				}
+			} else {
+				DBGLOG(CNM, WARN, "timer was re-inited, func %p\n", prTimer->pfMgmtTimeOutFunc);
+				break;
 			}
 
 			/* Search entire list again because of nest del and add timers
 			 * and current MGMT_TIMER could be volatile after stopped
 			 */
 			prLinkEntry = (P_LINK_ENTRY_T) prTimerList;
+			if (prLinkEntry == NULL)
+				break;
 
 			prRootTimer->rNextExpiredSysTime = rCurSysTime + MGMT_MAX_TIMEOUT_INTERVAL;
 		} else if (TIME_BEFORE(prTimer->rExpiredSysTime, prRootTimer->rNextExpiredSysTime)) {
@@ -407,7 +416,7 @@ VOID cnmTimerDoTimeOutCheck(IN P_ADAPTER_T prAdapter)
 	}
 
 	if (prRootTimer->fgWakeLocked && !fgNeedWakeLock) {
-		KAL_WAKE_UNLOCK(prAdapter, &prRootTimer->rWakeLock);
+		KAL_WAKE_UNLOCK(prAdapter, prRootTimer->rWakeLock);
 		prRootTimer->fgWakeLocked = FALSE;
 	}
 

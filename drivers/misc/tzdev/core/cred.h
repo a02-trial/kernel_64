@@ -14,6 +14,7 @@
 #ifndef __TZ_CRED_H__
 #define __TZ_CRED_H__
 
+#include <linux/kconfig.h>
 #include <tz_common.h>
 
 #define UUID_SIZE		16
@@ -22,6 +23,10 @@
 #define UUID_VERSION		5
 #define UUID_VERSION_SHIFT	12
 
-int tz_format_cred(struct tz_cred *cred);
+#if IS_MODULE(CONFIG_TZDEV)
+int tz_cred_init_notifier(void);
+#endif
+
+int tz_format_cred(struct tz_cred *cred, int is_kern);
 
 #endif /* __TZ_CRED_H__ */

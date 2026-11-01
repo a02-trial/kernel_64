@@ -139,7 +139,7 @@ int mtk_p2p_cfg80211_add_key(struct wiphy *wiphy,
 	prGlueInfo = *((P_GLUE_INFO_T *) wiphy_priv(wiphy));
 
 	DBGLOG(RSN, TRACE, "mtk_p2p_cfg80211_add_key\n");
-
+#if DBG
 	if (mac_addr) {
 		DBGLOG(RSN, TRACE,
 		   "keyIdx = %d pairwise = %d mac = " MACSTR "\n", key_index, pairwise,
@@ -150,6 +150,7 @@ int mtk_p2p_cfg80211_add_key(struct wiphy *wiphy,
 	}
 	DBGLOG(RSN, TRACE, "Cipher = %x\n", params->cipher);
 	DBGLOG_MEM8(RSN, TRACE, params->key, params->key_len);
+#endif
 
 	if (params->key_len > 32) {
 		DBGLOG(RSN, WARN, "key_len [%d] is invalid!\n",
@@ -210,8 +211,8 @@ int mtk_p2p_cfg80211_add_key(struct wiphy *wiphy,
 		COPY_MAC_ADDR(rKey.arBSSID, mac_addr);
 	} else {
 		/* Note that this bit must be set. Otherwise, broadcast frames
-		* will not be encrypted and will be dropped by peer devices.
-		*/
+		 * will not be encrypted and will be dropped by peer devices.
+		 */
 		rKey.u4KeyIndex |= BIT(31); /* Tx */
 		COPY_MAC_ADDR(rKey.arBSSID, aucBCAddr);
 	}
@@ -717,7 +718,7 @@ int mtk_p2p_cfg80211_start_ap(struct wiphy *wiphy, struct net_device *dev, struc
 
 #if CFG_SPM_WORKAROUND_FOR_HOTSPOT
 		if (glIsChipNeedWakelock(prGlueInfo))
-			KAL_WAKE_LOCK(prGlueInfo->prAdapter, &prGlueInfo->prAdapter->rApWakeLock);
+			KAL_WAKE_LOCK(prGlueInfo->prAdapter, prGlueInfo->prAdapter->rApWakeLock);
 #endif
 
 	} while (FALSE);
@@ -853,7 +854,7 @@ int mtk_p2p_cfg80211_stop_ap(struct wiphy *wiphy, struct net_device *dev)
 		i4Rslt = 0;
 #if CFG_SPM_WORKAROUND_FOR_HOTSPOT
 		if (glIsChipNeedWakelock(prGlueInfo))
-			KAL_WAKE_UNLOCK(prGlueInfo->prAdapter, &prGlueInfo->prAdapter->rApWakeLock);
+			KAL_WAKE_UNLOCK(prGlueInfo->prAdapter, prGlueInfo->prAdapter->rApWakeLock);
 #endif
 	} while (FALSE);
 
@@ -1676,6 +1677,9 @@ int mtk_p2p_cfg80211_testmode_cmd(IN struct wiphy *wiphy, IN struct wireless_dev
 	case TESTMODE_CMD_ID_HS_CONFIG:
 		i4Status = mtk_p2p_cfg80211_testmode_hotspot_config_cmd(wiphy, data, len);
 		break;
+	case TESTMODE_CMD_ID_UPDATE_STA_PMKID:
+		i4Status = mtk_p2p_cfg80211_testmode_update_sta_pmkid_cmd(wiphy, wdev->netdev, data, len);
+		break;
 	default:
 		i4Status = -EINVAL;
 		break;
@@ -2079,6 +2083,59 @@ int mtk_p2p_cfg80211_testmode_sw_cmd(IN struct wiphy *wiphy, IN void *data, IN i
 
 	if (rstatus != WLAN_STATUS_SUCCESS)
 		fgIsValid = -EFAULT;
+
+	return fgIsValid;
+}
+
+int mtk_p2p_cfg80211_testmode_update_sta_pmkid_cmd(IN struct wiphy *wiphy,
+		IN struct net_device *nDev, IN void *data, IN int len)
+{
+	P_GLUE_INFO_T prGlueInfo = NULL;
+	struct NL80211_DRIVER_UPDATE_STA_PMKID_PARAMS *prParams =
+		(struct NL80211_DRIVER_UPDATE_STA_PMKID_PARAMS *) NULL;
+	PARAM_PMKID_T pmkid;
+	UINT_8 ucBssIdx = 0;
+	UINT_32 rStatus;
+	UINT_32 u4BufLen;
+	int fgIsValid = 0;
+
+	ASSERT(wiphy);
+	prGlueInfo = *((P_GLUE_INFO_T *) wiphy_priv(wiphy));
+
+	if (data && len)
+		prParams = (struct NL80211_DRIVER_UPDATE_STA_PMKID_PARAMS *) data;
+	else
+		return -EFAULT;
+
+	COPY_MAC_ADDR(pmkid.arBSSID, prParams->aucSta);
+	kalMemCopy(pmkid.arPMKID, prParams->aucPmkid, IW_PMKID_LEN);
+	pmkid.ucBssIdx = ucBssIdx;
+	if (prParams->ucAddRemove) {
+		rStatus = kalIoctl(prGlueInfo, wlanoidSetPmkid, &pmkid,
+				   sizeof(PARAM_PMKID_T),
+				   FALSE, FALSE, FALSE, FALSE, &u4BufLen);
+		if (rStatus != WLAN_STATUS_SUCCESS)
+			DBGLOG(INIT, INFO, "add pmkid error:%x\n", rStatus);
+	} else {
+		rStatus = kalIoctl(prGlueInfo, wlanoidDelPmkid, &pmkid,
+				   sizeof(PARAM_PMKID_T),
+				   FALSE, FALSE, FALSE, FALSE, &u4BufLen);
+		if (rStatus != WLAN_STATUS_SUCCESS)
+			DBGLOG(INIT, INFO, "remove pmkid error:%x\n", rStatus);
+	}
+
+	DBGLOG(P2P, LOUD,
+		"%s " MACSTR " PMKID:" PMKSTR "\n",
+		prParams->ucAddRemove?"Add":"Remove",
+		MAC2STR(prParams->aucSta),
+		prParams->aucPmkid[0], prParams->aucPmkid[1],
+		prParams->aucPmkid[2], prParams->aucPmkid[3],
+		prParams->aucPmkid[4], prParams->aucPmkid[5],
+		prParams->aucPmkid[6], prParams->aucPmkid[7],
+		prParams->aucPmkid[8], prParams->aucPmkid[9],
+		prParams->aucPmkid[10], prParams->aucPmkid[11],
+		prParams->aucPmkid[12] + prParams->aucPmkid[13],
+		prParams->aucPmkid[14], prParams->aucPmkid[15]);
 
 	return fgIsValid;
 }

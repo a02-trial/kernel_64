@@ -290,7 +290,7 @@ void dumpSTA(P_ADAPTER_T prAdapter, P_STA_RECORD_T prStaRec)
 VOID dumpBss(P_ADAPTER_T prAdapter, P_BSS_INFO_T prBssInfo)
 {
 
-	DBGLOG(SW4, INFO, "SSID %s\n", prBssInfo->aucSSID);
+	DBGLOG(SW4, INFO, "SSID %s\n", HIDE(prBssInfo->aucSSID));
 	DBGLOG(SW4, INFO, "OWN %pM\n", prBssInfo->aucOwnMacAddr);
 	DBGLOG(SW4, INFO, "BSSID %pM\n", prBssInfo->aucBSSID);
 	DBGLOG(SW4, INFO, "ucNetTypeIndex %u\n", prBssInfo->ucNetTypeIndex);

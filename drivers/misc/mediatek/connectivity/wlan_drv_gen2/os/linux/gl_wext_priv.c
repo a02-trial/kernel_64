@@ -1030,7 +1030,7 @@ int priv_driver_send_ncho_reassoc(IN struct net_device *prNetDev, IN char *pcCom
 			DBGLOG(INIT, ERROR, "NCHO get reassoc information fail 0x%x\n", rStatus);
 			return -1;
 		}
-		DBGLOG(INIT, TRACE, "NCHO ssid %s to roam\n", rParamConn.pucSsid);
+		DBGLOG(INIT, TRACE, "NCHO ssid %s to roam\n", HIDE(rParamConn.pucSsid));
 		rStatus = kalIoctl(prGlueInfo,
 				   wlanoidSetConnect,
 				   &rParamConn,
@@ -2745,7 +2745,7 @@ _priv_get_int(IN struct net_device *prNetDev,
 			UINT_16 i, j = 0;
 			UINT_8 NumOfChannel = 50;
 			UINT_8 ucMaxChannelNum = 50;
-			INT_32 ch[50];
+			INT_32 ch[50] = {0};
 			/* RF_CHANNEL_INFO_T aucChannelList[50]; */
 			P_RF_CHANNEL_INFO_T paucChannelList;
 			P_RF_CHANNEL_INFO_T ChannelList_t;
@@ -3377,7 +3377,6 @@ _priv_set_struct(IN struct net_device *prNetDev,
 #endif
 
 	case PRIV_CMD_GET_WIFI_TYPE:
-	case PRIV_CMD_SET_FCC_CERT: /* same as PRIV_CMD_GET_WIFI_TYPE */
 		{
 			int32_t i4ResultLen;
 
@@ -4806,6 +4805,20 @@ int priv_support_driver_cmd(IN struct net_device *prNetDev, IN OUT struct ifreq 
 		DBGLOG(REQ, INFO, "%s: command %s failed; Written is %d\n",
 			__func__, pcCommand, i4BytesWritten);
 		ret = -EFAULT;
+	} else { /* (i4BytesWritten >= 0) */
+		priv_cmd->used_len = i4BytesWritten;
+		if ((i4BytesWritten == 0) && (priv_cmd->total_len > 0))
+			pcCommand[0] = '\0';
+		if (i4BytesWritten >= priv_cmd->total_len)
+			i4BytesWritten = priv_cmd->total_len;
+		else
+			i4BytesWritten++;
+		priv_cmd->used_len = i4BytesWritten;
+		if (copy_to_user(prReq->ifr_data, priv_cmd,
+					sizeof(struct priv_driver_cmd_s))) {
+			ret = -EFAULT;
+			DBGLOG(REQ, INFO, "copy fail");
+		}
 	}
 
 exit:

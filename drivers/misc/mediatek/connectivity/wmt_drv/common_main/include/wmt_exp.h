@@ -186,8 +186,8 @@ typedef enum _ENUM_WMTCHIN_TYPE_T {
 	WMTCHIN_MAPPINGHWVER = WMTCHIN_HWVER + 1,
 	WMTCHIN_FWVER = WMTCHIN_MAPPINGHWVER + 1,
 	WMTCHIN_IPVER = WMTCHIN_FWVER + 1,
+	WMTCHIN_ADIE = WMTCHIN_IPVER + 1,
 	WMTCHIN_MAX,
-
 } ENUM_WMT_CHIPINFO_TYPE_T, *P_ENUM_WMT_CHIPINFO_TYPE_T;
 
 typedef enum _ENUM_WMT_FLASH_PATCH_CTRL_T {
@@ -375,6 +375,8 @@ extern MTK_WCN_BOOL mtk_wcn_wmt_assert_keyword(ENUM_WMTDRV_TYPE_T type, PUINT8 k
 
 extern MTK_WCN_BOOL mtk_wcn_wmt_do_reset(ENUM_WMTDRV_TYPE_T type);
 
+extern MTK_WCN_BOOL mtk_wcn_wmt_do_reset_only(ENUM_WMTDRV_TYPE_T type);
+
 extern INT32 mtk_wcn_wmt_msgcb_reg(ENUM_WMTDRV_TYPE_T eType, PF_WMT_CB pCb);
 
 extern INT32 mtk_wcn_wmt_msgcb_unreg(ENUM_WMTDRV_TYPE_T eType);
@@ -431,6 +433,10 @@ extern INT32 mtk_wmt_gps_mcu_ctrl(PUINT8 p_tx_data_buf, UINT32 tx_data_len, PUIN
 				  UINT32 rx_data_buf_len, PUINT32 p_rx_data_len);
 extern VOID mtk_wcn_wmt_set_mcif_mpu_protection(MTK_WCN_BOOL enable);
 extern MTK_WCN_BOOL mtk_wmt_gps_suspend_ctrl(MTK_WCN_BOOL suspend);
+
+extern INT32 mtk_wcn_wmt_mpu_lock_aquire(VOID);
+extern VOID mtk_wcn_wmt_mpu_lock_release(VOID);
+
 extern INT32 mtk_wcn_get_reset_info(PUINT8 pBuff, INT32 buffLen);
 extern INT32 mtk_wcn_get_host_assert_info(PUINT32 type, PUINT32 reason, PUINT32 en);
 

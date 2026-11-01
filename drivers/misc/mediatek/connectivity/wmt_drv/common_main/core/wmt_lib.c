@@ -105,8 +105,8 @@ struct assert_work_st {
 
 static struct assert_work_st wmt_assert_work;
 
-static INT32 g_bt_no_acl_link;
-static INT32 g_bt_no_br_acl_link;
+static INT32 g_bt_no_acl_link = 1;
+static INT32 g_bt_no_br_acl_link = 1;
 
 #define CONSYS_MET_WAIT	(1000*10) /* ms */
 #define MET_DUMP_MAX_NUM (1)
@@ -115,6 +115,8 @@ static INT32 g_bt_no_br_acl_link;
 #define EMI_MET_WRITE_OFFSET	0x4
 #define EMI_MET_DATA_OFFSET	0x8
 #define FW_PATCH_UPDATE_RST_DURATION 180 /* 180 seconds */
+
+#define WMT_LIB_DMP_CONSYS_MAX_TIMES 10
 
 /*******************************************************************************
 *                            P U B L I C   D A T A
@@ -146,9 +148,9 @@ static INT32 wmtd_worker_thread(PVOID pvData);
 
 static INT32 wmt_lib_pin_ctrl(WMT_IC_PIN_ID id, WMT_IC_PIN_STATE stat, UINT32 flag);
 static MTK_WCN_BOOL wmt_lib_hw_state_show(VOID);
-static VOID wmt_lib_utc_sync_timeout_handler(ULONG data);
+static VOID wmt_lib_utc_sync_timeout_handler(timer_handler_arg arg);
 static VOID wmt_lib_utc_sync_worker_handler(struct work_struct *work);
-static VOID wmt_lib_wmtd_worker_thread_timeout_handler(ULONG data);
+static VOID wmt_lib_wmtd_worker_thread_timeout_handler(timer_handler_arg);
 static VOID wmt_lib_wmtd_worker_thread_work_handler(struct work_struct *work);
 
 static VOID wmt_lib_assert_work_cb(struct work_struct *work);
@@ -156,7 +158,7 @@ static VOID wmt_lib_assert_work_cb(struct work_struct *work);
 *                              F U N C T I O N S
 ********************************************************************************
 */
-INT32 __weak mtk_wcn_consys_stp_btif_dpidle_ctrl(enum _ENUM_BTIF_DPIDLE_ en_flag)
+INT32 __weak mtk_wcn_consys_stp_btif_dpidle_ctrl(UINT32 en_flag)
 {
 	WMT_ERR_FUNC("mtk_wcn_consys_stp_btif_dpidle_ctrl is not define!!!\n");
 
@@ -216,6 +218,31 @@ VOID wmt_lib_assert_lock_release(VOID)
 INT32 wmt_lib_assert_lock_trylock(VOID)
 {
 	return osal_trylock_sleepable_lock(&gDevWmt.assert_lock);
+}
+
+INT32 wmt_lib_mpu_lock_aquire(VOID)
+{
+	return osal_lock_sleepable_lock(&gDevWmt.mpu_lock);
+}
+
+VOID wmt_lib_mpu_lock_release(VOID)
+{
+	osal_unlock_sleepable_lock(&gDevWmt.mpu_lock);
+}
+
+INT32 wmt_lib_power_lock_aquire(VOID)
+{
+	return osal_lock_sleepable_lock(&gDevWmt.power_lock);
+}
+
+VOID wmt_lib_power_lock_release(VOID)
+{
+	osal_unlock_sleepable_lock(&gDevWmt.power_lock);
+}
+
+INT32 wmt_lib_power_lock_trylock(VOID)
+{
+	return osal_trylock_sleepable_lock(&gDevWmt.power_lock);
 }
 
 INT32 DISABLE_PSM_MONITOR(VOID)
@@ -332,10 +359,16 @@ INT32 wmt_lib_init(VOID)
 	osal_sleepable_lock_init(&pDevWmt->idc_lock);
 	osal_sleepable_lock_init(&pDevWmt->wlan_lock);
 	osal_sleepable_lock_init(&pDevWmt->assert_lock);
+	osal_sleepable_lock_init(&pDevWmt->mpu_lock);
+	osal_sleepable_lock_init(&pDevWmt->power_lock);
 	osal_sleepable_lock_init(&pDevWmt->rActiveOpQ.sLock);
 	osal_sleepable_lock_init(&pDevWmt->rWorkerOpQ.sLock);
 	osal_sleepable_lock_init(&pDevWmt->rFreeOpQ.sLock);
 	pDevWmt->state.data = 0;
+
+	atomic_set(&pDevWmt->state_dmp_req.version, 0);
+	for (i = 0; i < WMT_LIB_DMP_SLOT; i++)
+		osal_sleepable_lock_init(&(pDevWmt->state_dmp_req.consys_ops[i].lock));
 
 	/* Initialize op queue */
 	RB_INIT(&pDevWmt->rFreeOpQ, WMT_OP_BUF_SIZE);
@@ -497,10 +530,16 @@ INT32 wmt_lib_deinit(VOID)
 	osal_sleepable_lock_deinit(&pDevWmt->rFreeOpQ.sLock);
 	osal_sleepable_lock_deinit(&pDevWmt->rActiveOpQ.sLock);
 	osal_sleepable_lock_deinit(&pDevWmt->rWorkerOpQ.sLock);
+	osal_sleepable_lock_deinit(&pDevWmt->power_lock);
+	osal_sleepable_lock_deinit(&pDevWmt->mpu_lock);
 	osal_sleepable_lock_deinit(&pDevWmt->idc_lock);
 	osal_sleepable_lock_deinit(&pDevWmt->wlan_lock);
 	osal_sleepable_lock_deinit(&pDevWmt->assert_lock);
 	osal_sleepable_lock_deinit(&pDevWmt->psm_lock);
+
+	for (i = 0; i < WMT_LIB_DMP_SLOT; i++)
+		osal_sleepable_lock_deinit(&(pDevWmt->state_dmp_req.consys_ops[i].lock));
+
 	osal_event_deinit(&pDevWmt->rWmtdWq);
 	osal_event_deinit(&pDevWmt->rWmtdWorkerWq);
 
@@ -1052,7 +1091,7 @@ static INT32 wmt_lib_is_bt_able_to_reset(VOID)
 		ULONG local_time;
 		struct rtc_time tm;
 
-		do_gettimeofday(&time);
+		osal_do_gettimeofday(&time);
 		local_time = (ULONG)(time.tv_sec - (sys_tz.tz_minuteswest * 60));
 		rtc_time_to_tm(local_time, &tm);
 		if (tm.tm_hour == 2)
@@ -1215,7 +1254,8 @@ static INT32 wmtd_thread(void *pvData)
 			/* when whole chip reset, only HW RST and SW RST cmd can execute */
 			if ((pOp->op.opId == WMT_OPID_HW_RST)
 			    || (pOp->op.opId == WMT_OPID_SW_RST)
-			    || (pOp->op.opId == WMT_OPID_GPIO_STATE)) {
+			    || (pOp->op.opId == WMT_OPID_GPIO_STATE)
+			    || (pOp->op.opId == WMT_OPID_GET_CONSYS_STATE)) {
 				iResult = wmt_core_opid(&pOp->op);
 			} else {
 				iResult = -2;
@@ -1373,7 +1413,7 @@ met_exit:
 	return 0;
 };
 
-static VOID wmt_lib_wmtd_worker_thread_timeout_handler(ULONG data)
+static VOID wmt_lib_wmtd_worker_thread_timeout_handler(timer_handler_arg arg)
 {
 	schedule_work(&gDevWmt.wmtd_worker_thread_work);
 }
@@ -1756,6 +1796,8 @@ UINT32 wmt_lib_get_icinfo(ENUM_WMT_CHIPINFO_TYPE_T index)
 		return gDevWmt.fw_ver;
 	else if (index == WMTCHIN_IPVER)
 		return gDevWmt.ip_ver;
+	else if (index == WMTCHIN_ADIE)
+		return mtk_wcn_consys_get_adie_chipid();
 
 	return 0;
 
@@ -1887,7 +1929,7 @@ INT32 wmt_lib_reg_rw(UINT32 isWrite, UINT32 offset, PUINT32 pvalue, UINT32 mask)
 	}
 
 	pSignal = &pOp->signal;
-	pSignal->timeoutValue = MAX_EACH_WMT_CMD;
+	pSignal->timeoutValue = MAX_WMT_OP_TIMEOUT;
 	value = *pvalue;
 	WMT_DBG_FUNC("OPID_REG_RW isWrite(%u) offset(0x%x) value(0x%x) mask(0x%x)\n\n",
 		     isWrite, offset, *pvalue, mask);
@@ -1938,7 +1980,7 @@ INT32 wmt_lib_efuse_rw(UINT32 isWrite, UINT32 offset, PUINT32 pvalue, UINT32 mas
 	}
 
 	pSignal = &pOp->signal;
-	pSignal->timeoutValue = MAX_EACH_WMT_CMD;
+	pSignal->timeoutValue = MAX_WMT_OP_TIMEOUT;
 	value = *pvalue;
 	WMT_DBG_FUNC("OPID_EFUSE_RW isWrite(%u) offset(0x%x) value(0x%x) mask(0x%x)\n\n",
 		     isWrite, offset, *pvalue, mask);
@@ -2052,7 +2094,7 @@ P_WMT_PATCH_INFO wmt_lib_get_patch_info(VOID)
  */
 INT32 wmt_lib_set_aif(enum CMB_STUB_AIF_X aif, MTK_WCN_BOOL share)
 {
-	if (aif >= CMB_STUB_AIF_MAX) {
+	if (aif < 0 || aif >= CMB_STUB_AIF_MAX) {
 		WMT_ERR_FUNC("invalid aif (%d)\n", aif);
 		return -1;
 	}
@@ -2316,7 +2358,7 @@ ENUM_WMTRSTRET_TYPE_T wmt_lib_cmb_rst(ENUM_WMTRSTSRC_TYPE_T src)
 	WMT_INFO_FUNC("coredump mode == %d. Connsys coredump is %s.",
 			coredump_mode, coredump_mode ? "enabled" : "disabled");
 
-	if (src < WMTRSTSRC_RESET_MAX)
+	if (src >= 0 && src < WMTRSTSRC_RESET_MAX)
 		WMT_INFO_FUNC("reset source = %s\n", srcName[src]);
 
 	if (src == WMTRSTSRC_RESET_TEST) {
@@ -2403,6 +2445,7 @@ ENUM_WMTRSTRET_TYPE_T wmt_lib_cmb_rst(ENUM_WMTRSTSRC_TYPE_T src)
 rstDone:
 	osal_clear_bit(WMT_STAT_RST_ON, &pDevWmt->state);
 	chip_reset_only = 0;
+	mtk_wcn_consys_sleep_info_restore();
 	return retval;
 }
 
@@ -2514,6 +2557,9 @@ VOID wmt_lib_set_patch_info(P_WMT_PATCH_INFO pPatchinfo)
 VOID wmt_lib_set_rom_patch_info(struct wmt_rom_patch_info *PatchInfo, ENUM_WMTDRV_TYPE_T type)
 {
 	P_DEV_WMT pWmtDev = &gDevWmt;
+
+	if (type < 0)
+		return;
 
 	/* Allow info of a type to be set only once, to avoid inproper usage */
 	if (pWmtDev->pWmtRomPatchInfo[type])
@@ -2658,6 +2704,10 @@ PUINT8 wmt_lib_get_cpupcr_xml_format(PUINT32 pLen)
 	return &g_cpupcr_buf[0];
 }
 
+
+/**
+ * called by wmt_dev wmt_dev_proc_for_dump_info_read
+ */
 PUINT8 wmt_lib_get_cpupcr_reg_info(PUINT32 pLen, PUINT32 consys_reg)
 {
 	osal_memset(&g_cpupcr_buf[0], 0, WMT_STP_CPUPCR_BUF_SIZE);
@@ -2788,7 +2838,7 @@ INT32 wmt_lib_wifi_fem_cfg_report(PVOID pvInfoBuf)
 {
 	INT32 iRet = 0;
 	ULONG addr = 0;
-	WMT_GEN_CONF *pWmtGenConf;
+	WMT_GEN_CONF *pWmtGenConf = NULL;
 
 	/* sanity check */
 	ASSERT(pvInfoBuf);
@@ -2936,7 +2986,7 @@ UINT32 wmt_lib_get_ext_ldo(VOID)
 	return gDevWmt.ext_ldo_flag;
 }
 
-static VOID wmt_lib_utc_sync_timeout_handler(ULONG data)
+static VOID wmt_lib_utc_sync_timeout_handler(timer_handler_arg arg)
 {
 	schedule_work(&gDevWmt.utcSyncWorker);
 }
@@ -2996,7 +3046,7 @@ INT32 wmt_lib_gps_mcu_ctrl(PUINT8 p_tx_data_buf, UINT32 tx_data_len, PUINT8 p_rx
 	}
 
 	pSignal = &pOp->signal;
-	pSignal->timeoutValue = MAX_EACH_WMT_CMD;
+	pSignal->timeoutValue = MAX_WMT_OP_TIMEOUT;
 	pOp->op.opId = WMT_OPID_GPS_MCU_CTRL;
 	pOp->op.au4OpData[0] = (SIZE_T)p_tx_data_buf;
 	pOp->op.au4OpData[1] = tx_data_len;
@@ -3234,37 +3284,104 @@ VOID wmt_lib_trigger_assert_keyword_delay(ENUM_WMTDRV_TYPE_T type, UINT32 reason
 
 	a->type = type;
 	a->reason = reason;
-	snprintf(a->keyword, sizeof(a->keyword), "%s", keyword);
-	WMT_ERR_FUNC("Assert: type = %d, reason = %d, keyword = %s", type, reason, keyword);
-	schedule_work(&(a->work));
+	if (snprintf(a->keyword, sizeof(a->keyword), "%s", keyword) < 0) {
+		WMT_INFO_FUNC("snprintf a->keyword fail\n");
+	} else {
+		WMT_ERR_FUNC("Assert: type = %d, reason = %d, keyword = %s", type, reason, keyword);
+		schedule_work(&(a->work));
+	}
 }
 
-INT32 wmt_lib_resume_dump_info(VOID)
+INT32 wmt_lib_dmp_consys_state(P_CONSYS_STATE_DMP_INFO dmp_info,
+			unsigned int cpupcr_times, unsigned int slp_ms)
 {
 	P_OSAL_OP pOp;
-	MTK_WCN_BOOL bRet;
+	MTK_WCN_BOOL bRet = MTK_WCN_BOOL_TRUE;
 	P_OSAL_SIGNAL pSignal;
+	P_CONSYS_STATE_DMP_OP dmp_op = NULL;
+	P_CONSYS_STATE_DMP_OP tmp_op;
+	int i, wait_ms = 1000, tmp;
+	struct consys_state_dmp_req *p_req = &gDevWmt.state_dmp_req;
 
-	WMT_STEP_DO_ACTIONS_FUNC(STEP_TRIGGER_POINT_WHEN_AP_RESUME);
 
-	if (mtk_consys_check_reg_readable() == 0)
-		return MTK_WCN_BOOL_TRUE;
+	if (cpupcr_times > WMT_LIB_DMP_CONSYS_MAX_TIMES) {
+		pr_warn("dump too many times [%d]\n", cpupcr_times);
+		return MTK_WCN_BOOL_FALSE;
+	}
+
+	/* make sure:						*/
+	/* 1. consys already power on		*/
+	/* 2. consys register is readable	*/
+	if (wmt_lib_get_drv_status(WMTDRV_TYPE_WMT) != DRV_STS_FUNC_ON
+			|| osal_test_bit(WMT_STAT_PWR, &gDevWmt.state) == 0) {
+		return MTK_WCN_BOOL_FALSE;
+	}
+
+	for (i = 0; i < WMT_LIB_DMP_SLOT; i++) {
+		tmp_op = &p_req->consys_ops[i];
+		if (osal_trylock_sleepable_lock(&tmp_op->lock) == 1) {
+			if (tmp_op->status == WMT_DUMP_STATE_NONE) {
+				tmp = atomic_add_return(1, &p_req->version);
+				dmp_op = tmp_op;
+				dmp_op->status = WMT_DUMP_STATE_SCHEDULED;
+				dmp_op->version = tmp;
+			}
+			osal_unlock_sleepable_lock(&tmp_op->lock);
+			if (dmp_op != NULL)
+				break;
+		}
+	}
+
+	if (dmp_op == NULL)
+		return MTK_WCN_BOOL_FALSE;
+
+	memset(&dmp_op->dmp_info, 0, sizeof(struct consys_state_dmp_info));
+	dmp_op->times = cpupcr_times;
+	dmp_op->cpu_sleep_ms = slp_ms;
 
 	pOp = wmt_lib_get_free_op();
-
 	if (!pOp) {
-		WMT_DBG_FUNC("get_free_lxop fail\n");
-		return MTK_WCN_BOOL_FALSE;
+		WMT_DBG_FUNC("get_free_op fail\n");
+		bRet = MTK_WCN_BOOL_FALSE;
+		goto err;
 	}
+
+	tmp = cpupcr_times * slp_ms;
+	if (wait_ms < tmp)
+		wait_ms = tmp + 300;
+
 	pSignal = &pOp->signal;
-	pOp->op.opId = WMT_OPID_RESUME_DUMP_INFO;
-	pSignal->timeoutValue = 0;
+	pOp->op.opId = WMT_OPID_GET_CONSYS_STATE;
+	pOp->op.au4OpData[0] = (SIZE_T)dmp_op;
+	pOp->op.au4OpData[1] = (SIZE_T)dmp_op->version;
+	pSignal->timeoutValue = wait_ms;
 
 	bRet = wmt_lib_put_act_op(pOp);
+
 	if (bRet == MTK_WCN_BOOL_FALSE) {
-		WMT_WARN_FUNC("WMT_OPID_RESUME_DUMP_INFO failed\n");
-		return MTK_WCN_BOOL_FALSE;
+		WMT_WARN_FUNC("WMT_OPID_GET_CONSYS_STATE failed\n");
+		goto err;
 	}
 
-	return MTK_WCN_BOOL_TRUE;
+	memcpy(dmp_info, &dmp_op->dmp_info, sizeof(struct consys_state_dmp_info));
+err:
+	osal_lock_sleepable_lock(&dmp_op->lock);
+	dmp_op->status = WMT_DUMP_STATE_NONE;
+	osal_unlock_sleepable_lock(&dmp_op->lock);
+	return bRet;
 }
+
+INT32 wmt_lib_reg_readable(VOID)
+{
+	return wmt_lib_reg_readable_by_addr(0);
+}
+
+INT32 wmt_lib_reg_readable_by_addr(SIZE_T addr)
+{
+	if (wmt_lib_get_drv_status(WMTDRV_TYPE_WMT) == DRV_STS_POWER_OFF
+			|| osal_test_bit(WMT_STAT_PWR, &gDevWmt.state) == 0) {
+		return MTK_WCN_BOOL_FALSE;
+	}
+	return mtk_consys_check_reg_readable_by_addr(addr);
+}
+

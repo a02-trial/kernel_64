@@ -1,6 +1,6 @@
 #include <linux/input/input_booster.h>
 #include <vcorefs_v3/mtk_vcorefs_manager.h>
-#define KIR_SYSFS 13
+#define KIR_SYSF 13
 #define DDR_MAX 999
 
 #ifndef CONFIG_CPU_FREQ_LIMIT
@@ -40,7 +40,7 @@ void ib_set_booster(long *qos_values)
 		case DDRFREQ:
 			if (value == DDR_MAX)
 				value = 0;
-			vcorefs_request_dvfs_opp(KIR_SYSFS, value);
+			vcorefs_request_dvfs_opp(KIR_SYSF, value);
 			pr_booster("%s :: bus value : %ld", __func__, value);
 			break;
 		default:
@@ -74,7 +74,7 @@ void ib_release_booster(long *rel_flags)
 			pr_booster("%s :: cpufreq value : %ld", __func__, value);
 			break;
 		case DDRFREQ:
-			vcorefs_request_dvfs_opp(KIR_SYSFS, value);
+			vcorefs_request_dvfs_opp(KIR_SYSF, value);
 			pr_booster("%s :: bus value : %ld", __func__, value);
 			break;
 		default:

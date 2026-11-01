@@ -1,3 +1,4 @@
+MTK_PLATFORM := $(subst ",,$(CONFIG_MTK_PLATFORM))
 ###############################################################################
 # Necessary Check
 
@@ -23,8 +24,10 @@ CONFIG_MTK_WIFI_ONLY=n
 ccflags-y += -I$(srctree)/drivers/misc/mediatek/include
 ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
 ccflags-y += -I$(srctree)/drivers/misc/mediatek/base/power/$(MTK_PLATFORM)
+
 DRIVER_BUILD_DATE=$(shell date +%Y%m%d%H%M%S)
 ccflags-y += -DDRIVER_BUILD_DATE='"$(DRIVER_BUILD_DATE)"'
+
 # ---------------------------------------------------
 # Compile Options
 # ---------------------------------------------------
@@ -83,11 +86,7 @@ else
 endif
 
 ifeq ($(CONFIG_MTK_TC1_FEATURE), y)
-ifeq ($(CONFIG_MTK_GPT_SCHEME_SUPPORT), y)
-    ccflags-y += -I$(srctree)/drivers/misc/mediatek/tc1_interface/gpt
-else
-    ccflags-y += -I$(srctree)/drivers/misc/mediatek/tc1_interface/pmt
-endif
+    ccflags-y += -I$(srctree)/drivers/misc/mediatek/tc1_interface
     ccflags-y += -DCFG_TC1_FEATURE=1
     ccflags-y += -DCFG_SUPPORT_CFG_FILE=1
 else
@@ -312,6 +311,11 @@ $(MODULE_NAME)-objs  += $(PLAT_OBJS)
 endif
 
 ifeq ($(CONFIG_ARCH_MT6735M), y)
+PLAT_OBJS := $(PLAT_DIR)plat_priv.o
+$(MODULE_NAME)-objs  += $(PLAT_OBJS)
+endif
+
+ifeq ($(CONFIG_MACH_MT6735M), y)
 PLAT_OBJS := $(PLAT_DIR)plat_priv.o
 $(MODULE_NAME)-objs  += $(PLAT_OBJS)
 endif

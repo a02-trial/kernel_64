@@ -45,6 +45,9 @@
 #ifdef CONFIG_MTK_DFD_INTERNAL_DUMP
 #include <mtk_platform_debug.h>
 #endif
+#ifdef CONFIG_SEC_DEBUG
+#include <linux/sec_debug.h>
+#endif
 
 static int crashing_cpu;
 
@@ -52,8 +55,6 @@ static int crashing_cpu;
 static note_buf_t __percpu *crash_notes;
 
 static unsigned long mrdump_output_lbaooo;
-
-static char mrdump_lk[12];
 
 static u32 *mrdump_append_elf_note(u32 *buf, char *name, unsigned int type,
 				void *data, size_t data_len)
@@ -169,7 +170,9 @@ static void mrdump_stop_noncore_cpu(void *unused)
 		elf_core_copy_kernel_regs(
 			(elf_gregset_t *)&crash_record->cpu_regs[cpu], &regs);
 		crash_save_cpu((struct pt_regs *)&regs, cpu);
-
+#ifdef CONFIG_SEC_DEBUG
+		sec_save_context(cpu, (struct pt_regs *)&regs);
+#endif	
 		creg = (void *)&crash_record->cpu_creg[cpu];
 
 		mrdump_save_control_register(creg);
@@ -263,6 +266,9 @@ void __mrdump_create_oops_dump(enum AEE_REBOOT_MODE reboot_mode,
 			/* null regs, no register dump */
 			if (regs) {
 				crash_save_cpu(regs, cpu);
+#ifdef CONFIG_SEC_DEBUG
+				sec_save_context(cpu, regs);
+#endif					
 				elf_core_copy_kernel_regs(
 					(elf_gregset_t *)
 					&crash_record->cpu_regs[cpu],
@@ -290,24 +296,11 @@ int __init mrdump_full_init(void)
 #ifdef CONFIG_MTK_DFD_INTERNAL_DUMP
 	int res;
 #endif
-
-	if (mrdump_cblock == NULL) {
-		memset(mrdump_lk, 0, sizeof(mrdump_lk));
-		pr_notice("%s: MT-RAMDUMP no control block\n", __func__);
-		return -EINVAL;
-	}
-
 	/* Allocate memory for saving cpu registers. */
 	crash_notes = alloc_percpu(note_buf_t);
 	if (!crash_notes) {
 		pr_notice("MT-RAMDUMP: Memory allocation for saving cpu register failed\n");
 		return -ENOMEM;
-	}
-
-	if (strcmp(mrdump_lk, MRDUMP_GO_DUMP) != 0) {
-		pr_notice("%s: MT-RAMDUMP init failed, lk version %s not matched.\n",
-				__func__, mrdump_lk);
-		return -EINVAL;
 	}
 
 	mrdump_cblock->enabled = MRDUMP_ENABLE_COOKIE;
@@ -328,14 +321,14 @@ int __init mrdump_full_init(void)
 
 #if CONFIG_SYSFS
 
-static ssize_t mrdump_version_show(struct kobject *kobj,
-		struct kobj_attribute *attr, char *buf)
+static ssize_t mrdump_version_show(struct module_attribute *attr,
+		struct module_kobject *kobj, char *buf)
 {
-	return snprintf(buf, PAGE_SIZE, "%s\n", MRDUMP_GO_DUMP);
+	return snprintf(buf, PAGE_SIZE, "%s", MRDUMP_GO_DUMP);
 }
 
-static struct kobj_attribute mrdump_version_attribute =
-	__ATTR(version, 0600, mrdump_version_show, NULL);
+static struct module_attribute mrdump_version_attribute =
+	__ATTR(version, 0400, mrdump_version_show, NULL);
 
 static struct attribute *attrs[] = {
 	&mrdump_version_attribute.attr,
@@ -386,9 +379,6 @@ static int param_set_mrdump_lbaooo(const char *val,
 
 	return retval;
 }
-
-/* 0444: S_IRUGO */
-module_param_string(lk, mrdump_lk, sizeof(mrdump_lk), 0444);
 
 /* sys/modules/mrdump/parameter/lbaooo */
 struct kernel_param_ops param_ops_mrdump_lbaooo = {

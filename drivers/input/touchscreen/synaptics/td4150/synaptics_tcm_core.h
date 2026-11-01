@@ -57,7 +57,7 @@
 
 #define SYNAPTICS_TCM_ID_PRODUCT (1 << 0)
 #define SYNAPTICS_TCM_ID_VERSION 0x0201
-#define SYNAPTICS_TCM_ID_SUBVERSION 2
+#define SYNAPTICS_TCM_ID_SUBVERSION 0
 
 #define PLATFORM_DRIVER_NAME "synaptics_tcm"
 
@@ -247,7 +247,7 @@ enum dynamic_config_id {
 	DC_ENABLE_GLOVE,
 	DC_ENABLE_SENSITIVITY = 0xCD,
 	DC_ENABLE_EDGE_REJECT = 0xCE,
-	DC_ENABLE_FACE_DETECT = 0xD0,	
+	DC_ENABLE_DEADZONE = 0xCF,
 };
 
 enum cmd {
@@ -291,7 +291,6 @@ enum cmd {
 	CMD_SPI_MASTER_WRITE_THEN_READ_EXTENDED = 0x43,
 	CMD_ENTER_IO_BRIDGE_MODE = 0x44,
 	CMD_ROMBOOT_DOWNLOAD = 0x45,
-	CMD_GET_FACE_AREA = 195,
 };
 
 enum status_code {
@@ -314,7 +313,6 @@ enum report_type {
 	REPORT_RAW = 0x13,
 	REPORT_STATUS = 0x1b,
 	REPORT_PRINTF = 0x82,
-	REPORT_FW_PRINTF = 0x84,
 	REPORT_HDL_ROMBOOT = 0xfd,
 	REPORT_HDL_F35 = 0xfe,
 };
@@ -349,12 +347,6 @@ enum helper_task {
 	HELP_SEND_REINIT_NOTIFICATION,
 	HELP_TOUCH_REINIT,
 	HELP_SEND_ROMBOOT_HDL,
-};
-
-enum power_state {
-	PWR_ON = 0,
-	PWR_OFF,
-	LP_MODE,
 };
 
 struct syna_tcm_helper {
@@ -469,12 +461,11 @@ struct syna_tcm_hcd {
 	wait_queue_head_t reflash_wq;
 	int irq;
 	bool do_polling;
-//	bool in_suspend;
+	bool in_suspend;
 	bool irq_enabled;
 	bool in_hdl_mode;
 	bool is_detected;
 	bool wakeup_gesture_enabled;
-	int lp_state;	
 	unsigned char finger_state[MAX_FINGER_NUM];
 	unsigned int finger_x[MAX_FINGER_NUM];
 	unsigned int finger_y[MAX_FINGER_NUM];
@@ -533,20 +524,16 @@ struct syna_tcm_hcd {
 	struct syna_tcm_watchdog watchdog;
 	struct syna_tcm_features features;
 	struct sec_cmd_data sec;
-	struct completion resume_done;
 	char *print_buf;
 	short *pFrame;
 	unsigned char *image;
 	bool force_update;
 	int get_fw;
 	int sensitivity_mode;
-	int ear_detect_enable;
 	u32 print_info_cnt_open;
 	u32 print_info_cnt_release;
 	int noise;
 	bool tsp_dump_lock;
-	long prox_power_off;
-	u8 hover_event;	//virtual_prox
 	const struct syna_tcm_hw_interface *hw_if;
 	int (*reset)(struct syna_tcm_hcd *tcm_hcd);
 	int (*reset_n_reinit)(struct syna_tcm_hcd *tcm_hcd, bool hw, bool update_wd);

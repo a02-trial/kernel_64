@@ -1,14 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
- * Copyright (C) 2015 MediaTek Inc.
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
+ * Copyright (c) 2015 MediaTek Inc.
  */
 
 #ifndef __CMDQ_HELPER_EXT_H__
@@ -115,7 +107,9 @@ if (status < 0)		\
 {		\
 do {			\
 	char dispatchedTag[50]; \
-	snprintf(dispatchedTag, 50, "CRDISPATCH_KEY:%s", tag); \
+	int len = snprintf(dispatchedTag, 50, "CRDISPATCH_KEY:%s", tag); \
+	if (len >= 50) \
+		pr_debug("%s:%d len:%d over 50\n", __func__, __LINE__, len); \
 	pr_notice("[CMDQ][AEE]"string, ##args); \
 	cmdq_core_save_first_dump("[CMDQ][AEE]"string, ##args); \
 	cmdq_core_turnoff_first_dump(); \
@@ -137,7 +131,9 @@ do { \
 {		\
 do {			\
 	char dispatchedTag[50]; \
-	snprintf(dispatchedTag, 50, "CRDISPATCH_KEY:%s", tag); \
+	int len = snprintf(dispatchedTag, 50, "CRDISPATCH_KEY:%s", tag); \
+	if (len >= 50) \
+		pr_debug("%s:%d len:%d over 50\n", __func__, __LINE__, len); \
 	pr_debug("[CMDQ][AEE] AEE not READY!!!"); \
 	pr_debug("[CMDQ][AEE]"string, ##args); \
 	cmdq_core_save_first_dump("[CMDQ][AEE]"string, ##args); \
@@ -180,7 +176,7 @@ do {if (cmdq_core_met_enabled()) met_tag_oneshot(args);	\
 #define CMDQ_PROF_ONESHOT(args...)
 #endif
 
-#if IS_ENABLED(CONFIG_MMPROFILE)
+#if IS_ENABLED(CMDQ_MMPROFILE_SUPPORT)
 #define CMDQ_PROF_MMP(args...)\
 {\
 do {if (1) mmprofile_log_ex(args); } while (0);	\
@@ -542,6 +538,7 @@ struct WriteAddrStruct {
 	void *va;
 	dma_addr_t pa;
 	pid_t user;
+	bool pool;
 };
 
 /* resource unit between each module */
@@ -639,13 +636,6 @@ struct DumpCommandBufferStruct {
 };
 
 /* TODO: add stress support */
-#if 0
-typedef void (*cmdqStressCallback)(struct TaskStruct *task, s32 thread);
-
-struct StressContextStruct {
-	cmdqStressCallback exec_suspend;
-};
-#endif
 
 struct cmdq_event_table {
 	u16 event;	/* cmdq event enum value */
@@ -720,6 +710,7 @@ struct cmdqRecStruct {
 
 	/* task executing data */
 	atomic_t exec;
+	atomic_t wait_protect;
 	enum TASK_STATE_ENUM state;	/* task life cycle */
 	s32 thread;
 	enum cmdq_thread_dispatch thd_dispatch;
@@ -782,26 +773,8 @@ struct cmdqRecStruct {
 
 /* TODO: add controller support */
 struct cmdq_controller {
-#if 0
-	s32 (*compose)(struct cmdqCommandStruct *desc,
-		struct TaskStruct *task);
-	s32 (*copy_command)(struct cmdqCommandStruct *desc,
-		struct TaskStruct *task);
-#endif
 	s32 (*get_thread_id)(s32 scenario);
 	s32 (*handle_wait_result)(struct cmdqRecStruct *handle, s32 thread);
-#if 0
-	s32 (*execute_prepare)(struct TaskStruct *task, s32 thread);
-	s32 (*execute)(struct TaskStruct *task, s32 thread);
-	s32 (*handle_wait_result)(struct TaskStruct *task, s32 thread,
-		s32 wait_ret);
-	void (*free_buffer)(struct TaskStruct *task);
-	void (*append_command)(struct TaskStruct *task, u32 arg_a, u32 arg_b);
-	void (*dump_err_buffer)(const struct TaskStruct *task, u32 *hwpc);
-	void (*dump_summary)(const struct TaskStruct *task, s32 thread,
-		const struct TaskStruct **ngtask_out,
-		struct NGTaskInfoStruct **nginfo_out);
-#endif
 	bool change_jump;
 };
 
@@ -883,9 +856,11 @@ s32 cmdq_core_save_first_dump(const char *string, ...);
 
 /* Allocate/Free HW use buffer, e.g. command buffer forCMDQ HW */
 void *cmdq_core_alloc_hw_buffer_clt(struct device *dev, size_t size,
-	dma_addr_t *dma_handle, const gfp_t flag, enum CMDQ_CLT_ENUM clt);
+	dma_addr_t *dma_handle, const gfp_t flag, enum CMDQ_CLT_ENUM clt,
+	bool *pool);
 void cmdq_core_free_hw_buffer_clt(struct device *dev, size_t size,
-	void *cpu_addr, dma_addr_t dma_handle, enum CMDQ_CLT_ENUM clt);
+	void *cpu_addr, dma_addr_t dma_handle, enum CMDQ_CLT_ENUM clt,
+	bool pool);
 void *cmdq_core_alloc_hw_buffer(struct device *dev,
 	size_t size, dma_addr_t *dma_handle, const gfp_t flag);
 void cmdq_core_free_hw_buffer(struct device *dev, size_t size,

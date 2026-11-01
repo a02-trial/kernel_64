@@ -22,7 +22,9 @@
 
 #include "tzdev_internal.h"
 #include "core/cred.h"
+#include "core/subsystem.h"
 #include "core/sysdep.h"
+#include "debug/trace.h"
 
 struct cred_cache_entry {
 	struct list_head link;
@@ -61,9 +63,7 @@ static int tz_crypto_file_sha256(uint8_t *hash, struct file *file)
 
 	{
 		SHASH_DESC_ON_STACK(desc, tfm);
-
-		desc->tfm = tfm;
-		desc->flags = 0;
+		sysdep_shash_desc_init(desc, tfm);
 
 		ret = crypto_shash_init(desc);
 		if (ret < 0)
@@ -104,16 +104,21 @@ static int tz_format_cred_user(struct tz_cred *cred)
 	struct pid *pid = get_task_pid(current, PIDTYPE_PID);
 	struct file *exe_file;
 	int ret = 0;
+	int iterations_ctr = 0;
 
 	mutex_lock(&cred_cache_mutex);
 	list_for_each_entry(cred_cache_entry, &cred_cache, link) {
+		++iterations_ctr;
 		if (cred_cache_entry->pid == pid) {
 			memcpy(&cred->hash, &cred_cache_entry->hash,
 					sizeof(cred->hash));
+			trace_tzdev_cred_cache_hit(iterations_ctr);
 			goto unlock;
 		}
 	}
-	
+
+	trace_tzdev_cred_cache_miss(iterations_ctr);
+
 	exe_file = get_mm_exe_file(current->mm);
 	if (!exe_file) {
 		ret = -EINVAL;
@@ -140,6 +145,7 @@ static int tz_format_cred_user(struct tz_cred *cred)
 	}
 
 	memcpy(&cred->hash, hash, SHA256_DIGEST_SIZE);
+	cred->type = TZ_CRED_HASH;
 
 unlock:
 	mutex_unlock(&cred_cache_mutex);
@@ -155,6 +161,7 @@ unlock:
 
 static int tz_format_cred_kernel(struct tz_cred *cred)
 {
+	cred->type = TZ_CRED_KERNEL;
 	cred->pid = current->real_parent->pid;
 	cred->uid = __kuid_val(current_uid());
 	cred->gid = __kgid_val(current_gid());
@@ -164,13 +171,13 @@ static int tz_format_cred_kernel(struct tz_cred *cred)
 	return 0;
 }
 
-int tz_format_cred(struct tz_cred *cred)
+int tz_format_cred(struct tz_cred *cred, int is_kern)
 {
 	BUILD_BUG_ON(sizeof(pid_t) != sizeof(cred->pid));
 	BUILD_BUG_ON(sizeof(uid_t) != sizeof(cred->uid));
 	BUILD_BUG_ON(sizeof(gid_t) != sizeof(cred->gid));
 
-	return current->mm ? tz_format_cred_user(cred) : tz_format_cred_kernel(cred);
+	return (current->mm && !is_kern) ? tz_format_cred_user(cred) : tz_format_cred_kernel(cred);
 }
 
 static struct delayed_work tz_cred_gc_work;
@@ -181,7 +188,7 @@ static void tz_cred_gc_callback(struct work_struct *work)
 
 	mutex_lock(&cred_cache_mutex);
 	list_for_each_entry_safe(cred_cache_entry, tmp, &cred_cache, link) {
-		if (atomic_read(&cred_cache_entry->pid->count) == 1) {
+		if (sysdep_pid_refcount_read(cred_cache_entry->pid) == 1) {
 			list_del(&cred_cache_entry->link);
 			put_pid(cred_cache_entry->pid);
 			kfree(cred_cache_entry);
@@ -192,7 +199,7 @@ static void tz_cred_gc_callback(struct work_struct *work)
 	queue_delayed_work(system_wq, to_delayed_work(work), 500);
 }
 
-static int __init tz_cred_init_notifier(void)
+int tz_cred_init_notifier(void)
 {
 	INIT_DEFERRABLE_WORK(&tz_cred_gc_work, tz_cred_gc_callback);
 	queue_delayed_work(system_wq, &tz_cred_gc_work, 500);
@@ -200,4 +207,4 @@ static int __init tz_cred_init_notifier(void)
 	return 0;
 }
 
-module_init(tz_cred_init_notifier);
+tzdev_initcall(tz_cred_init_notifier);

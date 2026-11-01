@@ -382,8 +382,8 @@ int set_cur_volt_wrapper(struct mt_cpu_dvfs *p, unsigned int volt)
 			udelay(delay_us);
 
 			cpufreq_ver_dbg("@%s(): UP --> old_vsram=%d, cur_vsram=%d, old_vproc=%d, cur_vproc=%d, delay=%d\n",
-			     __func__, old_vsram, cur_vsram,
-			     old_vproc, cur_vproc, delay_us);
+				__func__, old_vsram, cur_vsram,
+				old_vproc, cur_vproc, delay_us);
 		} while (cur_vsram < target_vsram);
 		notify_cpu_volt_sampler(p->id, volt, VOLT_UP, VOLT_POSTCHANGE);
 	}
@@ -429,8 +429,8 @@ int set_cur_volt_wrapper(struct mt_cpu_dvfs *p, unsigned int volt)
 			udelay(delay_us);
 
 			cpufreq_ver_dbg("@%s(): DOWN --> old_vsram=%d, cur_vsram=%d, old_vproc=%d, cur_vproc=%d, delay=%d\n",
-			     __func__, old_vsram, cur_vsram,
-			     old_vproc, cur_vproc, delay_us);
+				__func__, old_vsram, cur_vsram,
+				old_vproc, cur_vproc, delay_us);
 		} while (cur_vproc > volt);
 		notify_cpu_volt_sampler(p->id, volt,
 			VOLT_DOWN, VOLT_POSTCHANGE);
@@ -864,8 +864,8 @@ static int _mt_cpufreq_cpu_CB(enum hp_action action,
 		}
 	}
 
-	cpufreq_ver_dbg("@%s():%d, cpu = %u, action = %u, num_online_cpus = %u\n"
-	, __func__, __LINE__, cpu, action, online_cpus);
+	cpufreq_ver_dbg("@%s():%d, cpu = %u, action = %u, num_online_cpus = %u\n",
+		__func__, __LINE__, cpu, action, online_cpus);
 
 	return NOTIFY_OK;
 }
@@ -1028,11 +1028,11 @@ static void ppm_limit_callback(struct ppm_client_req req)
 
 	cpufreq_para_lock();
 	for (i = 0; i < ppm->cluster_num; i++) {
-		cpufreq_ver_dbg("[%d]:cluster_id = %d, cpu_id = %d, min_cpufreq_idx = %d, max_cpufreq_idx = %d\n",
-			i, ppm->cpu_limit[i].cluster_id,
-			ppm->cpu_limit[i].cpu_id,
-			ppm->cpu_limit[i].min_cpufreq_idx,
-			ppm->cpu_limit[i].max_cpufreq_idx);
+		cpufreq_ver_dbg("[%d]:cluster_id = %d, cpu_id = %d, min_idx = %d, max_idx = %d\n",
+		i, ppm->cpu_limit[i].cluster_id,
+		ppm->cpu_limit[i].cpu_id,
+		ppm->cpu_limit[i].min_cpufreq_idx,
+		ppm->cpu_limit[i].max_cpufreq_idx);
 		cpufreq_ver_dbg("has_advise_freq = %d, advise_cpufreq_idx = %d\n",
 			ppm->cpu_limit[i].has_advise_freq,
 			ppm->cpu_limit[i].advise_cpufreq_idx);
@@ -1064,7 +1064,7 @@ static void ppm_limit_callback(struct ppm_client_req req)
 /*
  * cpufreq driver
  */
-static int _mt_cpufreq_verify(struct cpufreq_policy *policy)
+static int _mt_cpufreq_ver_dbgify(struct cpufreq_policy *policy)
 {
 	struct mt_cpu_dvfs *p;
 	int ret;	/* cpufreq_frequency_table_verify() always return 0 */
@@ -1187,7 +1187,7 @@ static struct freq_attr *_mt_cpufreq_attr[] = {
 
 static struct cpufreq_driver _mt_cpufreq_driver = {
 	.flags = CPUFREQ_ASYNC_NOTIFICATION,
-	.verify = _mt_cpufreq_verify,
+	.verify = _mt_cpufreq_ver_dbgify,
 	.target = _mt_cpufreq_target,
 	.init = _mt_cpufreq_init,
 	.exit = _mt_cpufreq_exit,

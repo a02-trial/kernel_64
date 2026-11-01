@@ -31,6 +31,7 @@
 #define FACTORY_BUF_SIZE	PAGE_SIZE
 #define BUILT_IN		(0)
 #define UMS			(1)
+#define SPU			(3)
 
 #define TSP_CH_UNKNOWN		(0)
 #define TSP_CH_UNUSED		(1)
@@ -56,6 +57,25 @@ u32 ist40xx_get_fw_ver(struct ist40xx_data *data)
 	}
 
 	tsp_debug("Reg addr: %x, ver: %x\n", eHCOM_GET_VER_FW, ver);
+
+	return ver;
+}
+
+u32 ist40xx_get_fw_test_ver(struct ist40xx_data *data)
+{
+	u32 ver = 0;
+	int ret = 0;
+
+	ret = ist40xx_read_cmd(data, eHCOM_GET_VER_TEST, &ver);
+	if (ret) {
+		ist40xx_reset(data, false);
+		ist40xx_start(data);
+
+		input_info(true, &data->client->dev, "%s: ret=%d\n", __func__, ret);
+		return ver;
+	}
+
+	tsp_debug("Reg addr: %x, ver: %x\n", eHCOM_GET_VER_TEST, ver);
 
 	return ver;
 }
@@ -166,6 +186,7 @@ static void fw_update(void *dev_data)
 	long fsize = 0, nread = 0;
 	char fw_path[MAX_FW_PATH + 1];
 	u8 *fwbuf = NULL;
+	u8 update_type = 0;
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)dev_data;
 	struct ist40xx_data *data = container_of(sec, struct ist40xx_data, sec);
 
@@ -186,16 +207,32 @@ static void fw_update(void *dev_data)
 
 	switch (sec->cmd_param[0]) {
 	case BUILT_IN:
-		sec->cmd_state = SEC_CMD_STATUS_OK;
+		update_type = TSP_TYPE_BUILTIN_FW;
+		break;
+	case UMS:
+#ifdef CONFIG_SAMSUNG_PRODUCT_SHIP
+		update_type = TSP_TYPE_EXTERNAL_FW_SIGNED;
+#else
+		update_type = TSP_TYPE_EXTERNAL_FW;
+#endif
+		break;
+	case SPU:
+		update_type = TSP_TYPE_SPU_FW_SIGNED;
+		break;
+	default:
+		goto fw_update_out;
+	}
 
+	sec->cmd_state = SEC_CMD_STATUS_OK;
+
+	if (update_type == TSP_TYPE_BUILTIN_FW) {
+		/* firmware update builtin binary */
 		ret = ist40xx_fw_recovery(data);
 		if (ret < 0)
 			sec->cmd_state = SEC_CMD_STATUS_FAIL;
-
-		break;
-	case UMS:
-		sec->cmd_state = SEC_CMD_STATUS_OK;
-
+		goto fw_update_out;
+	} else {
+		/* firmware update ums or spu */
 		fwbuf = vzalloc(IST40XX_ROM_TOTAL_SIZE + sizeof(struct ist40xx_tags));
 		if (!fwbuf) {
 			input_err(true, &data->client->dev,
@@ -203,13 +240,21 @@ static void fw_update(void *dev_data)
 
 			sec->cmd_state= SEC_CMD_STATUS_FAIL;
 
-			break;
+			goto fw_update_out;
 		}
 
 		old_fs = get_fs();
 		set_fs(get_ds());
 
-		snprintf(fw_path, MAX_FW_PATH, "/sdcard/Firmware/TSP/%s", IST40XX_FW_NAME);
+		if (update_type == TSP_TYPE_EXTERNAL_FW)
+			snprintf(fw_path, MAX_FW_PATH, TSP_PATH_EXTERNAL_FW);				
+		else if (update_type == TSP_TYPE_EXTERNAL_FW_SIGNED)
+			snprintf(fw_path, MAX_FW_PATH, TSP_PATH_EXTERNAL_FW_SIGNED);	
+		else if (update_type == TSP_TYPE_SPU_FW_SIGNED)
+			snprintf(fw_path, MAX_FW_PATH, TSP_PATH_SPU_FW_SIGNED);
+		else
+			goto fw_update_out;
+		
 		fp = filp_open(fw_path, O_RDONLY, 0);
 		if (IS_ERR(fp)) {
 			input_err(true, &data->client->dev, "%s: file %s open error:%d\n",
@@ -218,18 +263,23 @@ static void fw_update(void *dev_data)
 			sec->cmd_state = SEC_CMD_STATUS_FAIL;
 			set_fs(old_fs);
 
-			break;
+			goto fw_update_out;
 		}
 
 		fsize = fp->f_path.dentry->d_inode->i_size;
-		if (fsize != data->fw.buf_size) {
-			input_err(true, &data->client->dev, "%s: invalid fw size!!\n",
-				  __func__);
+		/* signed firmware is not equal with fw.buf_size: add tag and signature */
+		if (update_type == TSP_TYPE_EXTERNAL_FW) {
+			if (fsize != data->fw.buf_size) {
+				input_err(true, &data->client->dev, "%s: invalid fw size!!\n",
+						__func__);
 
-			sec->cmd_state = SEC_CMD_STATUS_FAIL;
-			set_fs(old_fs);
+				sec->cmd_state = SEC_CMD_STATUS_FAIL;
+				set_fs(old_fs);
 
-			break;
+				goto fw_update_out;
+			}
+		} else {
+			input_info(true, &data->client->dev, "%s: signed firmware\n", __func__);
 		}
 
 		nread = vfs_read(fp, (char __user *)fwbuf, fsize, &fp->f_pos);
@@ -241,7 +291,7 @@ static void fw_update(void *dev_data)
 			filp_close(fp, NULL);
 			set_fs(old_fs);
 
-			break;
+			goto fw_update_out;
 		}
 
 		filp_close(fp, current->files);
@@ -249,11 +299,30 @@ static void fw_update(void *dev_data)
 
 		input_info(true, &data->client->dev, "%s: ums fw is loaded!!\n",
 			   __func__);
+#ifdef SPU_FW_SIGNED
+		if (update_type == TSP_TYPE_EXTERNAL_FW_SIGNED || update_type == TSP_TYPE_SPU_FW_SIGNED) {
+			int ori_size;
+			int spu_ret;
 
+			ori_size = fsize - SPU_METADATA_SIZE(TSP);
+
+			spu_ret = spu_firmware_signature_verify("TSP", fwbuf, fsize);
+			if (ori_size != spu_ret) {
+				input_err(true, &data->client->dev, "%s: signature verify failed, ori:%ld, fsize:%d\n",
+						__func__, ori_size, fsize);				
+				sec->cmd_state = SEC_CMD_STATUS_FAIL;
+				goto fw_update_out;
+			}
+ 			fsize -= SPU_METADATA_SIZE(TSP);
+		}
+#endif
+		/* ToDo
+		 * version check before firmware update
+		 */
 		ret = ist40xx_get_update_info(data, fwbuf, fsize);
 		if (ret) {
 			sec->cmd_state = SEC_CMD_STATUS_FAIL;
-			break;
+			goto fw_update_out;
 		}
 
 		mutex_lock(&data->lock);
@@ -261,7 +330,7 @@ static void fw_update(void *dev_data)
 		if (ret) {
 			sec->cmd_state = SEC_CMD_STATUS_FAIL;
 			mutex_unlock(&data->lock);
-			break;
+			goto fw_update_out;
 		}
 		ist40xx_print_info(data);
 #ifdef TCLM_CONCEPT
@@ -279,14 +348,9 @@ static void fw_update(void *dev_data)
 		mutex_unlock(&data->lock);
 		ist40xx_start(data);
 
-		break;
-
-	default:
-		input_err(true, &data->client->dev, "%s() Invalid fw file type!\n",
-			  __func__);
-		break;
 	}
 
+fw_update_out:
 	if (fwbuf)
 		vfree(fwbuf);
 
@@ -382,16 +446,23 @@ static void get_fw_ver_ic(void *dev_data)
 
 	sec_cmd_set_default_result(sec);
 
-	if (data->status.sys_mode != STATE_POWER_OFF) {
-		ver = ist40xx_get_fw_ver(data);
-		snprintf(buf, sizeof(buf), "IM%08X", ver);
-	} else {
-		snprintf(buf, sizeof(buf), "IM%08X", data->fw.cur.fw_ver);
+	if (data->status.sys_mode == STATE_POWER_OFF) {
+		input_err(true, &data->client->dev, "%s: now sys_mode status is not STATE_POWER_ON!\n",
+				__func__);
+		snprintf(buf, sizeof(buf), "NG");
+		sec_cmd_set_cmd_result(sec, buf, strnlen(buf, sizeof(buf)));
+		sec->cmd_state = SEC_CMD_STATUS_FAIL;
+
+		return;
 	}
 
-	if (data->fw.cur.test_ver > 0) {
-		sprintf(msg, "(T%X)", data->fw.cur.test_ver);
-		strcat(buf, msg);
+	ver = ist40xx_get_fw_ver(data);
+	snprintf(buf, sizeof(buf), "IM%08X", ver);
+
+	ver = ist40xx_get_fw_test_ver(data);
+	if (ver > 0) {
+		sprintf(msg, "(T%X)", ver);
+		strlcat(buf, msg, sizeof(buf));
 	}
 
 	snprintf(model, sizeof(model), "IM%04X", data->fw.cur.fw_ver >> 16);
@@ -474,9 +545,9 @@ static void call_mode(void *dev_data)
 
 	sec_cmd_set_default_result(sec);
 
-	if (data->status.sys_mode != STATE_POWER_ON) {
+	if (data->status.sys_mode == STATE_POWER_OFF) {
 		input_err(true, &data->client->dev,
-			  "%s: now sys_mode status is not STATE_POWER_ON!\n",
+			  "%s: now sys_mode status is STATE_POWER_OFF!\n",
 			  __func__);
 
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
@@ -522,7 +593,6 @@ out:
 		   (int)strnlen(buf, sizeof(buf)));
 }
 
-#if POCKET_MODE
 static void pocket_mode(void *dev_data)
 {
 	char buf[16] = { 0 };
@@ -531,9 +601,9 @@ static void pocket_mode(void *dev_data)
 
 	sec_cmd_set_default_result(sec);
 
-	if (data->status.sys_mode != STATE_POWER_ON) {
+	if (data->status.sys_mode == STATE_POWER_OFF) {
 		input_err(true, &data->client->dev,
-			  "%s: now sys_mode status is not STATE_POWER_ON!\n",
+			  "%s: now sys_mode status is STATE_POWER_OFF!\n",
 			  __func__);
 
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
@@ -579,7 +649,41 @@ out:
 	input_info(true, &data->client->dev, "%s: %s(%d)\n", __func__, buf,
 		   (int)strnlen(buf, sizeof(buf)));
 }
-#endif
+
+static void ear_detect_enable(void *dev_data)
+{
+	char buf[16] = { 0 };
+	struct sec_cmd_data *sec = (struct sec_cmd_data *)dev_data;
+	struct ist40xx_data *data = container_of(sec, struct ist40xx_data, sec);
+	
+	sec_cmd_set_default_result(sec);
+
+	if (data->status.sys_mode == STATE_POWER_OFF) {
+		input_err(true, &data->client->dev,
+			  "%s: now sys_mode status is STATE_POWER_OFF!\n",
+			  __func__);
+
+		sec->cmd_state = SEC_CMD_STATUS_FAIL;
+
+		goto out;
+	}
+
+	data->ed_enable = sec->cmd_param[0];
+
+	ist40xx_set_call_mode(sec->cmd_param[0]);
+
+	sec->cmd_state = SEC_CMD_STATUS_OK;
+
+	snprintf(buf, sizeof(buf), "%s", "OK");
+
+out:
+	sec_cmd_set_cmd_result(sec, buf, strnlen(buf, sizeof(buf)));
+	sec_cmd_set_cmd_exit(sec);
+
+	input_info(true, &data->client->dev, "%s: %s(%d)\n", __func__, buf,
+		   (int)strnlen(buf, sizeof(buf)));
+}
+
 
 static void glove_mode(void *dev_data)
 {
@@ -589,9 +693,9 @@ static void glove_mode(void *dev_data)
 
 	sec_cmd_set_default_result(sec);
 
-	if (data->status.sys_mode != STATE_POWER_ON) {
+	if (data->status.sys_mode == STATE_POWER_OFF) {
 		input_err(true, &data->client->dev,
-			  "%s: now sys_mode status is not STATE_POWER_ON!\n",
+			  "%s: now sys_mode status is STATE_POWER_OFF!\n",
 			  __func__);
 
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
@@ -721,9 +825,9 @@ static void set_touchable_area(void *dev_data)
 
 	sec_cmd_set_default_result(sec);
 
-	if (data->status.sys_mode != STATE_POWER_ON) {
+	if (data->status.sys_mode == STATE_POWER_OFF) {
 		input_err(true, &data->client->dev,
-			  "%s: now sys_mode status is not STATE_POWER_ON!\n",
+			  "%s: now sys_mode status is STATE_POWER_OFF!\n",
 			  __func__);
 
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
@@ -1061,6 +1165,53 @@ static void singletap_enable(void *dev_data)
 		   (int)strnlen(buf, sizeof(buf)));
 }
 
+static void set_fod_rect(void *dev_data)
+{
+	int ret, i;
+	char buf[16] = { 0 };
+	struct sec_cmd_data *sec = (struct sec_cmd_data *)dev_data;
+	struct ist40xx_data *data = container_of(sec, struct ist40xx_data, sec);
+
+	sec_cmd_set_default_result(sec);
+
+	if (!data->dt_data->support_fod) {
+		input_err(true, &data->client->dev, "%s not supported\n", __func__);
+		snprintf(buf, sizeof(buf), "%s", "NA");
+		sec->cmd_state = SEC_CMD_STATUS_NOT_APPLICABLE;
+		sec_cmd_set_cmd_result(sec, buf, strnlen(buf, sizeof(buf)));
+		sec_cmd_set_cmd_exit(sec);
+		return;
+	}
+
+	sec->cmd_state = SEC_CMD_STATUS_OK;
+
+	input_info(true, &data->client->dev, "%s: fod rect:%d, %d, %d, %d\n", __func__,
+			sec->cmd_param[0], sec->cmd_param[1], sec->cmd_param[2],sec->cmd_param[3]);
+
+	for (i = 0; i < 4; i++)
+		data->fod_rect_data[i] = sec->cmd_param[i];
+	
+	mutex_lock(&data->aod_lock);
+
+	ret = ist40xx_write_buf(data->client, eHCOM_SET_FOD_RECT, (u32 *)data->fod_rect_data, 2);
+	if (ret) {
+		sec->cmd_state = SEC_CMD_STATUS_FAIL;
+		input_err(true, &data->client->dev, "%s: fail to write rect\n", __func__);
+	}
+
+	mutex_unlock(&data->aod_lock);
+	if (sec->cmd_state == SEC_CMD_STATUS_OK)
+		snprintf(buf, sizeof(buf), "OK");
+	else
+		snprintf(buf, sizeof(buf), "NG");
+
+	sec_cmd_set_cmd_result(sec, buf, strnlen(buf, sizeof(buf)));
+	sec_cmd_set_cmd_exit(sec);
+
+	input_info(true, &data->client->dev, "%s: %s(%d)\n", __func__, buf,
+			(int)strnlen(buf, sizeof(buf)));
+}
+
 static void fod_enable(void *dev_data)
 {
 	int ret;
@@ -1081,7 +1232,7 @@ static void fod_enable(void *dev_data)
 		return;
 	}
 
-	fod_property = !!sec->cmd_param[1];
+	fod_property = (sec->cmd_param[1] & 0x01) | ((sec->cmd_param[2] & 0x01) << 1);
 
 	mutex_lock(&data->aod_lock);
 
@@ -1128,6 +1279,24 @@ static void fod_enable(void *dev_data)
 
 	input_info(true, &data->client->dev, "%s: %s(%d)\n", __func__, buf,
 		   (int)strnlen(buf, sizeof(buf)));
+}
+
+static void fod_lp_mode(void *dev_data)
+{
+	char buf[32] = { 0 };
+	struct sec_cmd_data *sec = (struct sec_cmd_data *)dev_data;
+	struct ist40xx_data *data = container_of(sec, struct ist40xx_data, sec);
+
+	sec_cmd_set_default_result(sec);
+
+	data->fod_lp_mode = sec->cmd_param[0];
+
+	input_info(true, &data->client->dev, "%s: fod_lp_mode %d\n", __func__, data->fod_lp_mode);
+
+	snprintf(buf, sizeof(buf), "%s", "OK");
+	sec_cmd_set_cmd_result(sec, buf, strnlen(buf, sizeof(buf)));
+	sec->cmd_state = SEC_CMD_STATUS_OK;
+	sec_cmd_set_cmd_exit(sec);
 }
 
 static void get_threshold(void *dev_data)
@@ -1530,6 +1699,54 @@ out:
 	sec->cmd_state = SEC_CMD_STATUS_FAIL;
 }
 
+void run_factory_miscalibration(void *dev_data)
+{
+	int ret = 0;
+	int max_val = 0;
+	char buf[16] = { 0 };
+	struct sec_cmd_data *sec = (struct sec_cmd_data *)dev_data;
+	struct ist40xx_data *data = container_of(sec, struct ist40xx_data, sec);
+
+	sec_cmd_set_default_result(sec);
+
+	if (data->status.sys_mode != STATE_POWER_ON) {
+		input_err(true, &data->client->dev,
+			  "%s: now sys_mode status is STATE_POWER_OFF!\n",
+			  __func__);
+		goto out;
+	}
+
+	ret = ist40xx_miscalibrate(data);
+	if (ret) {
+		input_err(true, &data->client->dev, "%s: miscalibration fail!\n",
+			  __func__);
+		goto out;
+	}
+
+	max_val = data->status.miscalib_result;
+	if (max_val > SEC_MISCAL_SPEC) {
+		snprintf(buf, sizeof(buf), "NG,0,%d", max_val);
+		sec->cmd_state = SEC_CMD_STATUS_FAIL;
+	} else {
+		snprintf(buf, sizeof(buf), "OK,0,%d", max_val);
+		sec->cmd_state = SEC_CMD_STATUS_OK;
+	}
+
+	sec_cmd_set_cmd_result(sec, buf, strnlen(buf, sizeof(buf)));
+
+	input_info(true, &data->client->dev, "%s: %s(%d)\n", __func__, buf,
+		   strnlen(buf, sizeof(buf)));
+
+	return;
+
+out:
+	snprintf(buf, sizeof(buf), "NG");
+	sec_cmd_set_cmd_result(sec, buf, strnlen(buf, sizeof(buf)));
+
+	sec->cmd_state = SEC_CMD_STATUS_FAIL;
+}
+
+
 void run_miscalibration(void *dev_data)
 {
 	int ret = 0;
@@ -1770,8 +1987,8 @@ static void run_prox_intensity_read_all(void *dev_data)
 		snprintf(buf, sizeof(buf), "%s", "NG");
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;
 	} else {
-		snprintf(buf, sizeof(buf), "SUM_X:%d SUM_Y:%d THD_X:%d THD_Y:%d", (sensitivity >> 16) & 0xFFFF,
-				sensitivity & 0xFFFF, tsp->prox_tx_threshold, tsp->prox_rx_threshold);
+		snprintf(buf, sizeof(buf), "SUM_X:%d SUM_Y:%d THD_X:%d THD_Y:%d", (s16)((sensitivity >> 16) & 0xFFFF),
+				(s16)(sensitivity & 0xFFFF), tsp->prox_tx_threshold, tsp->prox_rx_threshold);
 		sec->cmd_state = SEC_CMD_STATUS_OK;
 	}
 
@@ -3023,7 +3240,7 @@ int get_read_all_data(struct ist40xx_data *data, u8 flag)
 
 	sec_cmd_set_cmd_result(sec, buffer, count - 1);
 	input_info(true, &data->client->dev, "%s: %s(%d)\n", __func__, buffer,
-		   strnlen(buffer, sizeof(buffer)) - 1);
+		   strnlen(buffer, IST40XX_MAX_NODE_NUM * 5) - 1);
 
 	kfree(buffer);
 	kfree(temp);
@@ -3610,8 +3827,8 @@ void get_cm_array(void *dev_data)
 	return;
 
 out:
-	snprintf(buf, sizeof(buf), "NG");
-	sec_cmd_set_cmd_result(sec, buf, strnlen(buf, sizeof(buf)));
+	snprintf(buf, IST40XX_MAX_NODE_NUM * 5, "NG");
+	sec_cmd_set_cmd_result(sec, buf, strnlen(buf, IST40XX_MAX_NODE_NUM * 5));
 
 	sec->cmd_state = SEC_CMD_STATUS_FAIL;
 }
@@ -3653,8 +3870,8 @@ void get_slope0_array(void *dev_data)
 	return;
 
 out:
-	snprintf(buf, sizeof(buf), "NG");
-	sec_cmd_set_cmd_result(sec, buf, strnlen(buf, sizeof(buf)));
+	snprintf(buf, IST40XX_MAX_NODE_NUM * 5, "NG");
+	sec_cmd_set_cmd_result(sec, buf, strnlen(buf, IST40XX_MAX_NODE_NUM * 5));
 
 	sec->cmd_state = SEC_CMD_STATUS_FAIL;
 }
@@ -3696,8 +3913,8 @@ void get_slope1_array(void *dev_data)
 	return;
 
 out:
-	snprintf(buf, sizeof(buf), "NG");
-	sec_cmd_set_cmd_result(sec, buf, strnlen(buf, sizeof(buf)));
+	snprintf(buf, IST40XX_MAX_NODE_NUM * 5, "NG");
+	sec_cmd_set_cmd_result(sec, buf, strnlen(buf, IST40XX_MAX_NODE_NUM * 5));
 
 	sec->cmd_state = SEC_CMD_STATUS_FAIL;
 }
@@ -3745,8 +3962,8 @@ void get_cs_array(void *dev_data)
 	return;
 
 out:
-	snprintf(buf, sizeof(buf), "NG");
-	sec_cmd_set_cmd_result(sec, buf, strnlen(buf, sizeof(buf)));
+	snprintf(buf, IST40XX_MAX_NODE_NUM * 5, "NG");
+	sec_cmd_set_cmd_result(sec, buf, strnlen(buf, IST40XX_MAX_NODE_NUM * 5));
 
 	sec->cmd_state = SEC_CMD_STATUS_FAIL;
 }
@@ -4043,8 +4260,8 @@ void run_cr_variance_read(void *dev_data)
 	mutex_unlock(&data->lock);
 
 	/* check spec (temp) */
-	if ((cmcs_buf->cr_variance2[0] > 800) || (cmcs_buf->cr_variance2[1] > 800) ||
-			(cmcs_buf->cr_variance2[2] > 800)) {
+	if ((cmcs_buf->cr_variance2[0] > 20000) || (cmcs_buf->cr_variance2[1] > 10000) ||
+			(cmcs_buf->cr_variance2[2] > 10000)) {
 		input_info(true, &data->client->dev, "%s: spec fail\n", __func__);
 		goto out;
 	}
@@ -4076,7 +4293,7 @@ int ist40xx_execute_force_calibration(struct i2c_client *client, int cal_mode)
 {
 	struct ist40xx_data *data = i2c_get_clientdata(client);
 	int ret = -ENOEXEC;
-	int wait_cnt = 1;
+	int wait_cnt = 2;
 
 	input_info(true, &data->client->dev, "*** Force Auto Calibrate %ds ***\n",
 		   CALIB_WAIT_TIME / 10);
@@ -4963,6 +5180,25 @@ out:
 		  sec->cmd_result_all);
 }
 
+static void debug(void *dev_data)
+{
+	char buf[16] = { 0 };
+	struct sec_cmd_data *sec = (struct sec_cmd_data *)dev_data;
+	struct ist40xx_data *data = container_of(sec, struct ist40xx_data, sec);
+
+	sec_cmd_set_default_result(sec);
+
+	data->debug_string = sec->cmd_param[0];
+
+	snprintf(buf, sizeof(buf), "%s", "OK");
+
+	sec_cmd_set_cmd_result(sec, buf, strnlen(buf, sizeof(buf)));
+	sec_cmd_set_cmd_exit(sec);
+
+	input_info(true, &data->client->dev, "%s: %s(%d)\n", __func__, buf,
+		   (int)strnlen(buf, sizeof(buf)));
+}
+
 struct sec_cmd sec_cmds[] = {
 	{SEC_CMD("get_chip_vendor", get_chip_vendor),},
 	{SEC_CMD("get_chip_name", get_chip_name),},
@@ -4979,20 +5215,21 @@ struct sec_cmd sec_cmds[] = {
 	{SEC_CMD("dead_zone_enable", dead_zone_enable),},
 	{SEC_CMD("clear_cover_mode", not_support_cmd),},
 	{SEC_CMD("call_mode", call_mode),},
-#if POCKET_MODE
-	{SEC_CMD("pocket_mode_enable", pocket_mode),},
-#endif
-	{SEC_CMD("glove_mode", glove_mode),},
+	{SEC_CMD_H("pocket_mode_enable", pocket_mode),},
+	{SEC_CMD_H("ear_detect_enable", ear_detect_enable),},
+	{SEC_CMD_H("glove_mode", glove_mode),},
 	{SEC_CMD("set_grip_data", set_grip_data),},
-	{SEC_CMD("set_touchable_area", set_touchable_area),},
+	{SEC_CMD_H("set_touchable_area", set_touchable_area),},
 	{SEC_CMD("hover_enable", not_support_cmd),},
-	{SEC_CMD("spay_enable", spay_enable),},
-	{SEC_CMD("aot_enable", aot_enable),},
-	{SEC_CMD("aod_enable", aod_enable),},
+	{SEC_CMD_H("spay_enable", spay_enable),},
+	{SEC_CMD_H("aot_enable", aot_enable),},
+	{SEC_CMD_H("aod_enable", aod_enable),},
 	{SEC_CMD("set_aod_rect", set_aod_rect),},
 	{SEC_CMD("get_aod_rect", get_aod_rect),},
-	{SEC_CMD("singletap_enable", singletap_enable),},
+	{SEC_CMD_H("singletap_enable", singletap_enable),},
 	{SEC_CMD("fod_enable", fod_enable),},
+	{SEC_CMD_H("set_fod_rect", set_fod_rect),},
+	{SEC_CMD_H("fod_lp_mode", fod_lp_mode),},
 	{SEC_CMD("get_cp_array", get_cp_array),},
 	{SEC_CMD("get_self_cp_array", get_self_cp_array),},
 	{SEC_CMD("get_prox_cp_array", get_prox_cp_array),},
@@ -5051,6 +5288,7 @@ struct sec_cmd sec_cmds[] = {
 	{SEC_CMD("run_force_calibration", run_force_calibration),},
 	{SEC_CMD("get_force_calibration", get_force_calibration),},
 	{SEC_CMD("run_mis_cal_read", run_miscalibration),},
+	{SEC_CMD("run_factory_miscalibration", run_factory_miscalibration),},
 	{SEC_CMD("run_mis_cal_read_all", run_miscalibration_all),},
 	{SEC_CMD("get_mis_cal", get_miscalibration_value),},
 	{SEC_CMD("get_mis_cal_info", get_mis_cal_info), },
@@ -5073,6 +5311,7 @@ struct sec_cmd sec_cmds[] = {
 	{SEC_CMD("get_crc_check", run_fw_integrity),},
 	{SEC_CMD("get_fw_integrity", get_checksum_data),},
 	{SEC_CMD("factory_cmd_result_all", factory_cmd_result_all),},
+	{SEC_CMD("debug", debug),},
 	{SEC_CMD("not_support_cmd", not_support_cmd),},
 };
 
@@ -5441,7 +5680,7 @@ static ssize_t sensitivity_mode_store(struct device *dev,
 static ssize_t sensitivity_mode_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
-	u32 result[5] = { 0, };
+	u32 result[9] = { 0, };
 	struct sec_cmd_data *sec = dev_get_drvdata(dev);
 	struct ist40xx_data *data = container_of(sec, struct ist40xx_data, sec);
 
@@ -5453,11 +5692,12 @@ static ssize_t sensitivity_mode_show(struct device *dev,
 	}
 
 	if (data->noise_mode & (1 << NOISE_MODE_SENSITIVITY))
-		ist40xx_burst_read(data->client, IST40XX_HIB_INTR_MSG, result, 5, true);
+		ist40xx_burst_read(data->client, IST40XX_HIB_INTR_MSG, result, 9, true);
 
 end:
-	return snprintf(buf, PAGE_SIZE, "%d,%d,%d,%d,%d", result[0], result[1],
-					result[2], result[3], result[4]);
+	return snprintf(buf, PAGE_SIZE, "%d,%d,%d,%d,%d,%d,%d,%d,%d",
+			result[0], result[1], result[2], result[3], result[4],
+			result[5], result[6], result[7], result[8]);
 }
 
 static ssize_t ear_detect_enable_store(struct device *dev,
@@ -5557,7 +5797,7 @@ static ssize_t fod_info_show(struct device *dev,
 
 	if (!data->dt_data->support_fod) {
 		input_err(true, &data->client->dev, "%s: fod is not supported\n", __func__);
-		return snprintf(buf, sizeof(buf), "NG");
+		return snprintf(buf, PAGE_SIZE, "NG");
 	}
 
 	input_info(true, &data->client->dev, "%s: tx:%d, rx:%d, size:%d\n",
@@ -5578,17 +5818,17 @@ static ssize_t fod_position_show(struct device *dev,
 
 	if (data->status.sys_mode == STATE_POWER_OFF) {
 		input_err(true, &data->client->dev, "%s: error currently power off\n", __func__);
-		return snprintf(buf, sizeof(buf), "NG");
+		return snprintf(buf, PAGE_SIZE, "NG");
 	}
 
 	if (!data->dt_data->support_fod) {
 		input_err(true, &data->client->dev, "%s: fod is not supported\n", __func__);
-		return snprintf(buf, sizeof(buf), "NG");
+		return snprintf(buf, PAGE_SIZE, "NG");
 	}
 
 	if (!data->fod_vi_size) {
 		input_err(true, &data->client->dev, "%s: not read fod_info yet\n", __func__);
-		return snprintf(buf, sizeof(buf), "NG");
+		return snprintf(buf, PAGE_SIZE, "NG");
 	}
 
 	if (data->status.sys_mode == STATE_LPM)
@@ -5604,6 +5844,44 @@ static ssize_t fod_position_show(struct device *dev,
 	}
 
 	return strlen(buf);
+}
+
+/** for protos **/
+static ssize_t protos_event_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct sec_cmd_data *sec = dev_get_drvdata(dev);
+	struct ist40xx_data *data = container_of(sec, struct ist40xx_data, sec);
+
+	input_info(true, &data->client->dev, "%s: %d\n", __func__,
+			data->hover);
+
+	return snprintf(buf, SEC_CMD_BUF_SIZE, "%d", data->hover != 3 ? 0 : 3);
+}
+
+static ssize_t protos_event_store(struct device *dev,
+		struct device_attribute *attr,
+		const char *buf, size_t count)
+{
+	struct sec_cmd_data *sec = dev_get_drvdata(dev);
+	struct ist40xx_data *data = container_of(sec, struct ist40xx_data, sec);
+	u8 value;
+	int ret;
+
+	ret = kstrtou8(buf, 10, &value);
+	if (ret < 0)
+		return ret;
+
+	input_info(true, &data->client->dev, "%s: %d\n", __func__, value);
+
+	if (value != 0 && value != 1) {
+		input_err(true, &data->client->dev, "%s: incorrect data\n", __func__);
+		return -EINVAL;
+	}
+
+	ist40xx_set_call_mode(value);
+
+	return count;
 }
 
 /* sysfs - tsp */
@@ -5634,6 +5912,7 @@ static DEVICE_ATTR(prox_power_off, S_IRUGO | S_IWUSR | S_IWGRP,
 static DEVICE_ATTR(support_feature, S_IRUGO, read_support_feature, NULL);
 static DEVICE_ATTR(fod_info, S_IRUGO, fod_info_show, NULL);
 static DEVICE_ATTR(fod_pos, S_IRUGO, fod_position_show, NULL);
+static DEVICE_ATTR(virtual_prox, 0664, protos_event_show, protos_event_store);
 
 static struct attribute *sec_touch_factory_attributes[] = {
 	&dev_attr_close_tsp_test.attr,
@@ -5654,6 +5933,7 @@ static struct attribute *sec_touch_factory_attributes[] = {
 	&dev_attr_support_feature.attr,
 	&dev_attr_fod_info.attr,
 	&dev_attr_fod_pos.attr,
+	&dev_attr_virtual_prox.attr,
 	NULL,
 };
 
@@ -6486,6 +6766,9 @@ int sec_touch_sysfs(struct ist40xx_data *data)
 			  __func__, SEC_CLASS_DEV_NAME_TSP);
 		goto err_sec_fac_dev_attr;
 	}
+#ifndef CONFIG_SAMSUNG_PRODUCT_SHIP
+	ist40xx_create_vendor_sysfs(data);
+#endif
 
 #if defined(CONFIG_INPUT_SEC_SECURE_TOUCH)
 	for (i = 0; i < (int)ARRAY_SIZE(secure_attrs); i++) {
@@ -6519,6 +6802,9 @@ void sec_touch_sysfs_remove(struct ist40xx_data *data)
 
 	for (i = 0; i < (int)ARRAY_SIZE(secure_attrs); i++)
 		sysfs_remove_file(&data->input_dev->dev.kobj, &secure_attrs[i].attr);
+#endif
+#ifndef CONFIG_SAMSUNG_PRODUCT_SHIP
+	ist40xx_remove_vendor_sysfs(data);
 #endif
 
 	sysfs_remove_group(&data->sec.fac_dev->kobj, &sec_touch_factory_attr_group);

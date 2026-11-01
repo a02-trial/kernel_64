@@ -32,7 +32,6 @@
 #include "wlan_lib.h"
 #include "wlan_oid.h"
 #include "gl_wext_priv.h"
-#include "queue.h"
 #include <asm/div64.h>
 
 #if CFG_ENABLE_BT_OVER_WIFI
@@ -265,10 +264,35 @@ struct KAL_HALT_CTRL_T {
 /*----------------------------------------------------------------------------*/
 #if CONFIG_ANDROID		/* Defined in Android kernel source */
 #if (KERNEL_VERSION(4, 9, 0) <= LINUX_VERSION_CODE)
+#if (KERNEL_VERSION(4, 14, 149) <= LINUX_VERSION_CODE)
 #define KAL_WAKE_LOCK_INIT(_prAdapter, _prWakeLock, _pcName) \
-	wakeup_source_init(_prWakeLock, _pcName)
+	_prWakeLock = wakeup_source_register(NULL, _pcName);
 #define KAL_WAKE_LOCK_DESTROY(_prAdapter, _prWakeLock) \
-	wakeup_source_trash(_prWakeLock)
+{ \
+	wakeup_source_unregister(_prWakeLock); \
+	_prWakeLock = NULL; \
+}
+#else
+#define KAL_WAKE_LOCK_INIT(_prAdapter, _prWakeLock, _pcName) \
+{ \
+	_prWakeLock = kalMemAlloc(sizeof(KAL_WAKE_LOCK_T), \
+	VIR_MEM_TYPE); \
+	if (!_prWakeLock) { \
+		DBGLOG(HAL, ERROR, \
+		"KAL_WAKE_LOCK_INIT init fail!\n"); \
+		} \
+	else { \
+		wakeup_source_init(_prWakeLock, _pcName); \
+	} \
+}
+#define KAL_WAKE_LOCK_DESTROY(_prAdapter, _prWakeLock) \
+{ \
+	if (!_prWakeLock) { \
+		wakeup_source_trash(_prWakeLock); \
+		_prWakeLock = NULL; \
+	} \
+}
+#endif
 #define KAL_WAKE_LOCK(_prAdapter, _prWakeLock) \
 	__pm_stay_awake(_prWakeLock)
 #define KAL_WAKE_LOCK_TIMEOUT(_prAdapter, _prWakeLock, _u4Timeout) \
@@ -428,8 +452,12 @@ typedef UINT_32 KAL_WAKE_LOCK_T, *P_KAL_WAKE_LOCK_T;
  */
 #define kalkStrtou32(cp, base, resp)                   kstrtou32(cp, base, resp)
 #define kalkStrtos32(cp, base, resp)                    kstrtos32(cp, base, resp)
-#define kalSnprintf(buf, size, fmt, ...)              snprintf(buf, size, fmt, __VA_ARGS__)
-#define kalSprintf(buf, fmt, ...)                     sprintf(buf, fmt, __VA_ARGS__)
+#define kalSnprintf(buf, size, fmt, ...)   \
+	_kalSnprintf((char *)(buf), (size_t)(size), \
+	(const char *)(fmt), ##__VA_ARGS__)
+#define kalSprintf(buf, fmt, ...)          \
+	_kalSprintf((char *)(buf), (const char *)(fmt), ##__VA_ARGS__)
+
 /* remove for AOSP */
 /* #define kalSScanf(buf, fmt, ...)                      sscanf(buf, fmt, __VA_ARGS__) */
 #define kalStrStr(ct, cs)                            strstr(ct, cs)
@@ -539,7 +567,7 @@ do { \
 /******************************************************************
  *
  ******************************************************************/
-
+#if KERNEL_VERSION(4, 19, 0) > CFG80211_VERSION_CODE
 #define KERNEL_event_trace_printk(ip, fmt, args...)               \
 do {                                                       \
     __trace_printk_check_format(fmt, ##args);              \
@@ -553,7 +581,7 @@ do {                                                       \
      } else                                                \
         __trace_printk(ip, fmt, ##args);                   \
 } while (0)
-
+#endif
 /*******************************************************************************
 *                  F U N C T I O N   D E C L A R A T I O N S
 ********************************************************************************
@@ -771,7 +799,11 @@ VOID kalScanDone(IN P_GLUE_INFO_T prGlueInfo, IN ENUM_KAL_NETWORK_TYPE_INDEX_T e
 
 UINT_32 kalRandomNumber(VOID);
 
+#if KERNEL_VERSION(4, 15, 0) <= CFG80211_VERSION_CODE
+VOID kalTimeoutHandler(struct timer_list *timer);
+#else
 VOID kalTimeoutHandler(ULONG arg);
+#endif
 
 VOID kalSetEvent(P_GLUE_INFO_T pr);
 
@@ -909,4 +941,20 @@ VOID kalChangeSchedParams(P_GLUE_INFO_T prGlueInfo, BOOLEAN fgNormalThread);
 #if CFG_SUPPORT_WPA3
 int kalExternalAuthRequest(IN P_ADAPTER_T prAdapter);
 #endif
+
+u_int8_t kalIsValidMacAddr(IN const uint8_t *addr);
+
+void kalScanParseRandomMac(
+	P_BSS_INFO_T prBssInfo,
+	const struct cfg80211_scan_request *request,
+	uint8_t *pucRandomMac);
+
+BOOLEAN kalSchedScanParseRandomMac(
+	P_BSS_INFO_T prBssInfo,
+	const struct cfg80211_sched_scan_request *request,
+	uint8_t *pucRandomMac, uint8_t *pucRandomMacMask);
+
+int _kalSnprintf(char *buf, size_t size, const char *fmt, ...);
+int _kalSprintf(char *buf, const char *fmt, ...);
+
 #endif /* _GL_KAL_H */

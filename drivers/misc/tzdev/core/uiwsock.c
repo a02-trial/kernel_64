@@ -13,6 +13,7 @@
 
 #include <linux/atomic.h>
 #include <linux/anon_inodes.h>
+#include <linux/err.h>
 #include <linux/module.h>
 #include <linux/poll.h>
 
@@ -21,6 +22,7 @@
 #include "core/iwsock.h"
 #include "core/log.h"
 #include "core/notifier.h"
+#include "core/subsystem.h"
 
 #define IS_EINTR(x)				\
 	(((x) == -EINTR)			\
@@ -28,6 +30,10 @@
 	|| ((x) == -ERESTARTNOHAND)		\
 	|| ((x) == -ERESTARTNOINTR)		\
 	|| ((x) == -ERESTART_RESTARTBLOCK))
+
+#define IS_EAGAIN(x)				\
+	(((x) == -EAGAIN)			\
+	|| ((x) == -EWOULDBLOCK))
 
 static atomic_t tz_uiwsock_init_done = ATOMIC_INIT(0);
 static const struct file_operations tz_uiwsock_fops;
@@ -66,6 +72,8 @@ static long tz_uiwsock_connect(struct file *filp, unsigned long arg)
 	ret = tz_iwsock_connect(sd, connection.name, 0);
 	if (IS_EINTR(ret))
 		log_debug(tzdev_uiwsock, "Wait interrupted, filp=%pK, ret=%ld\n", filp, ret);
+	else if (IS_EAGAIN(ret))
+		log_debug(tzdev_uiwsock, "Operation would block, filp=%pK, ret=%ld\n", filp, ret);
 	else if (ret < 0)
 		log_error(tzdev_uiwsock, "Failed to connect to socket %s, filp=%pK, ret=%ld\n", connection.name, filp, ret);
 
@@ -82,6 +90,8 @@ static long tz_uiwsock_wait_connection(struct file *filp, unsigned long arg)
 	ret = tz_iwsock_wait_connection(sd);
 	if (IS_EINTR(ret))
 		log_debug(tzdev_uiwsock, "Wait interrupted, filp=%pK, ret=%ld\n", filp, ret);
+	else if (IS_EAGAIN(ret))
+		log_debug(tzdev_uiwsock, "Operation would block, filp=%pK, ret=%ld\n", filp, ret);
 	else if (ret < 0)
 		log_error(tzdev_uiwsock, "Failed to wait connection to socket, filp=%pK socket=%d ret=%ld\n",
 				filp, sd->id, ret);
@@ -112,6 +122,8 @@ static long tz_uiwsock_listen(struct file *filp, unsigned long arg)
 	ret = tz_iwsock_listen(sd, connection.name);
 	if (IS_EINTR(ret))
 		log_debug(tzdev_uiwsock, "Wait interrupted, filp=%pK, ret=%ld\n", filp, ret);
+	else if (IS_EAGAIN(ret))
+		log_debug(tzdev_uiwsock, "Operation would block, filp=%pK, ret=%ld\n", filp, ret);
 	else if (ret)
 		log_error(tzdev_uiwsock, "Failed to listen, ret=%ld\n", ret);
 
@@ -131,6 +143,9 @@ static long tz_uiwsock_accept(struct file *filp, unsigned long arg)
 	new_sd = tz_iwsock_accept(sd);
 	if (IS_EINTR(PTR_ERR(new_sd))) {
 		log_debug(tzdev_uiwsock, "Wait interrupted, filp=%pK, ret=%ld\n", filp, PTR_ERR(new_sd));
+		return PTR_ERR(new_sd);
+	} else if (IS_EAGAIN(PTR_ERR(new_sd))){
+		log_debug(tzdev_uiwsock, "Operation would block, filp=%pK, ret=%ld\n", filp, PTR_ERR(new_sd));
 		return PTR_ERR(new_sd);
 	} else if (IS_ERR(new_sd)) {
 		log_error(tzdev_uiwsock, "Failed to accept, ret=%ld\n", PTR_ERR(new_sd));
@@ -166,6 +181,8 @@ static long tz_uiwsock_send(struct file *filp, unsigned long arg)
 			data.size, data.flags);
 	if (IS_EINTR(ret))
 		log_debug(tzdev_uiwsock, "Wait interrupted, filp=%pK, ret=%ld\n", filp, ret);
+	else if (IS_EAGAIN(ret))
+		log_debug(tzdev_uiwsock, "Operation would block, filp=%pK, ret=%ld\n", filp, ret);
 	else if (ret < 0)
 		log_error(tzdev_uiwsock, "Failed to write data filp=%pK, ret=%ld\n", filp, ret);
 
@@ -191,6 +208,8 @@ static long tz_uiwsock_recv_msg(struct file *filp, unsigned long arg)
 	ret = tz_iwsock_read_msg(sd, &msg, msg.msg_flags);
 	if (IS_EINTR(ret))
 		log_debug(tzdev_uiwsock, "Wait interrupted, filp=%pK, ret=%ld\n", filp, ret);
+	else if (IS_EAGAIN(ret))
+		log_debug(tzdev_uiwsock, "Operation would block, filp=%pK, ret=%ld\n", filp, ret);
 	else if (ret < 0)
 		log_error(tzdev_uiwsock, "Failed to read data filp=%pK, ret=%ld\n", filp, ret);
 
@@ -224,6 +243,8 @@ static long tz_uiwsock_compat_recv_msg(struct file *filp, unsigned long arg)
 	ret = tz_iwsock_read_msg(sd, &msg, msg.msg_flags);
 	if (IS_EINTR(ret))
 		log_debug(tzdev_uiwsock, "Wait interrupted, filp=%pK, ret=%ld\n", filp, ret);
+	else if (IS_EAGAIN(ret))
+		log_debug(tzdev_uiwsock, "Operation would block, filp=%pK, ret=%ld\n", filp, ret);
 	else if (ret < 0)
 		log_error(tzdev_uiwsock, "Failed to read data filp=%pK, ret=%ld\n", filp, ret);
 
@@ -461,7 +482,7 @@ static struct notifier_block tz_uiwsock_fini_notifier = {
 	.notifier_call = tz_uiwsock_fini_call,
 };
 
-static int __init tz_uiwsock_init(void)
+int tz_uiwsock_init(void)
 {
 	int rc;
 
@@ -481,4 +502,4 @@ static int __init tz_uiwsock_init(void)
 	return 0;
 }
 
-early_initcall(tz_uiwsock_init);
+tzdev_early_initcall(tz_uiwsock_init);

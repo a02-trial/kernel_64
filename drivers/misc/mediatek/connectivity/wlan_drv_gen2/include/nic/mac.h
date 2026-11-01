@@ -31,6 +31,7 @@
 /* 3  --------------- Constants for Ethernet/802.11 MAC --------------- */
 /* MAC Address */
 #define MAC_ADDR_LEN                            6
+#define MAC_OUI_LEN                             3
 
 #define MAC_ADDR_LOCAL_ADMIN                    BIT(1)
 
@@ -647,6 +648,8 @@
 #define STATUS_CODE_DESTINATION_STA_NOT_PRESENT     49	/* Destination STA is not present within this QBSS */
 #define STATUS_CODE_DESTINATION_STA_NOT_QSTA        50	/* Destination STA is not a QSTA */
 #define STATUS_CODE_ASSOC_DENIED_LARGE_LIS_INTERVAL 51	/* Association denied because the ListenInterval is too large */
+#define STATUS_INVALID_PMKID                        53  /* Invalid pairwise master key identifier (PMKID) */
+
 
 /* proprietary definition of reserved field of Status Code */
 #define STATUS_CODE_JOIN_FAILURE                    0xFFF0	/* Join failure */

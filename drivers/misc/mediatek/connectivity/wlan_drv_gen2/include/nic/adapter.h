@@ -369,6 +369,10 @@ struct _BSS_INFO_T {
 	TIMER_T rObssScanTimer;
 	UINT_16 u2ObssScanInterval;	/* in unit of sec */
 
+	/* Set scanning MAC OUI */
+	UINT_8 fgIsScanOuiSet;
+	UINT_8 ucScanOui[MAC_OUI_LEN];
+
 	BOOLEAN fgObssActionForcedTo20M;	/* GO only */
 	BOOLEAN fgObssBeaconForcedTo20M;	/* GO only */
 
@@ -409,6 +413,8 @@ struct _BSS_INFO_T {
 	/* AP PMF */
 	struct AP_PMF_CFG rApPmfCfg;
 #endif
+	LINK_T rPmkidCache;
+
 };
 
 struct ESS_CHNL_INFO {
@@ -609,13 +615,15 @@ typedef struct _WIFI_VAR_T {
 	UINT_16 au2TxOp[WMM_AC_INDEX_NUM];
 
 	BOOLEAN fgReuseRSNIE;
+
+	UINT_8 fgSapCheckPmkidInDriver;
 } WIFI_VAR_T, *P_WIFI_VAR_T;	/* end of _WIFI_VAR_T */
 
 /* cnm_timer module */
 typedef struct {
 	LINK_T rLinkHead;
 	OS_SYSTIME rNextExpiredSysTime;
-	KAL_WAKE_LOCK_T rWakeLock;
+	KAL_WAKE_LOCK_T *rWakeLock;
 	BOOLEAN fgWakeLocked;
 } ROOT_TIMER, *P_ROOT_TIMER;
 
@@ -963,12 +971,12 @@ struct _ADAPTER_T {
 	WLAN_CFG_T rWlanCfg;
 #endif
 #if CFG_SPM_WORKAROUND_FOR_HOTSPOT
-	KAL_WAKE_LOCK_T rApWakeLock;
+	KAL_WAKE_LOCK_T *rApWakeLock;
 #endif
 	UINT_32 u4FwCompileFlag0;
 	UINT_32 u4FwCompileFlag1;
-	KAL_WAKE_LOCK_T rTxThreadWakeLock;
-	KAL_WAKE_LOCK_T rAhbIsrWakeLock;
+	KAL_WAKE_LOCK_T *rTxThreadWakeLock;
+	KAL_WAKE_LOCK_T *rAhbIsrWakeLock;
 
 #if CFG_SUPPORT_ROAMING_ENC
 	BOOLEAN fgIsRoamingEncEnabled;

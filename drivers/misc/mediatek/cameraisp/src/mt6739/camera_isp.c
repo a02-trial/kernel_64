@@ -58,13 +58,9 @@
 #endif
 
 /*      */
-#ifdef CONFIG_PM_WAKELOCKS
+#ifdef CONFIG_PM_SLEEP
 #include <linux/pm_wakeup.h>
-#else
-#include <linux/wakelock.h>
 #endif
-
-#include <imgsensor_sysfs.h>
 
 /* #define ISP_DEBUG */
 
@@ -221,10 +217,8 @@ struct ISP_CLK_STRUCT isp_clk;
 static unsigned long gISPSYS_Irq[ISP_CAM_IRQ_IDX_NUM];
 static unsigned long gISPSYS_Reg[ISP_CAM_BASEADDR_NUM];
 
-#ifdef CONFIG_PM_WAKELOCKS
+#ifdef CONFIG_PM_SLEEP
 struct wakeup_source isp_wake_lock;
-#else
-struct wake_lock isp_wake_lock;
 #endif
 
 static int g_bWaitLock;
@@ -4167,10 +4161,10 @@ static signed int ISP_EnableHoldReg(bool En)
 										    (IspInfo.
 										     SpinLockHold))),
 							   ISP_MsToJiffies(500));
+		if (Timeout == 0)
+			LOG_DBG("[%s] wait timeout 500", __func__);
 		/*      */
 		if (IspInfo.DebugMask & ISP_DBG_TASKLET) {
-			if (Timeout == 0)
-				LOG_DBG("[%s] wait timeout 500", __func__);
 			LOG_DBG("End wait ");
 		}
 
@@ -7639,6 +7633,7 @@ static signed int ISP_ED_BufQue_CTRL_FUNC(struct ISP_ED_BUFQUE_STRUCT param)
 			/* [3] add new buffer package in manager list */
 			if (param.p2burstQIdx == 0) {
 				if (P2_EDBUF_MList_FirstBufIdx == P2_EDBUF_MList_LastBufIdx
+				    && P2_EDBUF_MList_FirstBufIdx != -1
 				    && P2_EDBUF_MgrList[P2_EDBUF_MList_FirstBufIdx].p2dupCQIdx ==
 				    -1) {
 					/* all managed buffer node is empty */
@@ -8342,7 +8337,6 @@ static signed int ISP_WaitIrq(struct ISP_WAIT_IRQ_STRUCT *WaitIrq)
 		    || (WaitIrq->UserNumber == ISP_IRQ_USER_MW)) {
 			ISP_DumpReg();
 		}
-		update_mipi_sensor_err_cnt();
 
 		Ret = -EFAULT;
 		goto EXIT;
@@ -8639,7 +8633,6 @@ static signed int ISP_WaitIrq_v3(struct ISP_WAIT_IRQ_STRUCT *WaitIrq)
 			== 0)) {
 			ISP_DumpReg();
 		}
-		update_mipi_sensor_err_cnt();
 
 		Ret = -EFAULT;
 		goto EXIT;
@@ -10141,20 +10134,16 @@ static long ISP_ioctl(struct file *pFile, unsigned int Cmd, unsigned long Param)
 		} else {
 			if (wakelock_ctrl == 1) {       /* Enable     wakelock */
 				if (g_bWaitLock == 0) {
-#ifdef CONFIG_PM_WAKELOCKS
+#ifdef CONFIG_PM_SLEEP
 					__pm_stay_awake(&isp_wake_lock);
-#else
-					wake_lock(&isp_wake_lock);
 #endif
 					g_bWaitLock = 1;
 					LOG_DBG("wakelock enable!!\n");
 				}
 			} else {        /* Disable wakelock */
 				if (g_bWaitLock == 1) {
-#ifdef CONFIG_PM_WAKELOCKS
+#ifdef CONFIG_PM_SLEEP
 					__pm_relax(&isp_wake_lock);
-#else
-					wake_unlock(&isp_wake_lock);
 #endif
 					g_bWaitLock = 0;
 					LOG_DBG("wakelock disable!!\n");
@@ -11336,6 +11325,39 @@ static long ISP_ioctl_compat(struct file *filp, unsigned int cmd, unsigned long 
 			(unsigned long)compat_ptr(arg));
 		return ret;
 	}
+	case COMPAT_ISP_ED_QUEBUF_CTRL: {
+		struct compat_ISP_ED_BUFQUE_STRUCT __user *data32;
+		struct ISP_ED_BUFQUE_STRUCT __user *data;
+		compat_uint_t u;
+		compat_ulong_t ul;
+		int err;
+
+		data32 = compat_ptr(arg);
+		data = compat_alloc_user_space(sizeof(*data));
+		if (data == NULL)
+			return -EFAULT;
+		err = get_user(u, (compat_uint_t __user *)&data32->ctrl);
+		err |= put_user(u, (compat_uint_t __user *)&data->ctrl);
+		err |= get_user(u, &data32->processID);
+		err |= put_user(u, &data->processID);
+		err |= get_user(ul, &data32->callerID);
+		err |= put_user((unsigned long)ul, &data->callerID);
+		err |= get_user(u, (compat_uint_t __user *)&data32->p2burstQIdx);
+		err |= put_user(u, (compat_uint_t __user *)&data->p2burstQIdx);
+		err |= get_user(u, (compat_uint_t __user *)&data32->p2dupCQIdx);
+		err |= put_user(u, (compat_uint_t __user *)&data->p2dupCQIdx);
+		err |= get_user(u, (compat_uint_t __user *)&data32->frameNum);
+		err |= put_user(u, (compat_uint_t __user *)&data->frameNum);
+		err |= get_user(u, &data32->timeoutUs);
+		err |= put_user(u, &data->timeoutUs);
+		err |= get_user(u, (compat_uint_t __user *)&data32->p2Scenario);
+		err |= put_user(u, (compat_uint_t __user *)&data->p2Scenario);
+		if (err) {
+			LOG_INF("compat ED_QUEBUF_CTRL copy error!!!\n");
+			return err;
+		}
+		return filp->f_op->unlocked_ioctl(filp, ISP_ED_QUEBUF_CTRL, (unsigned long)data);
+	}
 	case ISP_GET_CUR_SOF:
 	case ISP_GET_DROP_FRAME:
 	case ISP_RESET_CAM_P1:
@@ -11616,10 +11638,8 @@ static signed int ISP_release(struct inode *pInode, struct file *pFile)
 	/* The driver must releae the wakelock, otherwise the system will not enter     */
 	/* the power-saving mode */
 	if (g_bWaitLock == 1) {
-#ifdef CONFIG_PM_WAKELOCKS
+#ifdef CONFIG_PM_SLEEP
 		__pm_relax(&isp_wake_lock);
-#else
-		wake_unlock(&isp_wake_lock);
 #endif
 		g_bWaitLock = 0;
 	}
@@ -11712,7 +11732,7 @@ static signed int mmap_kmem(struct file *filp, struct vm_area_struct *vma)
 static signed int ISP_mmap(struct file *pFile, struct vm_area_struct *pVma)
 {
 	unsigned long length = 0;
-	unsigned int pfn = 0x0;
+	unsigned long pfn = 0x0;
 
 	LOG_DBG("- E.");
 	length = (pVma->vm_end - pVma->vm_start);
@@ -12035,10 +12055,8 @@ static signed int ISP_probe(struct platform_device *pDev)
 	init_waitqueue_head(&IspInfo.WaitQueueHead);
 	tasklet_init(&isp_tasklet, ISP_TaskletFunc, 0);
 
-#ifdef CONFIG_PM_WAKELOCKS
+#ifdef CONFIG_PM_SLEEP
 	wakeup_source_init(&isp_wake_lock, "isp_lock_wakelock");
-#else
-	wake_lock_init(&isp_wake_lock, WAKE_LOCK_SUSPEND, "isp_lock_wakelock");
 #endif
 
 	/*      */
@@ -12736,7 +12754,7 @@ int32_t ISP_BeginGCECallback(uint32_t taskID, uint32_t *regCount, uint32_t **reg
 {
 	LOG_DBG("+,taskID(%d)", taskID);
 
-	*regCount = sizeof(addressToDump) / sizeof(uint32_t);
+	*regCount = ARRAY_SIZE(addressToDump);
 	*regAddress = (uint32_t *) addressToDump;
 
 	LOG_DBG("-,*regCount(%d)", *regCount);

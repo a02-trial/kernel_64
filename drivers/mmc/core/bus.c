@@ -141,7 +141,7 @@ static void mmc_bus_shutdown(struct device *dev)
 	int ret;
 
 	if (!drv || !card) {
-		pr_debug("%s: %s: drv or card is NULL. SD card/tray was removed.\n", dev_name(dev), __func__);
+		pr_debug("%s: %s: drv or card is NULL. SDcard/tray was removed\n", dev_name(dev), __func__);
 		return;
 	}
 
@@ -181,19 +181,18 @@ static int mmc_bus_resume(struct device *dev)
 {
 	struct mmc_card *card = mmc_dev_to_card(dev);
 	struct mmc_host *host = card->host;
-	int ret;
+	int ret = 0;
 
-	if (mmc_bus_manual_resume(host)) {
+#ifdef CONFIG_MMC_BLOCK_DEFERRED_RESUME
+	if (mmc_bus_manual_resume(host))
 		host->bus_resume_flags |= MMC_BUSRESUME_NEEDS_RESUME;
-		goto skip_full_resume;
-	}
-
+	else
+#endif
 	ret = host->bus_ops->resume(host);
 	if (ret)
 		pr_warn("%s: error %d during resume (card was removed?)\n",
 			mmc_hostname(host), ret);
 
-skip_full_resume:
 	ret = pm_generic_resume(dev);
 	return ret;
 }
@@ -205,8 +204,10 @@ static int mmc_runtime_suspend(struct device *dev)
 	struct mmc_card *card = mmc_dev_to_card(dev);
 	struct mmc_host *host = card->host;
 
+#ifdef CONFIG_MMC_BLOCK_DEFERRED_RESUME
 	if (mmc_bus_needs_resume(host))
 		return 0;
+#endif
 
 	return host->bus_ops->runtime_suspend(host);
 }
@@ -216,8 +217,10 @@ static int mmc_runtime_resume(struct device *dev)
 	struct mmc_card *card = mmc_dev_to_card(dev);
 	struct mmc_host *host = card->host;
 
+#ifdef CONFIG_MMC_BLOCK_DEFERRED_RESUME
 	if (mmc_bus_needs_resume(host))
 		host->bus_resume_flags &= ~MMC_BUSRESUME_NEEDS_RESUME;
+#endif
 
 	return host->bus_ops->runtime_resume(host);
 }
@@ -382,6 +385,7 @@ int mmc_add_card(struct mmc_card *card)
 			mmc_card_ddr52(card) ? "DDR " : "",
 			uhs_bus_speed_mode, type, card->rca,
 			card->host->ios.clock);
+
 	}
 
 #ifdef CONFIG_DEBUG_FS

@@ -153,6 +153,15 @@ config USE_POGO
 	help
 	  Say Y to enable CONFIG_USE_POGO
 
+config DISCRETE_CHARGER
+	bool "enable discrete charger"
+	default n
+	help
+	  Say Y to enable CONFIG_USE_CHARGER
+	  This feature is used for models that have a
+	  dedicated charger IC or in-PMIC charger.
+	  It is needed to separate concepts in the battery driver.
+
 config MACH_KOR_EARJACK_WR
 	bool "enable earjack-noise workaround"
 	default n

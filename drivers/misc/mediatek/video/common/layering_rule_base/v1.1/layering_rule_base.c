@@ -505,10 +505,11 @@ static void print_disp_info_to_log_buffer(struct disp_layer_info *disp_info)
 		"Last hrt query data[start]\n");
 	for (i = 0 ; i < 2 ; i++) {
 		n += snprintf(status_buf + n, LOGGER_BUFFER_SIZE - n,
-			"HRT D%d/M%d/LN%d/hrt_num:%d/G(%d,%d)/fps:%d\n",
+			"HRT D%d/M%d/LN%d/hrt_num:%d/G(%d,%d)/fps:%d/config_id:%d\n",
 			i, disp_info->disp_mode[i], disp_info->layer_num[i],
 			disp_info->hrt_num,	disp_info->gles_head[i],
-			disp_info->gles_tail[i], l_rule_info->primary_fps);
+			disp_info->gles_tail[i], l_rule_info->primary_fps,
+			disp_info->active_config_id[0]);
 
 		for (j = 0 ; j < disp_info->layer_num[i] ; j++) {
 			layer_info = &disp_info->input_config[i][j];
@@ -762,6 +763,9 @@ static int ext_id_tuning(struct disp_layer_info *info, int disp)
 #ifdef CONFIG_MTK_ROUND_CORNER_SUPPORT
 	int ovl_num;
 #endif
+
+	if (disp < 0)
+		return -EFAULT;
 
 	if (info->layer_num[disp] <= 0)
 		return 0;
@@ -1563,6 +1567,9 @@ static int dispatch_ovl_id(struct disp_layer_info *disp_info)
 		disp_info->hrt_num = get_hrt_level(
 			l_rule_ops->get_hrt_bound(0, HRT_LEVEL_NUM - 1) *
 				HRT_UINT_BOUND_BPP, 0);
+
+		if (l_rule_ops->adjust_hrt_scen)
+			l_rule_ops->adjust_hrt_scen(disp_info);
 	}
 
 	/* Dispatch OVL id */
@@ -1803,6 +1810,15 @@ int layering_rule_start(struct disp_layer_info *disp_info_user,
 		return -EFAULT;
 	}
 
+#ifdef CONFIG_MTK_HIGH_FRAME_RATE
+	/*DynFPS, only primary display support*/
+	/*l_rule_info->active_config_id = disp_info_user->active_config_id[0];*/
+	if (g_force_cfg) {
+		disp_info_user->active_config_id[0] = g_force_cfg_id;
+	}
+	/*primary_display_update_cfg_id(disp_info_user->active_config_id[0]);*/
+#endif
+
 	if (check_disp_info(disp_info_user) < 0) {
 		DISPERR("check_disp_info fail\n");
 		return -EFAULT;
@@ -1956,6 +1972,8 @@ static char *parse_hrt_data_value(char *start, long int *value)
 	int ret;
 
 	tok_start = strchr(start + 1, ']');
+	if (!tok_start)
+		return tok_end;
 	tok_end = strchr(tok_start + 1, '[');
 	if (tok_end)
 		*tok_end = 0;
@@ -2023,7 +2041,7 @@ static int load_hrt_test_data(struct disp_layer_info *disp_info)
 			tok = parse_hrt_data_value(tok, &disp_id);
 			if (!tok)
 				DISPWARN("can not parse disp_id\n");
-			if (disp_id > HRT_SECONDARY)
+			if (disp_id > HRT_SECONDARY || disp_id < 0)
 				goto end;
 
 			if (layer_num != 0) {

@@ -98,11 +98,13 @@
 #include <linux/of_address.h>
 #include "mtk_musb.h"
 #endif
+#if IS_ENABLED(CONFIG_USB_NOTIFY_LAYER)
+#include <linux/usb_notify.h>
+#endif
 
-#if (defined CONFIG_MUIC_NOTIFIER) && (!defined CONFIG_USB_NOTIFY_LAYER) \
-	&& (defined CONFIG_MUIC_S2MU005)
-#include <linux/muic/muic.h>
-#include <linux/muic/muic_notifier.h>
+#if (IS_ENABLED(CONFIG_MUIC_NOTIFIER) && !IS_ENABLED(CONFIG_USB_NOTIFY_LAYER) && IS_ENABLED(CONFIG_MUIC_S2MU005))
+#include <linux/muic/common/muic.h>
+#include <linux/muic/common/muic_notifier.h>
 #endif
 
 static void (*usb_hal_dpidle_request_fptr)(int);
@@ -1352,14 +1354,13 @@ void musb_start(struct musb *musb)
 			musb->is_host, musb->is_active);
 
 	musb_platform_enable(musb);
+	musb_platform_reset(musb);
 	musb_generic_disable(musb);
 
 	intrusbe = musb_readb(regs, MUSB_INTRUSBE);
 	if (musb->is_host) {
 		musb->intrtxe = 0xffff;
-		musb_writew(regs, MUSB_INTRTXE, musb->intrtxe);
 		musb->intrrxe = 0xfffe;
-		musb_writew(regs, MUSB_INTRRXE, musb->intrrxe);
 		intrusbe = 0xf7;
 
 		while (!musb_platform_get_vbus_status(musb)) {
@@ -1371,6 +1372,9 @@ void musb_start(struct musb *musb)
 		}
 
 	} else if (!musb->is_host) {
+		/* enable ep0 interrupt */
+		musb->intrtxe = 0x1;
+		musb->intrrxe = 0;
 		/* device mode enable reset interrupt */
 		intrusbe |= MUSB_INTR_RESET;
 #if defined(CONFIG_USBIF_COMPLIANCE)
@@ -1379,6 +1383,8 @@ void musb_start(struct musb *musb)
 #endif
 	}
 
+	musb_writew(regs, MUSB_INTRTXE, musb->intrtxe);
+	musb_writew(regs, MUSB_INTRRXE, musb->intrrxe);
 	musb_writeb(regs, MUSB_INTRUSBE, intrusbe);
 
 	/* In U2 host mode, USB bus will issue
@@ -1940,6 +1946,7 @@ static int musb_core_init(u16 musb_type, struct musb *musb)
 	void __iomem *mbase = musb->mregs;
 	int status = 0;
 	int i;
+	int ret;
 
 	/* log core options (read using indexed model) */
 	reg = musb_read_configdata(mbase);
@@ -1986,9 +1993,13 @@ static int musb_core_init(u16 musb_type, struct musb *musb)
 
 	/* log release info */
 	musb->hwvers = musb_read_hwvers(mbase);
-	snprintf(aRevision, 32, "%d.%d%s", MUSB_HWVERS_MAJOR(musb->hwvers),
+	ret = snprintf(aRevision, 32, "%d.%d%s", MUSB_HWVERS_MAJOR(musb->hwvers),
 		 MUSB_HWVERS_MINOR(musb->hwvers),
 		 (musb->hwvers & MUSB_HWVERS_RC) ? "RC" : "");
+
+	if (ret < 0)
+		return -EINVAL;
+
 	pr_debug("%s: %sHDRC RTL version %s %s\n"
 		, musb_driver_name, type, aRevision, aDate);
 
@@ -2139,8 +2150,8 @@ irqreturn_t musb_interrupt(struct musb *musb)
 				static DEFINE_RATELIMIT_STATE(rlmt, HZ, 2);
 				static int skip_cnt;
 
-                if (musb_host_db_enable &&
-                    host_tx_refcnt_dec(ep_num) < 0) {
+				if (musb_host_db_enable &&
+					host_tx_refcnt_dec(ep_num) < 0) {
 					int ref_cnt;
 
 					musb_host_db_workaround_cnt++;
@@ -2448,7 +2459,19 @@ static void musb_free(struct musb *musb)
 
 	usb_put_hcd(musb_to_hcd(musb));
 }
+#if IS_ENABLED(CONFIG_USB_NOTIFY_LAYER)
+static void musb_usb_event_work(struct work_struct *work)
+{
+	struct musb *musb = container_of(work, struct musb, usb_event_work.work);
 
+	pr_info("usb: %s, event_state: %d\n", __func__, musb->event_state);
+
+	if (musb->event_state)
+		send_usb_err_uevent(USB_ERR_ABNORMAL_RESET, NOTIFY);
+	else
+		send_usb_err_uevent(USB_ERR_ABNORMAL_RESET, RELEASE);
+}
+#endif
 /*
  * Perform generic per-controller initialization.
  *
@@ -2597,7 +2620,7 @@ static int musb_init_controller
 
 	/* attach to the IRQ */
 	if (request_irq(musb->nIrq, musb->isr
-			, IRQF_TRIGGER_LOW, dev_name(dev), musb)) {
+			, IRQF_TRIGGER_NONE, dev_name(dev), musb)) {
 		DBG(0, "request_irq %d failed!\n", musb->nIrq);
 		status = -ENODEV;
 		goto fail3;
@@ -2656,26 +2679,30 @@ static int musb_init_controller
 	if (status < 0)
 		goto fail3;
 
+#ifdef CONFIG_DEBUG_FS
 	status = musb_init_debugfs(musb);
 	if (status < 0)
 		goto fail4;
-
+#endif
 #ifdef CONFIG_SYSFS
 	status = sysfs_create_group(&musb->controller->kobj, &musb_attr_group);
 	if (status)
 		goto fail5;
 #endif
-
+#if IS_ENABLED(CONFIG_USB_NOTIFY_LAYER)
+	INIT_DELAYED_WORK(&musb->usb_event_work, musb_usb_event_work);
+#endif
 	pm_runtime_put(musb->controller);
 
 	return 0;
-
+#ifdef CONFIG_DEBUG_FS
 #ifdef CONFIG_SYSFS
 fail5:
 	musb_exit_debugfs(musb);
 #endif
 
 fail4:
+#endif
 	musb_gadget_cleanup(musb);
 
 fail3:
@@ -2712,11 +2739,15 @@ static int musb_probe(struct platform_device *pdev)
 	struct resource *iomem;
 
 	iomem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	if (!iomem)
+		return -ENODEV;
 	base = devm_ioremap(dev, iomem->start, resource_size(iomem));
 	if (IS_ERR(base))
 		return PTR_ERR(base);
 
 	iomem = platform_get_resource(pdev, IORESOURCE_MEM, 1);
+	if (!iomem)
+		return -ENODEV;
 	pbase = devm_ioremap(dev, iomem->start, resource_size(iomem));
 	if (IS_ERR(pbase))
 		return PTR_ERR(pbase);
@@ -2743,7 +2774,9 @@ static int musb_remove(struct platform_device *pdev)
 	 *  - Peripheral mode: peripheral is deactivated (or never-activated)
 	 *  - OTG mode: both roles are deactivated (or never-activated)
 	 */
+#ifdef CONFIG_DEBUG_FS
 	musb_exit_debugfs(musb);
+#endif
 	musb_shutdown(pdev);
 
 	musb_free(musb);
@@ -2893,9 +2926,9 @@ static int musb_suspend_noirq(struct device *dev)
 
 	/*Turn on USB clock, before reading a batch of regs */
 	mtk_usb_power = true;
-	#ifdef CONFIG_MTK_MUSB_PORT0_LOWPOWER_MODE
+#ifdef CONFIG_MTK_MUSB_PORT0_LOWPOWER_MODE
 	mt_usb_clock_prepare(musb);
-	#endif
+#endif
 	musb_platform_prepare_clk(musb);
 	musb_platform_enable_clk(musb);
 
@@ -2906,9 +2939,9 @@ static int musb_suspend_noirq(struct device *dev)
 	musb_platform_disable_clk(musb);
 	musb_platform_unprepare_clk(musb);
 	mtk_usb_power = false;
-	#ifdef CONFIG_MTK_MUSB_PORT0_LOWPOWER_MODE
+#ifdef CONFIG_MTK_MUSB_PORT0_LOWPOWER_MODE
 	mt_usb_clock_unprepare(musb);
-	#endif
+#endif
 
 	usb_pre_clock(false);
 	/*spin_unlock_irqrestore(&musb->lock, flags); */
@@ -2924,9 +2957,9 @@ static int musb_resume_noirq(struct device *dev)
 
 	/*Turn on USB clock, before writing a batch of regs */
 	mtk_usb_power = true;
-	#ifdef CONFIG_MTK_MUSB_PORT0_LOWPOWER_MODE
+#ifdef CONFIG_MTK_MUSB_PORT0_LOWPOWER_MODE
 	mt_usb_clock_prepare(musb);
-	#endif
+#endif
 	musb_platform_prepare_clk(musb);
 	musb_platform_enable_clk(musb);
 
@@ -2936,9 +2969,9 @@ static int musb_resume_noirq(struct device *dev)
 	musb_platform_disable_clk(musb);
 	musb_platform_unprepare_clk(musb);
 	mtk_usb_power = false;
-	#ifdef CONFIG_MTK_MUSB_PORT0_LOWPOWER_MODE
+#ifdef CONFIG_MTK_MUSB_PORT0_LOWPOWER_MODE
 	mt_usb_clock_unprepare(musb);
-	#endif
+#endif
 
 	return 0;
 }
@@ -3071,8 +3104,7 @@ static struct kernel_param_ops musb_force_on_param_ops = {
 };
 module_param_cb(musb_force_on, &musb_force_on_param_ops, &musb_force_on, 0644);
 
-#if (defined CONFIG_MUIC_NOTIFIER) && (!defined CONFIG_USB_NOTIFY_LAYER) \
-	&& (defined CONFIG_MUIC_S2MU005)
+#if (IS_ENABLED(CONFIG_MUIC_NOTIFIER) && !IS_ENABLED(CONFIG_USB_NOTIFY_LAYER) && IS_ENABLED(CONFIG_MUIC_S2MU005))
 struct usb_notifier_platform_data {
 	struct  notifier_block usb_nb;
 	struct  notifier_block vbus_nb;
@@ -3144,3 +3176,4 @@ static int __init muic_notifier_init(void)
 }
 late_initcall(muic_notifier_init);
 #endif
+

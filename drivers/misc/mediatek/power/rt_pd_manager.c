@@ -38,6 +38,10 @@
 
 #include <mt-plat/mtk_boot.h>
 
+#ifdef CONFIG_BATTERY_SAMSUNG
+#include <../drivers/battery/common/sec_charging_common.h>
+#endif
+
 #define RT_PD_MANAGER_VERSION	"1.0.5_MTK"
 
 static DEFINE_MUTEX(param_lock);
@@ -48,9 +52,8 @@ static int pd_sink_voltage_new;
 static int pd_sink_voltage_old;
 static int pd_sink_current_new;
 static int pd_sink_current_old;
-static unsigned char pd_sink_type;
+static bool water_detected;
 static bool tcpc_kpoc;
-static unsigned char bc12_chr_type;
 #if 0 /* vconn is from vsys on mt6763 */
 /* vconn boost gpio pin */
 static int vconn_gpio;
@@ -87,18 +90,6 @@ void pd_chrdet_int_handler(void)
 {
 	pr_notice("[%s] CHRDET status = %d....\n", __func__,
 		pmic_get_register_value(PMIC_RGS_CHRDET));
-
-	if (!upmu_get_rgs_chrdet()) {
-		int boot_mode = 0;
-
-		boot_mode = get_boot_mode();
-
-		if (boot_mode == KERNEL_POWER_OFF_CHARGING_BOOT
-			|| boot_mode == LOW_POWER_OFF_CHARGING_BOOT) {
-			pr_notice("[%s] Unplug Charger/USB\n", __func__);
-			kernel_power_off();
-		}
-	}
 
 	pmic_set_register_value(PMIC_RG_USBDL_RST, 1);
 	do_chrdet_int_task();
@@ -163,7 +154,10 @@ static int pd_tcp_notifier_call(struct notifier_block *nb,
 					unsigned long event, void *data)
 {
 	struct tcp_notify *noti = data;
-
+#ifdef CONFIG_BATTERY_SAMSUNG
+	int ret = 0;
+	union power_supply_propval propval = {0, };
+#endif
 	switch (event) {
 	case TCP_NOTIFY_SOURCE_VCONN:
 #if 0 /* vconn is from vsys on mt6763 */
@@ -186,62 +180,47 @@ static int pd_tcp_notifier_call(struct notifier_block *nb,
 		mutex_lock(&param_lock);
 		pd_sink_voltage_new = noti->vbus_state.mv;
 		pd_sink_current_new = noti->vbus_state.ma;
-
-		if (noti->vbus_state.type & TCP_VBUS_CTRL_PD_DETECT)
-			pd_sink_type = SINK_TYPE_PD_CONNECTED;
-		else if (noti->vbus_state.type == TCP_VBUS_CTRL_REMOVE)
-			pd_sink_type = SINK_TYPE_REMOVE;
-		else if (noti->vbus_state.type == TCP_VBUS_CTRL_TYPEC)
-			pd_sink_type = SINK_TYPE_TYPEC;
-		else if (noti->vbus_state.type == TCP_VBUS_CTRL_PD)
-			pd_sink_type = SINK_TYPE_PD_TRY;
-		else if (noti->vbus_state.type == TCP_VBUS_CTRL_REQUEST)
-			pd_sink_type = SINK_TYPE_REQUEST;
-		pr_info("%s sink vbus %dmv %dma type(%d)\n", __func__,
-			pd_sink_voltage_new, pd_sink_current_new, pd_sink_type);
-		mutex_unlock(&param_lock);
+		pr_info("%s sink vbus %dmV %dmA type(0x%02X)\n", __func__,
+			pd_sink_voltage_new, pd_sink_current_new,
+			noti->vbus_state.type);
 
 		if ((pd_sink_voltage_new != pd_sink_voltage_old) ||
 		    (pd_sink_current_new != pd_sink_current_old)) {
-			if (pd_sink_voltage_new) {
-				/* enable charger */
+			pd_sink_voltage_old = pd_sink_voltage_new;
+			pd_sink_current_old = pd_sink_current_new;
+			if (pd_sink_voltage_new && pd_sink_current_new) {
+				if (!water_detected) {
 #if CONFIG_MTK_GAUGE_VERSION == 30
-				charger_manager_enable_power_path(chg_consumer,
-					MAIN_CHARGER, true);
+#ifdef CONFIG_BATTERY_SAMSUNG
+					propval.intval = 0;
+					psy_do_property("mtk-charger", get,
+						POWER_SUPPLY_EXT_PROP_BUCK_STATE,
+						propval);
+					if (ret < 0)
+						pr_err(
+						"%s: Fail to get property\n",
+									__func__);
+					if (propval.intval)
+						charger_dev_enable_powerpath(
+							primary_charger, true);
 #else
-				mtk_chr_pd_enable_power_path(1);
+					charger_dev_enable_powerpath(
+							primary_charger, true);
 #endif
-				pd_sink_voltage_old = pd_sink_voltage_new;
-				pd_sink_current_old = pd_sink_current_new;
-			} else if (pd_sink_type == SINK_TYPE_REMOVE) {
-				if (tcpc_kpoc)
-					break;
-#if CONFIG_MTK_GAUGE_VERSION == 30
-				charger_manager_enable_power_path(chg_consumer,
-					MAIN_CHARGER, false);
 #else
-				mtk_chr_pd_enable_power_path(0);
+					mtk_chr_pd_enable_power_path(1);
 #endif
-				pd_sink_voltage_old = pd_sink_voltage_new;
-				pd_sink_current_old = pd_sink_current_new;
-			} else {
-				bc12_chr_type = mt_get_charger_type();
-				if (bc12_chr_type >= STANDARD_HOST &&
-				    bc12_chr_type <= STANDARD_CHARGER)
-					break;
-				if (tcpc_kpoc)
-					break;
-				/* disable charge */
+				}
+			} else if (!tcpc_kpoc) {
 #if CONFIG_MTK_GAUGE_VERSION == 30
-				charger_manager_enable_power_path(chg_consumer,
-					MAIN_CHARGER, false);
+				charger_dev_enable_powerpath(primary_charger,
+									false);
 #else
 				mtk_chr_pd_enable_power_path(0);
 #endif
-				pd_sink_voltage_old = pd_sink_voltage_new;
-				pd_sink_current_old = pd_sink_current_new;
 			}
 		}
+		mutex_unlock(&param_lock);
 		break;
 	case TCP_NOTIFY_TYPEC_STATE:
 		if (noti->typec_state.old_state == TYPEC_UNATTACHED &&
@@ -275,7 +254,7 @@ static int pd_tcp_notifier_call(struct notifier_block *nb,
 	case TCP_NOTIFY_WD_STATUS:
 		pr_info("%s wd status = %d\n",
 			__func__, noti->wd_status.water_detected);
-
+		water_detected = noti->wd_status.water_detected;
 		if (noti->wd_status.water_detected) {
 			usb_dpdm_pulldown(false);
 			if (tcpc_kpoc) {
@@ -298,12 +277,6 @@ static int pd_tcp_notifier_call(struct notifier_block *nb,
 		break;
 	case TCP_NOTIFY_PLUG_OUT:
 		pr_info("%s typec plug out\n", __func__);
-
-		if (tcpc_kpoc) {
-			pr_info("[%s] typec cable plug out, power off\n",
-				__func__);
-			kernel_power_off();
-		}
 		break;
 	default:
 		break;

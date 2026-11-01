@@ -117,7 +117,7 @@ BOOLEAN nicpmSetDriverOwn(IN P_ADAPTER_T prAdapter)
 #define LP_OWN_BACK_CLR_OWN_ITERATION   200	/* exponential of 2 */
 
 	BOOLEAN fgStatus = TRUE;
-	UINT_32 i, u4CurrTick, u4WriteTick, u4WriteTickTemp, u4TickDiff;
+	UINT_32 i, u4CurrTick, u4WriteTick, u4WriteTickTemp, u4NewTick = 0;
 	UINT_32 u4RegValue = 0;
 	GL_HIF_INFO_T *HifInfo;
 	BOOLEAN fgWmtCoreDump = FALSE;
@@ -144,7 +144,7 @@ BOOLEAN nicpmSetDriverOwn(IN P_ADAPTER_T prAdapter)
 			break;
 		} else if (kalIsCardRemoved(prAdapter->prGlueInfo) == TRUE
 			   || fgIsBusAccessFailed == TRUE
-			   || (u4TickDiff = (kalGetTimeTick() - u4CurrTick)) > LP_OWN_BACK_TOTAL_DELAY_MS
+			   || CHECK_FOR_TIMEOUT(u4NewTick = kalGetTimeTick(), u4CurrTick, LP_OWN_BACK_TOTAL_DELAY_MS)
 			   || fgIsResetting == TRUE) {
 			/* ERRORLOG(("LP cannot be own back (for %ld ms)", kalGetTimeTick() - u4CurrTick)); */
 			fgStatus = FALSE;
@@ -179,7 +179,7 @@ BOOLEAN nicpmSetDriverOwn(IN P_ADAPTER_T prAdapter)
 				fgWmtCoreDump = glIsWmtCodeDump();
 				DBGLOG(NIC, WARN,
 					"<WiFi> Fatal error! Driver own fail!!!! %d, fgIsBusAccessFailed: %d, OWN retry:%d, fgCoreDump:%d, u4TickDiff:%u\n",
-					u4OwnCnt++, fgIsBusAccessFailed, i, fgWmtCoreDump, u4TickDiff);
+					u4OwnCnt++, fgIsBusAccessFailed, i, fgWmtCoreDump, u4NewTick - u4CurrTick);
 				DBGLOG(NIC, WARN, "CONNSYS FW CPUINFO:\n");
 				for (u4FwCnt = 0; u4FwCnt < 16; u4FwCnt++)
 					DBGLOG(NIC, WARN, "0x%08x ", MCU_REG_READL(HifInfo, CONN_MCU_CPUPCR));

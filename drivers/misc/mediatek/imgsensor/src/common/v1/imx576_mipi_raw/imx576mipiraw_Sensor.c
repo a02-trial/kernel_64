@@ -42,13 +42,28 @@
 /* #include <asm/system.h> */
 /* #include <linux/xlog.h> */
 #include <linux/types.h>
+#include <linux/slab.h>
 
 #include "kd_camera_typedef.h"
 #include "kd_imgsensor.h"
 #include "kd_imgsensor_define.h"
 #include "kd_imgsensor_errcode.h"
+#include "kd_imgsensor_sysfs_adapter.h"
+
+#include "imgsensor_sysfs.h"
 
 #include "imx576mipiraw_Sensor.h"
+
+#define WRITE_SENSOR_CAL_FOR_DPC                (0)
+#define WRITE_SENSOR_CAL_FOR_QSC                (1)
+#define ENABLE_BURST_WRITE                      (1)
+#define DEBUG_IMX576_RECORD_29FPS
+#ifdef DEBUG_IMX576_RECORD_29FPS
+static int the_frame_length;
+static int the_line_length;
+static int the_pclk;
+static int the_autoflicker_en;
+#endif
 
 #undef VENDOR_EDIT
 
@@ -60,6 +75,7 @@ static int32_t gSensorVersion;
 #define LSC_DEBUG 0
 
 static kal_uint32 streaming_control(kal_bool enable);
+static void wait_stream_onoff(kal_bool onoff);
 
 #define LOG_INF(format, args...) pr_debug(PFX "[%s] " format, __func__, ##args)
 static DEFINE_SPINLOCK(imgsensor_drv_lock);
@@ -73,13 +89,13 @@ static struct imgsensor_info_struct imgsensor_info = {
 
 	.pre = {
 		/*setting for normal binning*/
-		.pclk = 419900000,
-		.linelength = 6320,
-		.framelength = 2214,
+		.pclk = 286000000,
+		.linelength = 3160,
+		.framelength = 3016,
 		.startx = 0,
 		.starty = 0,
-		.grabwindow_width = 2832,
-		.grabwindow_height = 2124,
+		.grabwindow_width = 2880,
+		.grabwindow_height = 2156,
 		.mipi_data_lp2hs_settle_dc = 85,
 		.mipi_pixel_rate = 821600000,
 		.max_framerate = 300,
@@ -104,21 +120,21 @@ static struct imgsensor_info_struct imgsensor_info = {
 		.framelength = 2214,
 		.startx = 0,
 		.starty = 0,
-		.grabwindow_width = 2832,
-		.grabwindow_height = 2124,
+		.grabwindow_width = 2880,
+		.grabwindow_height = 2156,
 		.mipi_data_lp2hs_settle_dc = 85,
 		.mipi_pixel_rate = 821600000,
 		.max_framerate = 300,
 	},
 	.normal_video = {
 		/*setting for normal binning*/
-		.pclk = 419900000,
+		.pclk = 317200000,
 		.linelength = 6320,
-		.framelength = 2214,
+		.framelength = 1672,
 		.startx = 0,
 		.starty = 0,
-		.grabwindow_width = 2832,
-		.grabwindow_height = 1592,
+		.grabwindow_width = 2880,
+		.grabwindow_height = 1620,
 		.mipi_data_lp2hs_settle_dc = 85,
 		.mipi_pixel_rate = 821600000,
 		.max_framerate = 300,
@@ -140,11 +156,11 @@ static struct imgsensor_info_struct imgsensor_info = {
 		/*setting for remosaic*/
 		.pclk = 808600000,
 		.linelength = 6144,
-		.framelength = 4386,
+		.framelength = 5482,
 		.startx = 0,
 		.starty = 0,
-		.grabwindow_width = 5664,
-		.grabwindow_height = 4248,
+		.grabwindow_width = 5760,
+		.grabwindow_height = 4312,
 		.mipi_data_lp2hs_settle_dc = 85,
 		.mipi_pixel_rate = 821600000,
 		.max_framerate = 300,
@@ -241,7 +257,7 @@ static struct imgsensor_info_struct imgsensor_info = {
 	.custom3_delay_frame = 2,
 	.custom4_delay_frame = 2,
 	.custom5_delay_frame = 2,
-	.isp_driving_current = ISP_DRIVING_6MA,
+	.isp_driving_current = ISP_DRIVING_8MA,
 	.sensor_interface_type = SENSOR_INTERFACE_TYPE_MIPI,
 	.mipi_sensor_type = MIPI_OPHY_NCSI2,
 	/* 0,MIPI_OPHY_NCSI2;  1,MIPI_OPHY_CSI2 */
@@ -251,7 +267,7 @@ static struct imgsensor_info_struct imgsensor_info = {
 	.mclk = 26,
 	.mipi_lane_num = SENSOR_MIPI_4_LANE,
 	.i2c_addr_table = {0x34, 0x20, 0xff},
-	.i2c_speed = 320, /* i2c read/write speed */
+	.i2c_speed = 1000, /* i2c read/write speed */
 };
 
 
@@ -278,16 +294,16 @@ static struct imgsensor_struct imgsensor = {
 
 /* Sensor output window information */
 static struct SENSOR_WINSIZE_INFO_STRUCT imgsensor_winsize_info[10] = {
-	{ 5760, 4312,    0,   32, 5760, 4248, 2880, 2124,
-	    24,    0, 2832, 2124,    0,    0, 2832, 2124 }, /* preview */
-	{ 5760, 4312,    0,   32, 5760, 4248, 2880, 2124,
-	    24,    0, 2832, 2124,    0,    0, 2832, 2124 }, /* capture (pre.) */
-	{ 5760, 4312,    0,   32, 5760, 4248, 2880, 2124,
-	    24,  266, 2832, 1592,    0,    0, 2832, 1592 }, /* video */
+	{ 5760, 4312,    0,    0, 5760, 4312, 2880, 2156,
+	     0,    0, 2880, 2156,    0,    0, 2880, 2156 }, /* preview */
+	{ 5760, 4312,    0,    0, 5760, 4312, 2880, 2156,
+	     0,    0, 2880, 2156,    0,    0, 2880, 2156 }, /* capture (pre.) */
+	{ 5760, 4312,    0,    0, 5760, 4312, 2880, 2156,
+	     0,  268, 2880, 1620,    0,    0, 2880, 1620 }, /* video */
 	{ 5760, 4312,    0,  564, 5760, 3184, 2880, 1592,
 	    24,    0, 2832, 1592,    0,    0, 2832, 1592 }, /* hs video */
-	{ 5760, 4312,    0,   32, 5760, 4248, 5760, 4248,
-	    48,    0, 5664, 4248,    0,    0, 5664, 4248 }, /* slim (remo.) */
+	{ 5760, 4312,    0,    0, 5760, 4312, 5760, 4312,
+	     0,    0, 5760, 4312,    0,    0, 5760, 4312 }, /* slim (remo.) */
 	{ 5760, 4312,    0,  196, 5760, 3920, 2880, 1960,
 	   132,    0, 2616, 1960,    0,    0, 2616, 1960 }, /* custom1 */
 	{ 5760, 4312,    0,   32, 5760, 4248, 2880, 2124,
@@ -336,7 +352,7 @@ static kal_uint16 read_otp_sensor_id(void)
 	char pusendcmd[2] = {(char)(SENSOR_OTP_ID_OFFSET >> 8),
 				(char)(SENSOR_OTP_ID_OFFSET & 0xFF) };
 
-	iReadRegI2C(pusendcmd, 2, (u8 *)&get_byte, 1, EEPROM_READ_ID);
+	iReadRegI2CTiming(pusendcmd, 2, (u8 *)&get_byte, 1, EEPROM_READ_ID, imgsensor_info.i2c_speed);
 	LOG_INF("read from otp, sensor id is 0x%x\n", get_byte);
 	return get_byte;
 }
@@ -348,9 +364,9 @@ static kal_uint16 read_module_id(void)
 	char pusendcmd[2] = {(char)(MODULE_ID_OFFSET >> 8),
 			     (char)(MODULE_ID_OFFSET & 0xFF) };
 
-	iReadRegI2C(pusendcmd, 2, (u8 *)&get_byte, 1, 0xA2/*EEPROM_READ_ID*/);
+	iReadRegI2CTiming(pusendcmd, 2, (u8 *)&get_byte, 1, 0xA2/*EEPROM_READ_ID*/, imgsensor_info.i2c_speed);
 	if (get_byte == 0) /*EEPROM_READ_ID*/
-		iReadRegI2C(pusendcmd, 2, (u8 *)&get_byte, 1, 0xA8);
+		iReadRegI2CTiming(pusendcmd, 2, (u8 *)&get_byte, 1, 0xA8, imgsensor_info.i2c_speed);
 
 	return get_byte;
 }
@@ -360,7 +376,7 @@ static kal_uint16 read_cmos_sensor(kal_uint32 addr)
 	kal_uint16 get_byte = 0;
 	char pusendcmd[2] = {(char)(addr >> 8), (char)(addr & 0xFF) };
 
-	iReadRegI2C(pusendcmd, 2, (u8 *)&get_byte, 2, imgsensor.i2c_write_id);
+	iReadRegI2CTiming(pusendcmd, 2, (u8 *)&get_byte, 2, imgsensor.i2c_write_id, imgsensor_info.i2c_speed);
 	return ((get_byte<<8)&0xff00)|((get_byte>>8)&0x00ff);
 }
 
@@ -372,7 +388,7 @@ static void write_cmos_sensor(kal_uint16 addr, kal_uint16 para)
 
 	/*kdSetI2CSpeed(imgsensor_info.i2c_speed);*/
 	/* Add this func to set i2c speed by each sensor */
-	iWriteRegI2C(pusendcmd, 4, imgsensor.i2c_write_id);
+	iWriteRegI2CTiming(pusendcmd, 4, imgsensor.i2c_write_id, imgsensor_info.i2c_speed);
 }
 
 static kal_uint16 read_cmos_sensor_8(kal_uint16 addr)
@@ -382,7 +398,7 @@ static kal_uint16 read_cmos_sensor_8(kal_uint16 addr)
 
 	 /* Add this func to set i2c speed by each sensor */
 	/*kdSetI2CSpeed(imgsensor_info.i2c_speed);*/
-	iReadRegI2C(pusendcmd, 2, (u8 *)&get_byte, 1, imgsensor.i2c_write_id);
+	iReadRegI2CTiming(pusendcmd, 2, (u8 *)&get_byte, 1, imgsensor.i2c_write_id, imgsensor_info.i2c_speed);
 	return get_byte;
 }
 
@@ -392,7 +408,7 @@ static int write_cmos_sensor_8(kal_uint16 addr, kal_uint8 para)
 			     (char)(addr & 0xFF),
 			     (char)(para & 0xFF)};
 
-	return iWriteRegI2C(pusendcmd, 3, imgsensor.i2c_write_id);
+	return iWriteRegI2CTiming(pusendcmd, 3, imgsensor.i2c_write_id, imgsensor_info.i2c_speed);
 }
 
 static void set_dummy(void)
@@ -450,9 +466,24 @@ static void write_shutter(kal_uint16 shutter)
 	if (shutter < imgsensor_info.min_shutter)
 		shutter = imgsensor_info.min_shutter;
 
+#ifdef DEBUG_IMX576_RECORD_29FPS
+		if ((the_frame_length != imgsensor.frame_length) || (the_line_length != imgsensor.line_length) ||
+		 (the_pclk != imgsensor.pclk) || (the_autoflicker_en != imgsensor.autoflicker_en)) {
+			int realtime_fps = 0;
+			if (imgsensor.line_length > 0 && imgsensor.frame_length > 0)
+				realtime_fps = imgsensor.pclk / imgsensor.line_length * 10 / imgsensor.frame_length;
+			pr_err("%s imx576 shutter=%d, frame_length=%d->%d, line_length=%d->%d, pclk=%d->%d, autoflicker=%d->%d, realtime_fps=%d",
+				__func__, shutter, the_frame_length, imgsensor.frame_length, the_line_length, imgsensor.line_length,
+				the_pclk, imgsensor.pclk, the_autoflicker_en, imgsensor.autoflicker_en, realtime_fps);
+			the_frame_length = imgsensor.frame_length;
+			the_line_length = imgsensor.line_length;
+			the_pclk = imgsensor.pclk;
+			the_autoflicker_en = imgsensor.autoflicker_en;
+		}
+#endif
 	if (imgsensor.autoflicker_en) {
 		realtime_fps =
-	  imgsensor.pclk / imgsensor.line_length * 10 / imgsensor.frame_length;
+			imgsensor.pclk / imgsensor.line_length * 10 / imgsensor.frame_length;
 		if (realtime_fps >= 297 && realtime_fps <= 305)
 			set_max_framerate(296, 0);
 		else if (realtime_fps >= 147 && realtime_fps <= 150)
@@ -687,13 +718,47 @@ static kal_uint16 imx576_table_write_cmos_sensor(kal_uint16 *para,
 			tosend = 0;
 		}
 #else
-		iWriteRegI2C(puSendCmd, 3, imgsensor.i2c_write_id);
+		iWriteRegI2CTiming(puSendCmd, 3, imgsensor.i2c_write_id, imgsensor_info.i2c_speed);
 		tosend = 0;
 
 #endif
 	}
 	return 0;
 }
+
+#if ENABLE_BURST_WRITE
+static kal_int32 burst_write_cmos_sensor(kal_uint16 start_addr, kal_uint8 *para, kal_uint32 len)
+{
+	char *puSendCmd;
+	kal_uint32 tosend = 0, data_count = 0, ret = -1;
+	kal_uint8 data = 0;
+
+	// actual size: (len + 2), margin: 2
+	puSendCmd = kzalloc(len + 4, GFP_KERNEL);
+	if (!puSendCmd) {
+		pr_err("%s: i2c buffer alloc fail!\n", __func__);
+		ret  = -ENODEV;
+		goto p_err;
+	}
+
+	puSendCmd[tosend++] = (char)((start_addr >> 8) & 0xFF);
+	puSendCmd[tosend++] = (char)(start_addr & 0xFF);
+	while (len > data_count) {
+		data = para[data_count++];
+		puSendCmd[tosend++] = (char)(data & 0xFF);
+	}
+
+	ret = iBurstWriteReg_multi(puSendCmd, tosend,
+					imgsensor.i2c_write_id, tosend, imgsensor_info.i2c_speed);
+	if (ret < 0) {
+		pr_err("%s: fail!\n", __func__);
+	}
+
+	kfree(puSendCmd);
+p_err:
+	return ret;
+}
+#endif
 
 static kal_uint16 imx576_init_setting[] = {
 	/* External Clock Setting */
@@ -920,22 +985,22 @@ static kal_uint16 imx576_preview_setting[] = {
 	0x0114, 0x03,
 
 	/* Line Length PCK Setting */
-	0x0342, 0x18,
-	0x0343, 0xB0,
+	0x0342, 0x0C, // 0xC58: 3160
+	0x0343, 0x58,
 
 	/* Frame Length Lines Setting */
-	0x0340, 0x08,
-	0x0341, 0xA6,
+	0x0340, 0x0B, // 0xBC8: 3016
+	0x0341, 0xC8,
 
 	/* ROI Setting */
 	0x0344, 0x00,
 	0x0345, 0x00,
 	0x0346, 0x00,
-	0x0347, 0x20,
+	0x0347, 0x00,
 	0x0348, 0x16,
 	0x0349, 0x7F,
 	0x034A, 0x10,
-	0x034B, 0xB7,
+	0x034B, 0xD7,
 
 	/* Mode Setting */
 	0x0220, 0x62,
@@ -951,26 +1016,26 @@ static kal_uint16 imx576_preview_setting[] = {
 	0x0404, 0x00,
 	0x0405, 0x10,
 	0x0408, 0x00,
-	0x0409, 0x18,
+	0x0409, 0x00,
 	0x040A, 0x00,
 	0x040B, 0x00,
 	0x040C, 0x0B,
-	0x040D, 0x10,
+	0x040D, 0x40,
 	0x040E, 0x08,
-	0x040F, 0x4C,
+	0x040F, 0x6C,
 
 	/* Output Size Setting */
-	0x034C, 0x0B,
-	0x034D, 0x10,
-	0x034E, 0x08,
-	0x034F, 0x4C,
+	0x034C, 0x0B, // 0xB40: 2880
+	0x034D, 0x40,
+	0x034E, 0x08, // 0x86C: 2156
+	0x034F, 0x6C,
 
 	/* Clock Setting */
 	0x0301, 0x05,
 	0x0303, 0x04,
 	0x0305, 0x04,
-	0x0306, 0x01,
-	0x0307, 0x43,
+	0x0306, 0x00,
+	0x0307, 0xDC,
 	0x030B, 0x01,
 	0x030D, 0x04,
 	0x030E, 0x01,
@@ -982,8 +1047,8 @@ static kal_uint16 imx576_preview_setting[] = {
 	0x3620, 0x00,
 	0x3F0C, 0x00,
 	0x3F14, 0x01,
-	0x3F80, 0x02,
-	0x3F81, 0x30,
+	0x3F80, 0x03,
+	0x3F81, 0xE8,
 	0x3FFC, 0x00,
 	0x3FFD, 0x26,
 
@@ -1132,22 +1197,22 @@ static kal_uint16 imx576_normal_video_setting[] = {
 	0x0114, 0x03,
 
 	/* Line Length PCK Setting */
-	0x0342, 0x18,
+	0x0342, 0x18, //0x18B0: 6320
 	0x0343, 0xB0,
 
 	/* Frame Length Lines Setting */
-	0x0340, 0x08,
-	0x0341, 0xA6,
+	0x0340, 0x06, //0x688: 1672
+	0x0341, 0x88,
 
 	/* ROI Setting */
 	0x0344, 0x00,
 	0x0345, 0x00,
-	0x0346, 0x00,
-	0x0347, 0x20,
+	0x0346, 0x02,
+	0x0347, 0x18,
 	0x0348, 0x16,
 	0x0349, 0x7F,
-	0x034A, 0x10,
-	0x034B, 0xB7,
+	0x034A, 0x0E,
+	0x034B, 0xBF,
 
 	/* Mode Setting */
 	0x0220, 0x62,
@@ -1163,26 +1228,26 @@ static kal_uint16 imx576_normal_video_setting[] = {
 	0x0404, 0x00,
 	0x0405, 0x10,
 	0x0408, 0x00,
-	0x0409, 0x18,
-	0x040A, 0x01,
-	0x040B, 0x0A,
+	0x0409, 0x00,
+	0x040A, 0x00,
+	0x040B, 0x00,
 	0x040C, 0x0B,
-	0x040D, 0x10,
+	0x040D, 0x40,
 	0x040E, 0x06,
-	0x040F, 0x38,
+	0x040F, 0x54,
 
 	/* Output Size Setting */
-	0x034C, 0x0B,
-	0x034D, 0x10,
-	0x034E, 0x06,
-	0x034F, 0x38,
+	0x034C, 0x0B, //0xB40: 2880
+	0x034D, 0x40,
+	0x034E, 0x06, //0x654: 1620
+	0x034F, 0x54,
 
 	/* Clock Setting */
 	0x0301, 0x05,
 	0x0303, 0x04,
 	0x0305, 0x04,
-	0x0306, 0x01,
-	0x0307, 0x43,
+	0x0306, 0x00,
+	0x0307, 0xF4,
 	0x030B, 0x01,
 	0x030D, 0x04,
 	0x030E, 0x01,
@@ -1200,12 +1265,12 @@ static kal_uint16 imx576_normal_video_setting[] = {
 	0x3FFD, 0x26,
 
 	/* Integration Setting */
-	0x0202, 0x07,
-	0x0203, 0xD0,
+	0x0202, 0x06,
+	0x0203, 0x48,
 	0x0224, 0x01,
-	0x0225, 0xF4,
+	0x0225, 0x92,
 	0x3FE0, 0x03,
-	0x3FE1, 0xE8,
+	0x3FE1, 0x24,
 
 	/* Gain Setting */
 	0x0204, 0x00,
@@ -1344,22 +1409,22 @@ static kal_uint16 imx576_slim_video_setting[] = {
 	0x0114, 0x03,
 
 	/* Line Length PCK Setting */
-	0x0342, 0x18,
+	0x0342, 0x18, //0x1800: 6144
 	0x0343, 0x00,
 
 	/* Frame Length Lines Setting */
-	0x0340, 0x11,
-	0x0341, 0x22,
+	0x0340, 0x15, //0x156A: 5482
+	0x0341, 0x6A,
 
 	/* ROI Setting */
 	0x0344, 0x00,
 	0x0345, 0x00,
 	0x0346, 0x00,
-	0x0347, 0x20,
+	0x0347, 0x00,
 	0x0348, 0x16,
 	0x0349, 0x7F,
 	0x034A, 0x10,
-	0x034B, 0xB7,
+	0x034B, 0xD7,
 
 	/* Mode Setting */
 	0x0220, 0x62,
@@ -1375,19 +1440,19 @@ static kal_uint16 imx576_slim_video_setting[] = {
 	0x0404, 0x00,
 	0x0405, 0x10,
 	0x0408, 0x00,
-	0x0409, 0x30,
+	0x0409, 0x00,
 	0x040A, 0x00,
 	0x040B, 0x00,
 	0x040C, 0x16,
-	0x040D, 0x20,
+	0x040D, 0x80,
 	0x040E, 0x10,
-	0x040F, 0x98,
+	0x040F, 0xD8,
 
 	/* Output Size Setting */
-	0x034C, 0x16,
-	0x034D, 0x20,
-	0x034E, 0x10,
-	0x034F, 0x98,
+	0x034C, 0x16, //0x1680: 5760
+	0x034D, 0x80,
+	0x034E, 0x10, //0x10D8: 4312
+	0x034F, 0xD8,
 
 	/* Clock Setting */
 	0x0301, 0x05,
@@ -1975,14 +2040,102 @@ static kal_uint16 imx576_custom5_setting[] = {
 
 static void sensor_init(void)
 {
+	int ret = 0;
+	struct cam_hw_param *hw_param = NULL;
 	LOG_INF("%s E\n", __func__);
+#ifdef DEBUG_IMX576_RECORD_29FPS
+	pr_err("%s imx576 debug values for flicker and fps reset to 0", __func__);
+	the_frame_length = 0;
+	the_line_length = 0;
+	the_pclk = 0;
+	the_autoflicker_en = 0;
+#endif
 
-	imx576_table_write_cmos_sensor(imx576_init_setting,
+	ret = imx576_table_write_cmos_sensor(imx576_init_setting,
 		sizeof(imx576_init_setting)/sizeof(kal_uint16));
+
+	if (ret != 0) {
+		imgsensor_sec_get_hw_param(&hw_param, SENSOR_POSITION_FRONT);
+		if (hw_param)
+			hw_param->i2c_sensor_err_cnt++;
+	}
 
 	set_mirror_flip(imgsensor.mirror);
 	LOG_INF("%s X\n", __func__);
 }	/*	sensor_init  */
+
+#if WRITE_SENSOR_CAL_FOR_DPC
+#define SENSOR_IMX576_DPC_CAL_BASE_REAR           (0x09D0)
+#define SENSOR_IMX576_DPC_CAL_SIZE                (2048)
+
+static void sensor_DPC_write(void)
+{
+	int i = 0;
+	char *rom_cal_buf = NULL;
+	char cal_data[SENSOR_IMX576_DPC_CAL_SIZE] = {0};
+
+	int start_addr = 0;
+	int data_size = 0;
+
+	// TODO : sensor_dev_id needs to be updated according to actual id.
+	int sensor_dev_id = IMGSENSOR_SENSOR_IDX_MAIN;
+
+	pr_debug("%s", __func__);
+
+	if (IMGSENSOR_GET_CAL_BUF_BY_SENSOR_IDX(sensor_dev_id, &rom_cal_buf)) {
+		pr_err("%s : cal data is NULL, sensor_dev_id: %d", __func__, sensor_dev_id);
+		return;
+	}
+	rom_cal_buf += SENSOR_IMX576_DPC_CAL_BASE_REAR;
+	memcpy(cal_data, &rom_cal_buf, SENSOR_IMX576_DPC_CAL_SIZE);
+
+	start_addr = ((rom_cal_buf[SENSOR_IMX576_DPC_CAL_SIZE-4] << 8) | rom_cal_buf[SENSOR_IMX576_DPC_CAL_SIZE-3]);
+	data_size = ((rom_cal_buf[SENSOR_IMX576_DPC_CAL_SIZE-2] << 8) | rom_cal_buf[SENSOR_IMX576_DPC_CAL_SIZE-1]);
+	pr_err("%s write addr=0x%X, size=%d", __func__, start_addr, data_size);
+	pr_err("%s write2 addr=0x%X,%X, size=%X,%X", __func__,
+		rom_cal_buf[SENSOR_IMX576_DPC_CAL_SIZE-4], rom_cal_buf[SENSOR_IMX576_DPC_CAL_SIZE-3],
+		rom_cal_buf[SENSOR_IMX576_DPC_CAL_SIZE-2], rom_cal_buf[SENSOR_IMX576_DPC_CAL_SIZE-1]);
+	for (i = 0; i < data_size ; i++)
+		write_cmos_sensor_8(start_addr+i, rom_cal_buf[i]);
+	pr_info("%s done writing %d bytes", __func__, data_size);
+}
+#endif
+
+#if WRITE_SENSOR_CAL_FOR_QSC
+#define SENSOR_IMX576_QSC_CAL_BASE_REAR           (0x11D0)
+#define SENSOR_IMX576_QSC_CAL_SIZE                (1056)
+#define SENSOR_IMX576_QSC_REG_ADDR                (0x8000)
+static bool sensor_imx576_QSC_write_flag;
+
+static void sensor_QSC_write(void)
+{
+#if ENABLE_BURST_WRITE == 0
+	int i = 0;
+#endif
+	char *rom_cal_buf = NULL;
+
+	int start_addr = SENSOR_IMX576_QSC_REG_ADDR;
+	int data_size = SENSOR_IMX576_QSC_CAL_SIZE;
+
+	// TODO : sensor_dev_id needs to be updated according to actual id.
+	int sensor_dev_id = IMGSENSOR_SENSOR_IDX_MAIN;
+
+	pr_debug("%s", __func__);
+
+	if (IMGSENSOR_GET_CAL_BUF_BY_SENSOR_IDX(sensor_dev_id, &rom_cal_buf)) {
+		pr_err("%s : cal data is NULL, sensor_dev_id: %d", __func__, sensor_dev_id);
+		return;
+	}
+	rom_cal_buf += SENSOR_IMX576_QSC_CAL_BASE_REAR;
+#if ENABLE_BURST_WRITE
+	burst_write_cmos_sensor(start_addr, rom_cal_buf, data_size);
+#else
+	for (i = 0; i < data_size ; i++)
+		write_cmos_sensor_8(start_addr+i, rom_cal_buf[i]);
+#endif
+	pr_info("%s done writing %d bytes", __func__, data_size);
+}
+#endif
 
 static void preview_setting(void)
 {
@@ -2241,7 +2394,14 @@ static kal_uint32 open(void)
 		return ERROR_SENSOR_CONNECT_FAIL;
 	/* initail sequence write in  */
 
+#if ENABLE_BURST_WRITE
+	sensor_imx576_QSC_write_flag = false;
+#endif
 	sensor_init();
+
+#if WRITE_SENSOR_CAL_FOR_DPC
+	sensor_DPC_write();
+#endif
 
 	spin_lock(&imgsensor_drv_lock);
 
@@ -2402,6 +2562,14 @@ static kal_uint32 slim_video(MSDK_SENSOR_EXPOSURE_WINDOW_STRUCT *image_window,
 			     MSDK_SENSOR_CONFIG_STRUCT *sensor_config_data)
 {
 	LOG_INF("E\n");
+
+#if WRITE_SENSOR_CAL_FOR_QSC
+	if (sensor_imx576_QSC_write_flag == false) {
+		sensor_QSC_write();
+		sensor_imx576_QSC_write_flag = true;
+		LOG_INF("QSC write: done\n");
+	}
+#endif
 
 	spin_lock(&imgsensor_drv_lock);
 	imgsensor.sensor_mode = IMGSENSOR_MODE_SLIM_VIDEO;
@@ -3328,7 +3496,7 @@ static void imx576_set_lsc_reg_setting(
 	write_cmos_sensor_8(0x0B00, 0x01); /*lsc enable*/
 	write_cmos_sensor_8(0x9014, 0x01);
 	write_cmos_sensor_8(0x4439, 0x01);
-	mdelay(1);
+	mDELAY(1);
 	LOG_INF("Addr 0xB870, 0x380D Value:0x%x %x\n",
 		read_cmos_sensor_8(0xB870), read_cmos_sensor_8(0x380D));
 	/*define Knot point, 2'b01:u3.7*/
@@ -3417,15 +3585,59 @@ static kal_uint32 imx576_awb_gain(struct SET_SENSOR_AWB_GAIN *pSetSensorAWB)
 	return ERROR_NONE;
 }
 
+static void wait_stream_onoff(kal_bool enable)
+{
+	kal_uint8 read_val = 0;
+	kal_uint16 read_addr = 0;
+	kal_uint32 max_cnt = 0, cur_cnt = 0;
+	unsigned long wait_delay_ms = 0;
+
+	read_addr = 0x0005;
+	wait_delay_ms = 2;
+	max_cnt = 100;
+	cur_cnt = 0;
+
+	read_val = read_cmos_sensor_8(read_addr);
+
+	/*
+	 * Read sensor frame counter (sensor_fcount address = 0x0005)
+	 * stream on (0x00 ~ 0xFE), stream off (0xFF)
+	 */
+	if (enable) {
+		while (read_val == 0xFF) {
+			mDELAY(wait_delay_ms);
+			read_val = read_cmos_sensor_8(read_addr);
+			cur_cnt++;
+
+			if (cur_cnt >= max_cnt) {
+				pr_err("starem on timeout: %d ms \n", (max_cnt * wait_delay_ms));
+				break;
+			}
+		}
+	} else {
+		while (read_val != 0xFF) {
+			mDELAY(wait_delay_ms);
+			read_val = read_cmos_sensor_8(read_addr);
+			cur_cnt++;
+
+			if (cur_cnt >= max_cnt) {
+				pr_err("starem off timeout: %d ms \n", (max_cnt * wait_delay_ms));
+				break;
+			}
+		}
+	}
+}
+
 static kal_uint32 streaming_control(kal_bool enable)
 {
-	LOG_INF("streaming_enable(0=Sw Standby,1=streaming): %d\n", enable);
-	if (enable)
-		write_cmos_sensor_8(0x0100, 0x01);
-	else
-		write_cmos_sensor_8(0x0100, 0x00);
 
-	mdelay(10);
+	LOG_INF("streaming_enable(0=Sw Standby,1=streaming): %d\n", enable);
+	if (enable) {
+		write_cmos_sensor_8(0x0100, 0x01);
+	} else {
+		write_cmos_sensor_8(0x0100, 0x00);
+		wait_stream_onoff(enable);
+	}
 	return ERROR_NONE;
 }
 

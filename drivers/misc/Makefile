@@ -48,6 +48,7 @@ obj-$(CONFIG_VMWARE_VMCI)	+= vmw_vmci/
 obj-$(CONFIG_LATTICE_ECP3_CONFIG)	+= lattice-ecp3-config.o
 obj-$(CONFIG_SRAM)		+= sram.o
 obj-$(CONFIG_SRAM_EXEC)		+= sram-exec.o
+obj-$(CONFIG_ACCESS_RAMOOPS)	+= access_ramoops.o
 obj-y				+= mic/
 obj-$(CONFIG_GENWQE)		+= genwqe/
 obj-$(CONFIG_ECHO)		+= echo/
@@ -82,5 +83,13 @@ $(obj)/lkdtm_rodata_objcopy.o: $(obj)/lkdtm_rodata.o FORCE
 obj-$(CONFIG_DEV_RIL_BRIDGE) += dev_ril_bridge.o
 
 # TEEGRIS kernel driver
+ifneq (,$(filter $(CONFIG_MTK_PLATFORM), "mt6739"))
+# 4.1, R OS upgrade
+ccflags-$(CONFIG_TZDEV) += -I$(srctree)/drivers/misc/tzdev/4.1/include
+obj-$(CONFIG_TZDEV)		+= tzdev/4.1/
+else
+# 4.2
 ccflags-$(CONFIG_TZDEV) += -I$(srctree)/drivers/misc/tzdev/include
 obj-$(CONFIG_TZDEV)		+= tzdev/
+endif
+obj-$(CONFIG_SAMSUNG_TUI)	+= tui/

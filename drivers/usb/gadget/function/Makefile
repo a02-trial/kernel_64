@@ -59,11 +59,12 @@ ifeq ($(CONFIG_SEC_FACTORY),y)
 	obj-$(CONFIG_USB_F_MTP) += usb_f_mtp.o
 else
 ifeq ($(CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE),y)
-	usb_f_mtp-y             := f_mtp.o
+	usb_f_mtp-y     := f_mtp.o
 	obj-$(CONFIG_USB_F_MTP) += usb_f_mtp.o
 else
 	usb_f_mtp-y             := f_mtp.o
-	obj-$(CONFIG_USB_F_MTP) += usb_f_mtp.o
+        obj-$(CONFIG_USB_F_MTP) += usb_f_mtp.o
+endif
 endif
 usb_f_ptp-y                     := f_ptp.o
 obj-$(CONFIG_USB_F_PTP)         += usb_f_ptp.o
@@ -74,4 +75,3 @@ obj-$(CONFIG_USB_F_ACC)         += usb_f_accessory.o
 usb_f_conn_gadget-y             := f_conn_gadget.o
 obj-$(CONFIG_USB_F_CONN_GADGET) += usb_f_conn_gadget.o
 obj-$(CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE)	+= multi_config.o
-endif

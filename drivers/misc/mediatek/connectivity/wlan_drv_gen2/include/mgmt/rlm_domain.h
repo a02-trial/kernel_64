@@ -35,7 +35,7 @@
 
 /* ISO/IEC 3166-1 two-character country codes */
 
-#define COUNTRY_CODE_AD (((UINT_16) 'A' << 8) | (UINT_16) 'D')	/* Andorra                             */
+#define COUNTRY_CODE_AD (((UINT_16) 'A' << 8) | (UINT_16) 'D')	/* Andorra			       */
 #define COUNTRY_CODE_AE (((UINT_16) 'A' << 8) | (UINT_16) 'E')	/* UAE                                 */
 #define COUNTRY_CODE_AF (((UINT_16) 'A' << 8) | (UINT_16) 'F')	/* Afghanistan                         */
 #define COUNTRY_CODE_AG (((UINT_16) 'A' << 8) | (UINT_16) 'G')	/* Antigua & Barbuda                   */

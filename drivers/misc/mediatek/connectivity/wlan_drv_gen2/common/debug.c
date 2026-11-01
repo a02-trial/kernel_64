@@ -1565,7 +1565,7 @@ VOID wlanDbgSetLogLevelImpl(IN P_ADAPTER_T prAdapter, UINT_32 u4Version,
 			break;
 		}
 	} while (FALSE);
-
+#if KERNEL_VERSION(4, 14, 0) >= CFG80211_VERSION_CODE
 	if (u4DriverLogLevel > ENUM_WIFI_LOG_LEVEL_OFF ||
 		u4FwLogLevel > ENUM_WIFI_LOG_LEVEL_OFF) {
 		DBGLOG(OID, INFO,
@@ -1574,6 +1574,7 @@ VOID wlanDbgSetLogLevelImpl(IN P_ADAPTER_T prAdapter, UINT_32 u4Version,
 			u4FwLogLevel);
 		set_logtoomuch_enable(0);
 	}
+#endif
 }
 
 VOID wlanDbgLevelSync(VOID)

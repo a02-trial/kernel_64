@@ -28,10 +28,6 @@
 #include <asm/tlbflush.h>
 #include <mt-plat/aee.h>
 
-#ifdef CONFIG_SEC_DEBUG_EXTRA_INFO
-#include <linux/sec_debug.h>
-#endif
-
 #include "fault.h"
 
 #ifdef CONFIG_MMU
@@ -148,19 +144,10 @@ __do_kernel_fault(struct mm_struct *mm, unsigned long addr, unsigned int fsr,
 	 * No handler, we'll have to terminate things with extreme prejudice.
 	 */
 	bust_spinlocks(1);
-	
-#ifdef CONFIG_SEC_DEBUG_AUTO_COMMENT
-	pr_auto(ASL1, "Unable to handle kernel %s at virtual address %08lx\n",
-		 (addr < PAGE_SIZE) ? "NULL pointer dereference" :
-		 "paging request", addr);
-#else
 	pr_alert("Unable to handle kernel %s at virtual address %08lx\n",
 		 (addr < PAGE_SIZE) ? "NULL pointer dereference" :
 		 "paging request", addr);
-#endif
-#ifdef CONFIG_SEC_DEBUG_EXTRA_INFO
-	sec_debug_set_extra_info_fault(addr, regs);
-#endif
+
 	show_pte(mm, addr);
 	die("Oops", regs, fsr);
 	bust_spinlocks(0);
@@ -596,8 +583,11 @@ do_DataAbort(unsigned long addr, unsigned int fsr, struct pt_regs *regs)
 		thread->cpu_excp++;
 		if (thread->cpu_excp == 1) {
 			thread->regs_on_excp = (void *)regs;
+#ifdef CONFIG_MTK_AEE_IPANIC
 			aee_excp_regs = (void *)regs;
+#endif
 		}
+#ifdef CONFIG_MTK_AEE_IPANIC
 		/*
 		 * NoteXXX: The data abort exception may happen twice
 		 *          when calling probe_kernel_address() in which.
@@ -608,6 +598,7 @@ do_DataAbort(unsigned long addr, unsigned int fsr, struct pt_regs *regs)
 		 */
 		if (thread->cpu_excp >= 3)
 			aee_stop_nested_panic(regs);
+#endif
 	}
 
 	if (!inf->fn(addr, fsr & ~FSR_LNX_PF, regs)) {
@@ -616,18 +607,8 @@ do_DataAbort(unsigned long addr, unsigned int fsr, struct pt_regs *regs)
 		return;
 	}
 
-#ifdef CONFIG_SEC_DEBUG_AUTO_COMMENT
-	pr_auto(ASL1, "Unhandled fault: %s (0x%03x) at 0x%08lx\n",
-		 inf->name, fsr, addr);
-#else
 	pr_alert("Unhandled fault: %s (0x%03x) at 0x%08lx\n",
 		inf->name, fsr, addr);
-#endif
-#ifdef CONFIG_SEC_DEBUG_EXTRA_INFO
-	if (!user_mode(regs)) {
-		sec_debug_set_extra_info_fault(addr, regs);
-	}
-#endif
 	show_pte(current->mm, addr);
 
 	info.si_signo = inf->sig;
@@ -661,6 +642,7 @@ do_PrefetchAbort(unsigned long addr, unsigned int ifsr, struct pt_regs *regs)
 		thread->cpu_excp++;
 		if (thread->cpu_excp == 1)
 			thread->regs_on_excp = (void *)regs;
+#ifdef CONFIG_MTK_AEE_IPANIC
 		/*
 		 * NoteXXX: The data abort exception may happen twice
 		 *          when calling probe_kernel_address() in which.
@@ -671,6 +653,7 @@ do_PrefetchAbort(unsigned long addr, unsigned int ifsr, struct pt_regs *regs)
 		 */
 		if (thread->cpu_excp >= 3)
 			aee_stop_nested_panic(regs);
+#endif
 	}
 
 	if (!inf->fn(addr, ifsr | FSR_LNX_PF, regs)) {
@@ -679,18 +662,8 @@ do_PrefetchAbort(unsigned long addr, unsigned int ifsr, struct pt_regs *regs)
 		return;
 	}
 
-#ifdef CONFIG_SEC_DEBUG_AUTO_COMMENT
-	pr_auto(ASL1, "Unhandled prefetch abort: %s (0x%03x) at 0x%08lx\n",
-		inf->name, ifsr, addr);
-#else
 	pr_alert("Unhandled prefetch abort: %s (0x%03x) at 0x%08lx\n",
 		inf->name, ifsr, addr);
-#endif
-#ifdef CONFIG_SEC_DEBUG_EXTRA_INFO
-	if (!user_mode(regs)) {
-		sec_debug_set_extra_info_fault(addr, regs);
-	}
-#endif
 
 	info.si_signo = inf->sig;
 	info.si_errno = 0;

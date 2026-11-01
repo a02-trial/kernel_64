@@ -17,11 +17,13 @@
 #include <linux/device.h>
 #include <linux/platform_device.h>
 #include <linux/regulator/consumer.h>
+
 #if defined(CONFIG_SMCDSD_PANEL)
 #include "smcdsd_notify.h"
 #include "smcdsd_abd.h"
-extern unsigned char rx_offset;
+extern unsigned int rx_offset;
 extern unsigned char data_type;
+extern unsigned int gpara_len;
 #endif
 
 #ifndef ARY_SIZE
@@ -98,6 +100,11 @@ enum LCM_INTERFACE_ID {
 
 enum LCM_IOCTL {
 	LCM_IOCTL_NULL = 0,
+};
+
+enum LCM_Send_Cmd_Mode {
+	LCM_SEND_IN_CMD = 0,
+	LCM_SEND_IN_VDO
 };
 
 /* DBI related enumerations */
@@ -532,6 +539,60 @@ struct dynamic_fps_info {
 	/*unsigned int idle_check_interval;*//*ms*/
 };
 
+/*DynFPS*/
+enum DynFPS_LEVEL {
+	DFPS_LEVEL0 = 0,
+	DFPS_LEVEL1,
+	DFPS_LEVELNUM,
+};
+
+#define DFPS_LEVELS 2
+enum FPS_CHANGE_INDEX {
+	DYNFPS_NOT_DEFINED = 0,
+	DYNFPS_DSI_VFP = 1,
+	DYNFPS_DSI_HFP = 2,
+	DYNFPS_DSI_MIPI_CLK = 4,
+};
+
+struct dfps_info {
+	enum DynFPS_LEVEL level;
+	unsigned int fps; /*real fps *100*/
+
+	unsigned int vertical_sync_active;
+	unsigned int vertical_backporch;
+	unsigned int vertical_frontporch;
+	unsigned int vertical_frontporch_for_low_power;
+
+	unsigned int horizontal_sync_active;
+	unsigned int horizontal_backporch;
+	unsigned int horizontal_frontporch;
+
+	unsigned int PLL_CLOCK;
+	/* data_rate = PLL_CLOCK x 2 */
+	unsigned int data_rate;
+	/*real fps during active*/
+	unsigned int vact_timing_fps; /*real vact timing fps * 100*/
+
+	/*mipi hopping*/
+	unsigned int dynamic_switch_mipi;
+	unsigned int vertical_sync_active_dyn;
+	unsigned int vertical_backporch_dyn;
+	unsigned int vertical_frontporch_dyn;
+	unsigned int vertical_frontporch_for_low_power_dyn;
+	unsigned int vertical_active_line_dyn;
+
+	unsigned int horizontal_sync_active_dyn;
+	unsigned int horizontal_backporch_dyn;
+	unsigned int horizontal_frontporch_dyn;
+	unsigned int horizontal_active_pixel_dyn;
+
+	unsigned int PLL_CLOCK_dyn;	/* PLL_CLOCK = (int) PLL_CLOCK */
+	unsigned int data_rate_dyn;	/* data_rate = PLL_CLOCK x 2 */
+
+	/*real fps during active*/
+	unsigned int vact_timing_fps_dyn;
+};
+
 struct LCM_DSI_PARAMS {
 	enum LCM_DSI_MODE_CON mode;
 	enum LCM_DSI_MODE_CON switch_mode;
@@ -680,6 +741,16 @@ struct LCM_DSI_PARAMS {
 	/*for ARR*/
 	unsigned int dynamic_fps_levels;
 	struct dynamic_fps_info dynamic_fps_table[DYNAMIC_FPS_LEVELS];
+#ifdef CONFIG_MTK_HIGH_FRAME_RATE
+	/****DynFPS start****/
+	unsigned int dfps_enable;
+	unsigned int dfps_default_fps;
+	unsigned int dfps_def_vact_tim_fps;
+	unsigned int dfps_num;
+	/*unsigned int dfps_solution;*/
+	struct dfps_info dfps_params[DFPS_LEVELS];
+	/****DynFPS end****/
+#endif
 };
 
 /* ------------------------------------------------------------------------- */
@@ -725,8 +796,14 @@ struct LCM_PARAMS {
 	unsigned int average_luminance;
 	unsigned int max_luminance;
 
+#ifdef CONFIG_MTK_HIGH_FRAME_RATE
+	enum LCM_Send_Cmd_Mode sendmode;
+#endif
 	/* HBM: High Backlight Mode */
-	unsigned int hbm_enable_wait_frame;
+//	unsigned int hbm_en_time;
+//	unsigned int hbm_dis_time;
+
+	unsigned int hbm_enable_wait_frame;		// add samsung
 	unsigned int hbm_disable_wait_frame;
 };
 
@@ -826,8 +903,8 @@ struct LCM_DTS {
 struct LCM_setting_table_V3 {
 	unsigned char id;
 	unsigned char cmd;
-	unsigned char count;
-	unsigned char para_list[128];
+	unsigned int count;
+	unsigned char para_list[512];
 };
 
 /*
@@ -862,11 +939,11 @@ struct LCM_UTIL_FUNCS {
 
 	void (*dsi_set_cmdq_V3)(struct LCM_setting_table_V3 *para_list,
 			unsigned int size, unsigned char force_update);
-	void (*dsi_set_cmdq_V2)(unsigned int cmd, unsigned char count,
+	void (*dsi_set_cmdq_V2)(unsigned int cmd, unsigned int count,
 			unsigned char *para_list, unsigned char force_update);
 	void (*dsi_set_cmdq)(unsigned int *pdata, unsigned int queue_size,
 			unsigned char force_update);
-	void (*dsi_set_null)(unsigned int cmd, unsigned char count,
+	void (*dsi_set_null)(unsigned int cmd, unsigned int count,
 			unsigned char *para_list, unsigned char force_update);
 	void (*dsi_write_cmd)(unsigned int cmd);
 	void (*dsi_write_regs)(unsigned int addr, unsigned int *para,
@@ -874,9 +951,6 @@ struct LCM_UTIL_FUNCS {
 	unsigned int (*dsi_read_reg)(void);
 	unsigned int (*dsi_dcs_read_lcm_reg)(unsigned char cmd);
 	unsigned int (*dsi_dcs_read_lcm_reg_v2)(unsigned char cmd,
-		unsigned char *buffer, unsigned char buffer_size);
-	unsigned int (*dsi_dcs_read_cmdq_lcm_reg_v2_1)(void *cmdq,
-		unsigned char data_id, unsigned char offset, unsigned char cmd,
 		unsigned char *buffer, unsigned char buffer_size);
 	void (*wait_transfer_done)(void);
 
@@ -886,24 +960,26 @@ struct LCM_UTIL_FUNCS {
 	int (*set_gpio_dir)(unsigned int pin, unsigned int dir);
 	int (*set_gpio_pull_enable)(unsigned int pin, unsigned char pull_en);
 	long (*set_gpio_lcd_enp_bias)(unsigned int value);
-	long (*set_gpio_lcd_vpp_1p8)(unsigned int value);
-	long (*set_gpio_lcd_vsp_5p5)(unsigned int value);
-	long (*set_gpio_lcd_vsn_5p5)(unsigned int value);
-	long (*set_gpio_lcd_rst_enp)(unsigned int value);
-	long (*set_gpio_blic_en_enp)(unsigned int value);
-	long (*set_gpio_tsp_rst)(unsigned int value);
 	void (*dsi_set_cmdq_V11)(void *cmdq, unsigned int *pdata,
 			unsigned int queue_size, unsigned char force_update);
 	void (*dsi_set_cmdq_V22)(void *cmdq, unsigned int cmd,
-			unsigned char count, unsigned char *para_list,
+			unsigned int count, unsigned char *para_list,
 			unsigned char force_update);
 	void (*dsi_swap_port)(int swap);
 	void (*dsi_set_cmdq_V23)(void *cmdq, unsigned int cmd,
-		unsigned char count, unsigned char *para_list,
+		unsigned int count, unsigned char *para_list,
 		unsigned char force_update);	/* dual */
+	void (*dsi_set_cmdq_V24)(void *cmdq, unsigned int cmd,
+		unsigned int count, unsigned char *para_list,
+		unsigned char force_update, unsigned int hs);	/* Adding HS */
 	void (*mipi_dsi_cmds_tx)(void *cmdq, struct dsi_cmd_desc *cmds);
 	unsigned int (*mipi_dsi_cmds_rx)(char *out,
 		struct dsi_cmd_desc *cmds, unsigned int len);
+	/*Dynfps*/
+	void (*dsi_dynfps_send_cmd)(
+		void *cmdq, unsigned int cmd,
+		unsigned int count, unsigned char *para_list,
+		unsigned char force_update, enum LCM_Send_Cmd_Mode sendmode);
 };
 enum LCM_DRV_IOCTL_CMD {
 	LCM_DRV_IOCTL_ENABLE_CMD_MODE = 0x100,
@@ -913,20 +989,8 @@ struct LCM_DRIVER {
 	const char *name;
 	void (*set_util_funcs)(const struct LCM_UTIL_FUNCS *util);
 	void (*get_params)(struct LCM_PARAMS *params);
-	void (*dsi_set_withrawcmdq)(void *cmdq, unsigned int *pdata,
-		unsigned int queue_size, unsigned char force_update);
-	void (*dsi_set_withcmdq)(void *cmdq, unsigned int cmd,
-		unsigned char count, unsigned char *para_list,
-		unsigned char force_update);
-	int (*read_by_cmdq)(void *cmdq, unsigned int data_id,
-		unsigned int offset, unsigned int cmd, unsigned char *buffer,
-		unsigned char size);
 
 	void (*init)(void);
-#if defined(CONFIG_LCD_GENERIC)
-	/*Add panel start check at frist booting*/
-	void (*reduced_init)(int is_init);
-#endif
 	void (*suspend)(void);
 	void (*resume)(void);
 
@@ -936,8 +1000,10 @@ struct LCM_DRIVER {
 	void (*resume_power)(void);
 
 #if defined(CONFIG_SMCDSD_PANEL)
+	void (*cmdq)(unsigned int enable);
 	void (*power_enable)(unsigned int enable);
 	void (*disable)(void);
+	bool (*path_lock)(bool en);
 #endif
 
 	void (*update)(unsigned int x, unsigned int y, unsigned int width,
@@ -953,11 +1019,11 @@ struct LCM_DRIVER {
 	bool (*get_hbm_wait)(void);
 	bool (*set_hbm_wait)(bool wait);
 	bool (*set_hbm_cmdq)(bool en, void *qhandle);
+	bool (*framedone_notify)(void);
 	void (*set_pwm)(unsigned int divider);
 	unsigned int (*get_pwm)(unsigned int divider);
 	void (*set_backlight_mode)(unsigned int mode);
 	/* ///////////////////////// */
-	int (*set_display_on)(void);
 
 	int (*adjust_fps)(void *cmdq, int fps, struct LCM_PARAMS *params);
 	void (*validate_roi)(int *x, int *y, int *width, int *height);
@@ -986,6 +1052,12 @@ struct LCM_DRIVER {
 	void (*set_pwm_for_mix)(int enable);
 
 	void (*aod)(int enter);
+
+	/* /////////////DynFPS///////////////////////////// */
+	void (*dfps_send_lcm_cmd)(void *cmdq_handle,
+		unsigned int from_level, unsigned int to_level, struct LCM_PARAMS *params);
+	bool (*dfps_need_send_cmd)(
+	unsigned int from_level, unsigned int to_level, struct LCM_PARAMS *params);
 };
 
 /* LCM Driver Functions */
@@ -996,11 +1068,6 @@ unsigned char which_lcd_module_triple(void);
 int lcm_vgp_supply_enable(void);
 int lcm_vgp_supply_disable(void);
 extern enum LCM_DSI_MODE_CON lcm_dsi_mode;
-
-extern void primary_display_idlemgr_kick(const char *source, int need_lock);
-extern int primary_display_dsi_set_withcmdq(unsigned int cmd,
-	unsigned char count, unsigned char *para_list,
-	unsigned char force_update);
 
 extern int display_bias_enable(void);
 extern int display_bias_disable(void);

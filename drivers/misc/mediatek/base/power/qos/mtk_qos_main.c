@@ -23,6 +23,10 @@
 #include "mtk_qos_sram.h"
 #include "mtk_qos_sysfs.h"
 
+#ifdef QOS_SHARE_SUPPORT
+#include "mtk_qos_share.h"
+#endif /* QOS_SHARE_SUPPORT */
+
 static int mtk_qos_probe(struct platform_device *pdev)
 {
 	struct resource *res;
@@ -37,7 +41,10 @@ static int mtk_qos_probe(struct platform_device *pdev)
 	qos_add_interface(&pdev->dev);
 	qos_ipi_init();
 	qos_bound_init();
-
+	qos_ipi_recv_init();
+#ifdef QOS_SHARE_SUPPORT
+	qos_init_rec_share();
+#endif /* QOS_SHARE_SUPPORT */
 	return 0;
 }
 

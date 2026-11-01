@@ -725,8 +725,8 @@ void sec_cmd_send_event_to_user(struct sec_cmd_data *data, char *test, char *res
 
 	calltime = ktime_get();
 	realtime = ktime_to_ns(calltime);
-	do_div(realtime, NSEC_PER_USEC);
-	curr_time = (int) realtime / USEC_PER_MSEC;
+	do_div(realtime, NSEC_PER_MSEC);
+	curr_time = (int) realtime;
 
 	snprintf(timestamp, 32, "TIMESTAMP=%d", curr_time);
 	strncat(timestamp, eol, 1);

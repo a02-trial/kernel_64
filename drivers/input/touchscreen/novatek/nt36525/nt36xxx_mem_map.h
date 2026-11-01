@@ -2,7 +2,7 @@
  * Copyright (C) 2010 - 2018 Novatek, Inc.
  *
  * $Revision: 49361 $
- * $Date: 2019-08-19 16:30:57 +0800 (?±ä?, 19 ?«æœˆ 2019) $
+ * $Date: 2019-08-19 16:30:57 +0800 (é€±ä¸€, 19 å…«æœˆ 2019) $
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

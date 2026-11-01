@@ -46,6 +46,31 @@ ccflags-y += -I$(srctree)/drivers/misc/mediatek/pmic/include/mt6359
 ccflags-y += -I$(srctree)/drivers/devfreq
 endif
 
+ifeq ($(CONFIG_MTK_PLATFORM), "mt6885")
+ccflags-y += -I$(srctree)/drivers/misc/mediatek/pmic/include/mt6359p
+ccflags-y += -I$(srctree)/drivers/devfreq
+endif
+
+ifeq ($(CONFIG_MTK_PLATFORM), "mt6893")
+ccflags-y += -I$(srctree)/drivers/misc/mediatek/pmic/include/mt6359p
+ccflags-y += -I$(srctree)/drivers/devfreq
+endif
+
+ifeq ($(CONFIG_MTK_PLATFORM), "mt6873")
+ccflags-y += -I$(srctree)/drivers/misc/mediatek/pmic/include/mt6359p
+ccflags-y += -I$(srctree)/drivers/devfreq
+endif
+
+ifeq ($(CONFIG_MTK_PLATFORM), "mt6853")
+ccflags-y += -I$(srctree)/drivers/misc/mediatek/pmic/include/mt6359p
+ccflags-y += -I$(srctree)/drivers/devfreq
+endif
+
+ifeq ($(CONFIG_MTK_PLATFORM), "mt6833")
+ccflags-y += -I$(srctree)/drivers/misc/mediatek/pmic/include/mt6359p
+ccflags-y += -I$(srctree)/drivers/devfreq
+endif
+
 ifeq ($(CONFIG_MTK_HW_FDE_AES),y)
 ccflags-y += -I$(srctree)/drivers/misc/mediatek/fde_aes/$(subst ",,$(CONFIG_MTK_PLATFORM))
 endif
@@ -62,6 +87,7 @@ msdc-y += msdc_partition.o
 msdc-y += $(MTK_PLATFORM)/msdc_cust.o
 msdc-y += autok.o
 msdc-y += $(MTK_PLATFORM)/autok_dvfs.o
+obj-$(CONFIG_MMC_CRYPTO) += sw-cqhci-crypto.o
 
 ifeq ($(CONFIG_FPGA_EARLY_PORTING),y)
 msdc-y += $(MTK_PLATFORM)/msdc_fpga_io.o

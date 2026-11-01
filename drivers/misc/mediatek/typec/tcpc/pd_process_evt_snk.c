@@ -17,6 +17,8 @@
 #include "inc/pd_dpm_core.h"
 #include "inc/tcpci_event.h"
 #include "inc/pd_process_evt.h"
+#include <mt-plat/mtk_boot.h>
+#include <mt-plat/charger_class.h>
 
 /* PD Control MSG reactions */
 
@@ -188,7 +190,7 @@ static inline bool pd_process_data_msg(
 			return true;
 		break;
 #endif	/* CONFIG_USB_PD_PR_SWAP */
-		/* fall-through */
+
 #ifdef CONFIG_USB_PD_REV30
 #ifdef CONFIG_USB_PD_REV30_ALERT_REMOTE
 	case PD_DATA_ALERT:
@@ -284,8 +286,8 @@ static inline bool pd_process_hw_msg_sink_tx_change(
 	if (pd_port->pe_data.pd_traffic_control == pd_traffic)
 		return false;
 
-	dpm_reaction_set_ready_once(pd_port);
 	pd_port->pe_data.pd_traffic_control = pd_traffic;
+	dpm_reaction_set_ready_once(pd_port);
 #endif	/* CONFIG_USB_PD_REV30_COLLISION_AVOID */
 
 	return false;
@@ -305,7 +307,8 @@ static inline bool pd_process_hw_msg(
 		return false;
 
 	case PD_HW_TX_FAILED:
-		return pd_process_tx_failed(pd_port);
+	case PD_HW_TX_DISCARD:
+		return pd_process_tx_failed_discard(pd_port, pd_event->msg);
 
 #ifdef CONFIG_USB_PD_REV30_COLLISION_AVOID
 	case PD_HW_SINK_TX_CHANGE:
@@ -366,6 +369,14 @@ static inline void pd_report_typec_only_charger(struct pd_port *pd_port)
 static inline bool pd_process_timer_msg(
 	struct pd_port *pd_port, struct pd_event *pd_event)
 {
+#ifdef CONFIG_KPOC_GET_SOURCE_CAP_TRY
+	unsigned int boot_mode = get_boot_mode();
+	struct charger_device *chg_dev = get_charger_by_name("primary_chg");
+	int vbus = 10000000, ret = -1;
+	bool is_power_off_boot = (boot_mode == KERNEL_POWER_OFF_CHARGING_BOOT ||
+			boot_mode == LOW_POWER_OFF_CHARGING_BOOT) ? true:false;
+#endif /*CONFIG_KPOC_GET_SOURCE_CAP_TRY*/
+
 	switch (pd_event->msg) {
 	case PD_TIMER_SINK_REQUEST:
 		return PE_MAKE_STATE_TRANSIT_SINGLE(
@@ -373,6 +384,16 @@ static inline bool pd_process_timer_msg(
 
 #ifndef CONFIG_USB_PD_DBG_IGRONE_TIMEOUT
 	case PD_TIMER_SINK_WAIT_CAP:
+#ifdef CONFIG_KPOC_GET_SOURCE_CAP_TRY
+		if (is_power_off_boot) {
+			if (pd_port->error_recovery_once >= PD_ERROR_RECOVERY_COUNT) {
+				PE_DBG("KPOC not hardreset again after error recovery\r\n");
+				pd_port->pe_data.hard_reset_counter = PD_HARD_RESET_COUNT + 1;
+				pd_report_typec_only_charger(pd_port);
+				break;
+			}
+		}
+#endif /*CONFIG_KPOC_GET_SOURCE_CAP_TRY*/
 	case PD_TIMER_PS_TRANSITION:
 		if (pd_port->pe_data.hard_reset_counter <=
 						PD_HARD_RESET_COUNT) {
@@ -382,10 +403,22 @@ static inline bool pd_process_timer_msg(
 		break;
 
 	case PD_TIMER_NO_RESPONSE:
+#ifdef CONFIG_KPOC_GET_SOURCE_CAP_TRY
+		if ((pd_port->pe_data.hard_reset_counter == 1)
+						&& is_power_off_boot)
+			ret = charger_dev_get_vbus(chg_dev, &vbus);
+#endif /*CONFIG_KPOC_GET_SOURCE_CAP_TRY*/
 		if (!pd_dpm_check_vbus_valid(pd_port)) {
 			PE_DBG("NoResp&VBUS=0\r\n");
 			PE_TRANSIT_STATE(pd_port, PE_ERROR_RECOVERY);
 			return true;
+#ifdef CONFIG_KPOC_GET_SOURCE_CAP_TRY
+		} else if (!ret && vbus < 5500000) {
+			PE_DBG("KPOC let TA ERROR_RECOVERY once\r\n");
+			pd_port->pe_data.hard_reset_counter = PD_HARD_RESET_COUNT + 1;
+			PE_TRANSIT_STATE(pd_port, PE_ERROR_RECOVERY);
+			return true;
+#endif /*CONFIG_KPOC_GET_SOURCE_CAP_TRY*/
 		} else if (pd_port->pe_data.hard_reset_counter <=
 						PD_HARD_RESET_COUNT) {
 			PE_TRANSIT_STATE(pd_port, PE_SNK_HARD_RESET);

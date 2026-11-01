@@ -87,7 +87,7 @@ static int m4u_buf_show(void *priv, unsigned int mva_start,
 {
 	struct m4u_buf_info *pMvaInfo = priv;
 
-	M4U_PRINT_LOG_OR_SEQ(
+	M4U_PRINT_SEQ(
 		data,
 		"0x%-8x, 0x%-8x, 0x%lx, 0x%-8x, 0x%x, %s, 0x%x, 0x%x, 0x%x\n",
 		pMvaInfo->mva, pMvaInfo->mva + pMvaInfo->size - 1, pMvaInfo->va,
@@ -101,14 +101,14 @@ static int m4u_buf_show(void *priv, unsigned int mva_start,
 int m4u_dump_buf_info(struct seq_file *seq)
 {
 
-	M4U_PRINT_LOG_OR_SEQ(seq, "\ndump mva allocated info ========>\n");
-	M4U_PRINT_LOG_OR_SEQ(
+	M4U_PRINT_SEQ(seq, "\ndump mva allocated info ========>\n");
+	M4U_PRINT_SEQ(
 		seq,
 		"mva_start   mva_end          va       size     prot   module   flags   debug1  debug2\n");
 
 	mva_foreach_priv((void *)m4u_buf_show, seq);
 
-	M4U_PRINT_LOG_OR_SEQ(seq, " dump mva allocated info done ========>\n");
+	M4U_PRINT_SEQ(seq, " dump mva allocated info done ========>\n");
 	return 0;
 }
 
@@ -1648,10 +1648,9 @@ static int __m4u_sec_init(void)
 		M4UERR("m4u exec command fail\n");
 		goto out;
 	}
-
 	M4ULOG_HIGH("%s ret:0x%x, rsp:0x%x\n",
 		__func__, ret, ctx->m4u_msg->rsp);
-	/* ret = ctx->m4u_msg->rsp; */
+	/*ret = ctx->m4u_msg->rsp;*/
 out:
 	for (i = 0; i < SMI_LARB_NR; i++)
 		larb_clock_off(i, 1);
@@ -1760,7 +1759,7 @@ static struct mc_session_handle m4u_dci_session;
 static struct m4u_msg *m4u_dci_msg;
 #endif
 
-int m4u_sec_init(void)
+static int m4u_sec_init_nolock(void)
 {
 	int ret;
 #if defined(CONFIG_TRUSTONIC_TEE_SUPPORT) && \
@@ -1830,6 +1829,19 @@ m4u_sec_reinit:
 	/* don't deinit ta because of multiple init operation */
 
 	return 0;
+}
+
+int m4u_sec_init(void)
+{
+	int ret;
+#ifdef M4U_TEE_SERVICE_ENABLE
+		mutex_lock(&gM4u_sec_init);
+#endif
+		ret = m4u_sec_init_nolock();
+#ifdef M4U_TEE_SERVICE_ENABLE
+		mutex_unlock(&gM4u_sec_init);
+#endif
+	return ret;
 }
 
 int m4u_config_port_tee(struct M4U_PORT_STRUCT *pM4uPort)	/* native */
@@ -2126,13 +2138,12 @@ out:
 
 #endif
 
-#ifdef M4U_GZ_SERVICE_ENABLE
 int m4u_gz_sec_init(int mtk_iommu_sec_id)
 {
 	M4UMSG("%s : do nothing!!\n", __func__);
 	return 0;
 }
-
+#ifdef M4U_GZ_SERVICE_ENABLE
 int m4u_map_gz_nonsec_buf(int iommu_sec_id, int port, unsigned long mva,
 		unsigned long size)
 {
@@ -2391,9 +2402,9 @@ static long MTK_M4U_ioctl(struct file *filp, unsigned int cmd,
 	case MTK_M4U_T_SEC_INIT: {
 		M4UMSG("MTK M4U ioctl : MTK_M4U_T_SEC_INIT command!! 0x%x\n",
 		       cmd);
-		mutex_lock(&gM4u_sec_init);
+//		mutex_lock(&gM4u_sec_init);
 		ret = m4u_sec_init();
-		mutex_unlock(&gM4u_sec_init);
+//		mutex_unlock(&gM4u_sec_init);
 	} break;
 #endif
 #ifdef M4U_GZ_SERVICE_ENABLE
@@ -2633,11 +2644,14 @@ long MTK_M4U_COMPAT_ioctl(struct file *filp, unsigned int cmd,
 	case MTK_M4U_T_CACHE_FLUSH_ALL:
 	case MTK_M4U_T_CONFIG_PORT_ARRAY:
 	case MTK_M4U_T_SEC_INIT:
-#ifdef M4U_GZ_SERVICE_ENABLE
-	case MTK_M4U_GZ_SEC_INIT:
-#endif
 		return filp->f_op->unlocked_ioctl(
 			filp, cmd, (unsigned long)compat_ptr(arg));
+#ifdef M4U_GZ_SERVICE_ENABLE
+	case MTK_M4U_GZ_SEC_INIT:
+		return filp->f_op->unlocked_ioctl(
+			filp, cmd, (unsigned long)compat_ptr(arg));
+		break;
+#endif
 	default:
 		return -ENOIOCTLCMD;
 	}

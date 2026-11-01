@@ -997,6 +997,7 @@ static int muic_manager_get_property(struct power_supply *psy,
 		enum power_supply_property psp,
 		union power_supply_propval *val)
 {
+	struct muic_interface_t *muic_if = power_supply_get_drvdata(psy);
 	enum power_supply_lsi_property lsi_prop = (enum power_supply_lsi_property)psp;
 
 	switch (psp) {
@@ -1007,6 +1008,7 @@ static int muic_manager_get_property(struct power_supply *psy,
 	case POWER_SUPPLY_EXT_PROP_MAX ... POWER_SUPPLY_LSI_PROP_MAX:
 		switch (lsi_prop) {
 		case POWER_SUPPLY_LSI_PROP_PM_VCHGIN:
+			val->intval = muic_if->get_vbus(muic_if->muic_data);
 			break;
 		default:
 			return -EINVAL;

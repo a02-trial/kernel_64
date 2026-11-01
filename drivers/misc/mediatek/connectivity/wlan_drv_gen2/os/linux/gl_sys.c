@@ -317,7 +317,7 @@ void sysCreateWifiVer(void)
 
 	ucOffset += kalSnprintf(acVerInfo + ucOffset
 		, MTK_INFO_MAX_SIZE - ucOffset
-		, "%s\n", "Mediatek");
+		, "%s ", "Mediatek");
 
 	ucOffset += kalSnprintf(acVerInfo + ucOffset
 		, MTK_INFO_MAX_SIZE - ucOffset
@@ -426,7 +426,7 @@ void sysCreateSoftap(void)
 	else
 		ucOffset += kalSnprintf(acSoftAPInfo + ucOffset
 			, MTK_INFO_MAX_SIZE - ucOffset
-			, "5G=%s\n", "yes");
+			, "5G=%s\n", "no");
 
 	ucOffset += kalSnprintf(acSoftAPInfo + ucOffset
 		, MTK_INFO_MAX_SIZE - ucOffset

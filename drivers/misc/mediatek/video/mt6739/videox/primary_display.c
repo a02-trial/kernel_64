@@ -232,7 +232,7 @@ static void _primary_path_unlock(const char *caller)
 
 	mutex_time_end = sched_clock();
 	mutex_time_period = mutex_time_end - mutex_time_start;
-	if (mutex_time_period > 400000000) {
+	if (mutex_time_period > 300000000) {
 		DISPCHECK("mutex_release_timeout1 <%lld ns>\n",
 			  mutex_time_period);
 		dump_stack();
@@ -241,8 +241,8 @@ static void _primary_path_unlock(const char *caller)
 
 	mutex_time_end1 = sched_clock();
 	mutex_time_period1 = mutex_time_end1 - mutex_time_start;
-	if ((mutex_time_period < 400000000 && mutex_time_period1 > 400000000) ||
-	   (mutex_time_period < 400000000 && mutex_time_period1 < 0)) {
+	if ((mutex_time_period < 300000000 && mutex_time_period1 > 300000000) ||
+	   (mutex_time_period < 300000000 && mutex_time_period1 < 0)) {
 		DISPCHECK("mutex_release_timeout2 <%lld ns>,<%lld ns>\n",
 			mutex_time_period1, mutex_time_period);
 		dump_stack();
@@ -923,7 +923,7 @@ int primary_display_get_debug_state(char *stringbuf, int buf_len)
 	len += scnprintf(
 		stringbuf + len, buf_len - len,
 		"|State=%s\tlcm_fps=%d\tmax_layer=%d\tmode:%d\tvsync_drop=%d\n",
-		pgc->state == DISP_ALIVE ? "Alive" : "Sleep", pgc->lcm_fps,
+		pgc->state == DISP_ALIVE ? "Alive" : "Sleep", primary_display_get_fps_nolock(),
 		pgc->max_layer, pgc->mode, pgc->vsync_drop);
 	len += scnprintf(
 		stringbuf + len, buf_len - len,
@@ -4137,6 +4137,9 @@ int primary_display_suspend(void)
 {
 	enum DISP_STATUS ret = DISP_STATUS_OK;
 
+#if defined(CONFIG_MTK_VSYNC_PRINT)
+	disp_unregister_irq_callback(vsync_print_handler);
+#endif
 	DISPCHECK("%s begin\n", __func__);
 	mmprofile_log_ex(ddp_mmp_get_events()->primary_suspend,
 			 MMPROFILE_FLAG_START, 0, 0);
@@ -4150,17 +4153,26 @@ int primary_display_suspend(void)
 	if (primary_display_is_video_mode())
 		primary_display_switch_dst_mode(0);
 #endif
+#if defined(CONFIG_SMCDSD_PANEL)
+	disp_lcm_path_lock(1, pgc->plcm);
+#endif
 	_primary_path_switch_dst_lock();
 	disp_sw_mutex_lock(&(pgc->capture_lock));
 	_primary_path_lock(__func__);
 
 	while (primary_get_state() == DISP_BLANK) {
 		_primary_path_unlock(__func__);
+#if defined(CONFIG_SMCDSD_PANEL)
+		disp_lcm_path_lock(0, pgc->plcm);
+#endif
 		DISPCHECK("%s wait tui finish!!\n", __func__);
 #ifdef CONFIG_TRUSTONIC_TRUSTED_UI
 		switch_set_state(&disp_switch_data, DISP_SLEPT);
 #endif
 		primary_display_wait_state(DISP_ALIVE, MAX_SCHEDULE_TIMEOUT);
+#if defined(CONFIG_SMCDSD_PANEL)
+		disp_lcm_path_lock(1, pgc->plcm);
+#endif
 		_primary_path_lock(__func__);
 		DISPCHECK("%s wait tui done stat=%d\n",
 			  __func__, primary_get_state());
@@ -4218,17 +4230,20 @@ int primary_display_suspend(void)
 	mmprofile_log_ex(ddp_mmp_get_events()->primary_suspend,
 			 MMPROFILE_FLAG_PULSE, 0, 2);
 
+#if defined(CONFIG_SMCDSD_PANEL)
+	if (primary_display_get_power_mode_nolock() == FB_SUSPEND)
+		disp_lcm_disable(pgc->plcm);
+
+	/* From now, MIPI TX command will be written on register directly */
+	disp_lcm_cmdq(pgc->plcm, 0);
+#endif
+
 	if (disp_helper_get_option(DISP_OPT_USE_CMDQ)) {
 		DISPCHECK("[POWER]display cmdq trigger loop stop\n");
 		_cmdq_stop_trigger_loop();
 	}
 	mmprofile_log_ex(ddp_mmp_get_events()->primary_suspend,
 			 MMPROFILE_FLAG_PULSE, 0, 3);
-
-#if defined(CONFIG_SMCDSD_PANEL)
-	if (primary_display_get_power_mode_nolock() == FB_SUSPEND)
-		disp_lcm_disable(pgc->plcm);
-#endif
 
 	DISPDBG("[POWER]primary display path stop[begin]\n");
 	dpmgr_path_stop(pgc->dpmgr_handle, CMDQ_DISABLE);
@@ -4273,16 +4288,15 @@ int primary_display_suspend(void)
 	DISPDBG("[POWER]dpmanager path power off[begin]\n");
 	primary_display_power_control(0);
 
-#if defined(CONFIG_SMCDSD_PANEL)
-	if (primary_display_get_power_mode_nolock() == FB_SUSPEND)
-		disp_lcm_power_enable(pgc->plcm, 0);
-#endif
-
 	DISPCHECK("[POWER]dpmanager path power off[end]\n");
 	mmprofile_log_ex(ddp_mmp_get_events()->primary_suspend,
 			 MMPROFILE_FLAG_PULSE, 0, 8);
 
 	pgc->lcm_refresh_rate = 60;
+#if defined(CONFIG_SMCDSD_PANEL)
+	if (primary_display_get_power_mode_nolock() == FB_SUSPEND)
+		disp_lcm_power_enable(pgc->plcm, 0);
+#endif
 /* pgc->state = DISP_SLEPT; */
 done:
 	primary_set_state(DISP_SLEPT);
@@ -4292,6 +4306,9 @@ done:
 		primary_display_esd_check_enable(0);
 
 	_primary_path_unlock(__func__);
+#if defined(CONFIG_SMCDSD_PANEL)
+	disp_lcm_path_lock(0, pgc->plcm);
+#endif
 	disp_sw_mutex_unlock(&(pgc->capture_lock));
 	_primary_path_switch_dst_unlock();
 
@@ -4374,6 +4391,13 @@ int primary_display_resume(void)
 	mmprofile_log_ex(ddp_mmp_get_events()->primary_resume,
 			 MMPROFILE_FLAG_START, 0, 0);
 
+#if defined(CONFIG_SMCDSD_PANEL)
+/*
+ *	@ disp_lcm_path_lock
+ *	LCM lock -> primary display lock.
+ */
+	disp_lcm_path_lock(1, pgc->plcm);
+#endif
 	_primary_path_lock(__func__);
 	if (pgc->state == DISP_ALIVE) {
 		DISPCHECK("primary display path is already resume, skip\n");
@@ -4406,9 +4430,11 @@ int primary_display_resume(void)
 			DSI_ForceConfig(1);
 	}
 #if defined(CONFIG_SMCDSD_PANEL)
-	if (primary_display_get_power_mode_nolock() == FB_RESUME)
+	if ((primary_display_get_power_mode_nolock() == FB_RESUME) ||
+		(primary_display_get_power_mode_nolock() == DOZE))
 		disp_lcm_power_enable(pgc->plcm, 1);
 #endif
+
 	dvfsrc_mdsrclkena_control_nolock(1);
 	DISPDBG("dpmanager path power on[begin]\n");
 	primary_display_power_control(1);
@@ -4632,6 +4658,11 @@ int primary_display_resume(void)
 	mmprofile_log_ex(ddp_mmp_get_events()->primary_resume,
 			 MMPROFILE_FLAG_PULSE, 0, 9);
 
+#if defined(CONFIG_SMCDSD_PANEL)
+	/* From now, MIPI TX command will be written via CMDQ engine */
+	disp_lcm_cmdq(pgc->plcm, 1);
+#endif
+
 	/* primary_display_diagnose(); */
 	mmprofile_log_ex(ddp_mmp_get_events()->primary_resume,
 			 MMPROFILE_FLAG_PULSE, 0, 10);
@@ -4707,9 +4738,15 @@ done:
 		primary_display_esd_check_enable(1);
 
 	_primary_path_unlock(__func__);
+#if defined(CONFIG_SMCDSD_PANEL)
+	disp_lcm_path_lock(0, pgc->plcm);
+#endif
 	DISPMSG("skip_update:%d\n", skip_update);
 
 	aee_kernel_wdt_kick_Powkey_api("mtkfb_late_resume", WDT_SETBY_Display);
+#if defined(CONFIG_MTK_VSYNC_PRINT)
+	disp_register_irq_callback(vsync_print_handler);
+#endif
 	mmprofile_log_ex(ddp_mmp_get_events()->primary_resume,
 			 MMPROFILE_FLAG_END, 0, 0);
 	return ret;

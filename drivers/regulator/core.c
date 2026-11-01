@@ -4495,6 +4495,21 @@ static const struct file_operations regulator_summary_fops = {
 };
 
 #ifdef CONFIG_SEC_PM
+static char *reg_skip_list[] = {"VMDLA", "VDRAM1", "VMDDR", "VDRAM2",
+								"VFP", "VTP", "VMC", "VMCH", "vtp"};
+
+static int __regulator_is_skip_ops(struct regulator_dev *rdev)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(reg_skip_list); i++) {
+		if (!strcmp(rdev_get_name(rdev), reg_skip_list[i]))
+			return 1;
+	}
+
+	return 0;
+}
+
 static int regulator_check_str(struct regulator *reg,
 	   unsigned int *slen, char *snames)
 {
@@ -4516,11 +4531,12 @@ static int _regulator_debug_print_enabled(struct device *dev, void *data)
 	unsigned int slen;
 	char snames[80];
 	int *cnt = data;
+	int skip = __regulator_is_skip_ops(rdev);
 
-	if (_regulator_is_enabled(rdev) <= 0)
+	if (!skip && _regulator_is_enabled(rdev) <= 0)
 		return 0;
 
-	if (rdev->desc->ops) {
+	if (rdev->desc->ops && !skip) {
 		slen = 0;
 		list_for_each_entry(reg, &rdev->consumer_list, list) {
 			if (regulator_check_str(reg, &slen, snames))
@@ -4534,8 +4550,12 @@ static int _regulator_debug_print_enabled(struct device *dev, void *data)
 				rdev_get_name(rdev),
 				_regulator_get_voltage(rdev),
 				mode, slen ? snames : ", null");
-	} else
-		pr_info("%s enabled\n", rdev_get_name(rdev));
+	} else {
+		if(rdev->use_count)
+			pr_info("%s enabled\n", rdev_get_name(rdev));
+		else
+			return 0;
+	}
 
 	(*cnt)++;
 

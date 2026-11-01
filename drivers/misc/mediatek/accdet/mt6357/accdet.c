@@ -49,7 +49,7 @@
 #endif /* end of #if PMIC_ACCDET_KERNEL */
 
 #ifdef CONFIG_SND_SOC_SAMSUNG_AUDIO
-#include "sec_accdet_sysfs_cb.h"
+#include "../../../../../sound/soc/samsung/jack_accdet_sysfs_cb.h"
 #endif
 /********************grobal variable definitions******************/
 #if PMIC_ACCDET_CTP
@@ -240,7 +240,7 @@ static bool debug_thread_en;
 static bool dump_reg;
 static struct task_struct *thread;
 #ifdef CONFIG_SND_SOC_SAMSUNG_AUDIO
-static struct jack_pdata accdet_pdata;
+static struct accdet_data accdet_pdata;
 #endif
 
 static void accdet_init_once(void);
@@ -428,68 +428,91 @@ static void dump_register(void)
 #if PMIC_ACCDET_KERNEL
 static void cat_register(char *buf)
 {
-	int i = 0;
+	int i = 0, ret = 0;
 
 #ifdef CONFIG_ACCDET_EINT_IRQ
 #ifdef CONFIG_ACCDET_SUPPORT_EINT0
-	sprintf(accdet_log_buf, "[Accdet EINT0 support][MODE_%d]regs:\n",
+	ret = sprintf(accdet_log_buf, "[Accdet EINT0 support][MODE_%d]regs:\n",
 		accdet_dts.mic_mode);
+	if (ret < 0)
+		pr_notice("sprintf failed\n");
 	strncat(buf, accdet_log_buf, strlen(accdet_log_buf));
 #elif defined CONFIG_ACCDET_SUPPORT_EINT1
-	sprintf(accdet_log_buf, "[ccdet EINT1 support][MODE_%d]regs:\n",
+	ret = sprintf(accdet_log_buf, "[Accdet EINT1 support][MODE_%d]regs:\n",
 		accdet_dts.mic_mode);
+	if (ret < 0)
+		pr_notice("sprintf failed\n");
 	strncat(buf, accdet_log_buf, strlen(accdet_log_buf));
 #elif defined CONFIG_ACCDET_SUPPORT_BI_EINT
-	sprintf(accdet_log_buf, "[Accdet BIEINT support][MODE_%d] regs:\n",
+	ret = sprintf(accdet_log_buf, "[Accdet EINT support][MODE_%d] regs:\n",
 		accdet_dts.mic_mode);
+	if (ret < 0)
+		pr_notice("sprintf failed\n");
 	strncat(buf, accdet_log_buf, strlen(accdet_log_buf));
 #else
 	strncat(buf, "ACCDET_EINT_IRQ:NO EINT configed.Error!!\n", 64);
 #endif
 #elif defined CONFIG_ACCDET_EINT
-	sprintf(accdet_log_buf, "[Accdet AP EINT][MODE_%d] regs:\n",
+	ret = sprintf(accdet_log_buf, "[Accdet AP EINT][MODE_%d] regs:\n",
 		accdet_dts.mic_mode);
+	if (ret < 0)
+		pr_notice("sprintf failed\n");
 	strncat(buf, accdet_log_buf, strlen(accdet_log_buf));
 #else
 	strncat(buf, "ACCDET EINT:No configed.Error!!\n", 64);
 #endif
 
 	for (i = ACCDET_RSV; i <= ACCDET_EINT1_CUR_DEB; i += 2) {
-		sprintf(accdet_log_buf, "ADDR[0x%x]=0x%x\n", i, pmic_read(i));
+		ret = sprintf(accdet_log_buf, "ADDR[0x%x]=0x%x\n",
+				i, pmic_read(i));
+		if (ret < 0)
+			pr_notice("sprintf failed\n");
 		strncat(buf, accdet_log_buf, strlen(accdet_log_buf));
 	}
 
-	sprintf(accdet_log_buf, "[0x%x]=0x%x\n",
+	ret = sprintf(accdet_log_buf, "[0x%x]=0x%x\n",
 		TOP_CKPDN_CON0, pmic_read(TOP_CKPDN_CON0));
+	if (ret < 0)
+		pr_notice("sprintf failed\n");
 	strncat(buf, accdet_log_buf, strlen(accdet_log_buf));
 
-	sprintf(accdet_log_buf, "[0x%x]=0x%x\n",
+	ret = sprintf(accdet_log_buf, "[0x%x]=0x%x\n",
 		AUD_TOP_RST_CON0, pmic_read(AUD_TOP_RST_CON0));
+	if (ret < 0)
+		pr_notice("sprintf failed\n");
 	strncat(buf, accdet_log_buf, strlen(accdet_log_buf));
 
-	sprintf(accdet_log_buf, "[0x%x]=0x%x, [0x%x]=0x%x, [0x%x]=0x%x\n",
+	ret = sprintf(accdet_log_buf, "[0x%x]=0x%x, [0x%x]=0x%x, [0x%x]=0x%x\n",
 		AUD_TOP_INT_CON0, pmic_read(AUD_TOP_INT_CON0),
 		AUD_TOP_INT_MASK_CON0, pmic_read(AUD_TOP_INT_MASK_CON0),
 		AUD_TOP_INT_STATUS0, pmic_read(AUD_TOP_INT_STATUS0));
+	if (ret < 0)
+		pr_notice("sprintf failed\n");
 	strncat(buf, accdet_log_buf, strlen(accdet_log_buf));
 
-	sprintf(accdet_log_buf,
+	ret = sprintf(accdet_log_buf,
 		"[0x%x]=0x%x,[0x%x]=0x%x,[0x%x]=0x%x,[0x%x]=0x%x\n",
 		AUDENC_ANA_CON6, pmic_read(AUDENC_ANA_CON6),
 		AUDENC_ANA_CON9, pmic_read(AUDENC_ANA_CON9),
 		AUDENC_ANA_CON10, pmic_read(AUDENC_ANA_CON10),
 		AUDENC_ANA_CON11, pmic_read(AUDENC_ANA_CON11));
+	if (ret < 0)
+		pr_notice("sprintf failed\n");
 	strncat(buf, accdet_log_buf, strlen(accdet_log_buf));
 
-	sprintf(accdet_log_buf, "[0x%x]=0x%x, [0x%x]=0x%x\n",
+	ret = sprintf(accdet_log_buf, "[0x%x]=0x%x, [0x%x]=0x%x\n",
 		AUXADC_RQST0, pmic_read(AUXADC_RQST0),
 		AUXADC_ACCDET, pmic_read(AUXADC_ACCDET));
+	if (ret < 0)
+		pr_notice("sprintf failed\n");
 	strncat(buf, accdet_log_buf, strlen(accdet_log_buf));
 
-	sprintf(accdet_log_buf,
+	ret = sprintf(accdet_log_buf,
 		"dtsInfo:deb0=0x%x,deb1=0x%x,deb3=0x%x,deb4=0x%x\n",
 		 cust_pwm_deb->debounce0, cust_pwm_deb->debounce1,
 		 cust_pwm_deb->debounce3, cust_pwm_deb->debounce4);
+	if (ret < 0)
+		pr_notice("sprintf failed\n");
 	strncat(buf, accdet_log_buf, strlen(accdet_log_buf));
 }
 
@@ -640,12 +663,15 @@ static ssize_t set_headset_mode_store(struct device_driver *ddri,
 static ssize_t state_show(struct device_driver *ddri, char *buf)
 {
 	char temp_type = (char)cable_type;
+	int ret = 0;
 
 	if (buf == NULL) {
 		pr_notice("[%s] *buf is NULL!\n",  __func__);
 		return -EINVAL;
 	}
-	snprintf(buf, 3, "%d\n", temp_type);
+	ret = snprintf(buf, 3, "%d\n", temp_type);
+	if (ret < 0)
+		pr_notice("snprintf failed\n");
 
 	return strlen(buf);
 }
@@ -756,13 +782,6 @@ static u32 accdet_get_auxadc(int deCount)
 #endif
 }
 
-#ifdef CONFIG_SND_SOC_SAMSUNG_AUDIO
-u32 accdet_get_adc(void)
-{
-	return accdet_get_auxadc(1);
-}
-EXPORT_SYMBOL_GPL(accdet_get_auxadc);
-#endif
 static void accdet_get_efuse(void)
 {
 	u32 efuseval = 0;
@@ -921,7 +940,7 @@ static void send_key_event(u32 keycode, u32 flag)
 		break;
 	}
 #ifdef CONFIG_SND_SOC_SAMSUNG_AUDIO
-	accdet_pdata.buttons_pressed = (flag) ? 1 : 0;
+	accdet_pdata.key_state = (flag) ? 1 : 0;
 #endif
 }
 
@@ -968,9 +987,9 @@ static void send_accdet_status_event(u32 cable_type, u32 status)
 	}
 #ifdef CONFIG_SND_SOC_SAMSUNG_AUDIO
 	if (status == 0)
-		accdet_pdata.hph_status = NO_DEVICE;
+		accdet_pdata.jack_state = NO_DEVICE;
 	else
-		accdet_pdata.hph_status = cable_type;
+		accdet_pdata.jack_state = cable_type;
 #endif
 }
 #else
@@ -1000,11 +1019,18 @@ static void multi_key_detection(u32 cur_AB)
 	if (cur_AB == ACCDET_STATE_AB_00)
 		cur_key = key_check(cali_voltage);
 
+#ifdef CONFIG_SND_SOC_SAMSUNG_AUDIO
+	if (cur_AB == ACCDET_STATE_AB_00)
+		accdet_pdata.mic_adc = cali_voltage;
+	else
+		accdet_pdata.mic_adc = 0;
+#endif
+
 	/* delay to fix side effect key when plug-out, when plug-out,seldom
 	 * issued AB=0 and Eint, delay to wait eint been flaged in register.
 	 * or eint handler issued. cur_eint_state == PLUG_OUT
 	 */
-	mdelay(10);
+	usleep_range(10000, 12000);
 
 #ifdef CONFIG_ACCDET_EINT_IRQ
 	irq_bit = !(pmic_read(ACCDET_IRQ_STS) & ACCDET_EINT_IRQ_B2_B3);
@@ -1251,6 +1277,7 @@ static void dis_micbias_work_callback(struct work_struct *work)
 	}
 }
 #endif /* end of #if PMIC_ACCDET_KERNEL */
+
 #if PMIC_ACCDET_KERNEL
 static void eint_work_callback(struct work_struct *work)
 #else
@@ -1282,16 +1309,17 @@ static void eint_work_callback(void)
 		enable_accdet(ACCDET_EINT_PWM_IDLE_B11_12 | ACCDET_PWM_EN);
 #endif
 #if NO_USE_COMPARATOR
-		mdelay(180);/* may be need delay more, relevant to Bias vol. */
+		msleep(180);/* may be need delay more, relevant to Bias vol. */
 		check_cable_type();
 		if (accdet_status == MIC_BIAS)
 			cali_voltage = accdet_get_auxadc(1);
-		mod_timer(&accdet_open_cable_timer, jiffies + ACCDET_OPEN_CABLE_TIMER);
+		mod_timer(&accdet_open_cable_timer,
+			jiffies + ACCDET_OPEN_CABLE_TIMER);
 #endif
 #else
 		enable_accdet(ACCDET_PWM_EN);
 #if NO_USE_COMPARATOR
-		mdelay(180);/* may be need delay more, relevant to Bias vol. */
+		msleep(180);/* may be need delay more, relevant to Bias vol. */
 		check_cable_type();
 		if (accdet_status == MIC_BIAS)
 			cali_voltage = accdet_get_auxadc(1);
@@ -1411,7 +1439,7 @@ static inline void check_cable_type(void)
 				if (!fast_discharge) {
 					pmic_write(ACCDET_HW_MODE_DFF,
 						ACCDET_FAST_DISCAHRGE_REVISE);
-					mdelay(20);
+					msleep(20);
 					pmic_write(ACCDET_HW_MODE_DFF,
 						ACCDET_FAST_DISCAHRGE_EN);
 					fast_discharge = true;
@@ -1571,8 +1599,7 @@ static int pmic_eint_queue_work(int eintID)
 #ifdef CONFIG_ACCDET_SUPPORT_EINT0
 	if (eintID == PMIC_EINT0) {
 		if (cur_eint_state == EINT_PIN_PLUG_IN) {
-			eint_debounce_set(eintID, ACCDET_EINT0_DEB_512);
-			pr_info("accdet: pmic_eint0 debounce time = 512ms\n");
+			eint_debounce_set(eintID, ACCDET_EINT0_DEB_IN_256);
 			accdet_set_debounce(accdet_state110,
 				cust_pwm_deb->debounce3);
 			cur_eint_state = EINT_PIN_PLUG_OUT;
@@ -2426,8 +2453,12 @@ int mt_accdet_probe(struct platform_device *dev)
 	/* the third argument may include TIMER_* flags */
 
 	/* wake lock */
-	accdet_irq_lock = wakeup_source_register("accdet_irq_lock");
-	accdet_timer_lock = wakeup_source_register("accdet_timer_lock");
+	accdet_irq_lock = wakeup_source_register(NULL, "accdet_irq_lock");
+	if (!accdet_irq_lock)
+		return -ENOMEM;
+	accdet_timer_lock = wakeup_source_register(NULL, "accdet_timer_lock");
+	if (!accdet_timer_lock)
+		return -ENOMEM;
 
 	/* Create workqueue */
 	accdet_workqueue = create_singlethread_workqueue("accdet");
@@ -2475,8 +2506,6 @@ int mt_accdet_probe(struct platform_device *dev)
 		pr_notice("%s create eint workqueue fail.\n", __func__);
 		goto err_create_workqueue;
 	}
-	eint_debounce_set(PMIC_EINT0, ACCDET_EINT0_DEB_512);
-	pr_info("accdet: pmic_eint0 debounce time = 512ms\n");
 
 #ifdef CONFIG_ACCDET_EINT
 	ret = ext_eint_setup(dev);

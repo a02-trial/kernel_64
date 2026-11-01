@@ -51,7 +51,6 @@ static int vibr_Enable(void)
 		vibr_Enable_HW();
 		g_mt_vib->ldo_state = 1;
 	}
-	pr_info(VIB_TAG "vibr_Enable\n");
 	return 0;
 }
 
@@ -61,7 +60,6 @@ static int vibr_Disable(void)
 		vibr_Disable_HW();
 		g_mt_vib->ldo_state = 0;
 	}
-	pr_info(VIB_TAG "vibr_Disable\n");
 	return 0;
 }
 
@@ -82,8 +80,7 @@ static void vibrator_enable(unsigned int dur, unsigned int activate)
 
 	spin_lock_irqsave(&g_mt_vib->vibr_lock, flags);
 	hrtimer_cancel(&g_mt_vib->vibr_timer);
-
-	pr_info(VIB_TAG "cancel hrtimer, cust:%dms, value:%u, shutdown:%d\n",
+	pr_debug(VIB_TAG "cancel hrtimer, cust:%dms, value:%u, shutdown:%d\n",
 			hw->vib_timer, dur, g_mt_vib->shutdown_flag);
 
 	if (activate == 0 || g_mt_vib->shutdown_flag == 1) {
@@ -108,7 +105,7 @@ static void vibrator_enable(unsigned int dur, unsigned int activate)
 
 static void vibrator_oc_handler(void)
 {
-	pr_info(VIB_TAG "%s: disable vibr for oc intr happened\n", __func__);
+	pr_debug(VIB_TAG "%s: disable vibr for oc intr happened\n", __func__);
 	vibrator_enable(0, 0);
 }
 
@@ -137,7 +134,7 @@ static ssize_t vibr_activate_show(struct device *dev,
 static ssize_t vibr_activate_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size)
 {
-	unsigned int activate, dur;
+	unsigned int activate = 0, dur = 0;
 	ssize_t ret;
 
 	ret = kstrtouint(buf, 10, &activate);
@@ -160,7 +157,7 @@ static ssize_t vibr_state_show(struct device *dev,
 static ssize_t vibr_state_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size)
 {
-	unsigned int state;
+	unsigned int state = 0;
 	ssize_t ret;
 
 	ret = kstrtouint(buf, 10, &state);
@@ -176,7 +173,7 @@ static ssize_t vibr_state_store(struct device *dev,
 static ssize_t vibr_duration_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size)
 {
-	unsigned int duration;
+	unsigned int duration = 0;
 	ssize_t ret;
 
 	ret = kstrtouint(buf, 10, &duration);
@@ -268,7 +265,7 @@ static int vib_probe(struct platform_device *pdev)
 	init_cust_vibrator_dtsi(pdev);
 	vibr_power_set();
 
-	pr_info(VIB_TAG "%s: probe done\n", __func__);
+	pr_debug(VIB_TAG "probe done\n");
 
 	return 0;
 }
@@ -325,7 +322,7 @@ static int vib_mod_init(void)
 		pr_err(VIB_TAG "Unable to register driver (%d)\n", ret);
 		return ret;
 	}
-	pr_info(VIB_TAG "init Done\n");
+	pr_debug(VIB_TAG "init Done\n");
 
 	return 0;
 }

@@ -29,6 +29,14 @@ struct mipi_dsi_lcd_common {
 	struct abd_protect		abd;
 
 	struct LCM_PARAMS		*lcm_params;
+
+	// add samsung for finger print
+	bool			mask_wait;
+	bool			set_mask_state;
+	bool			get_mask_state;
+	void			*mask_qhandle;
+	int				cmdq_index;
+	unsigned int	cmdq;
 };
 
 struct mipi_dsi_lcd_driver {
@@ -45,12 +53,25 @@ struct mipi_dsi_lcd_driver {
 #if defined(CONFIG_SMCDSD_DOZE)
 	int	(*doze_init)(struct platform_device *p, unsigned int on);
 #endif
+#ifdef CONFIG_MTK_HIGH_FRAME_RATE
+	bool (*is_new_fps)(struct platform_device *p,
+		unsigned int from_level, unsigned int to_level,
+		struct LCM_PARAMS *params);
+	void (*set_fps)(struct platform_device *p, void *cmdq_handle,
+		unsigned int from_level, unsigned int to_level,
+		struct LCM_PARAMS *params);
+#endif
+	int (*set_mask)(struct platform_device *p, int on);
+	int (*get_mask)(struct platform_device *p);
+	int	(*path_lock)(struct platform_device *p, bool locking);
+	int	(*framedone_notify)(struct platform_device *p);
 };
 
 extern struct mipi_dsi_lcd_common *g_lcd_common;
 extern unsigned int lcdtype;
-extern unsigned char rx_offset;
+extern unsigned int rx_offset;
 extern unsigned char data_type;
+extern unsigned int gpara_len;
 extern unsigned int islcmconnected;
 
 static inline struct mipi_dsi_lcd_common *get_lcd_common(u32 id)
@@ -77,5 +98,8 @@ extern int smcdsd_panel_dsi_command_tx(void *drvdata,
 	unsigned int id, unsigned long data0, unsigned int data1, bool need_lock);
 extern int smcdsd_panel_dsi_command_rx(void *drvdata,
 	unsigned int id, unsigned int offset, u8 cmd, unsigned int len, u8 *buf, bool need_lock);
-
+extern int smcdsd_panel_dsi_clk_change(unsigned int target_clk);
+#ifdef CONFIG_MACH_MT6768
+extern int mipi_clk_change(int msg, int en);
+#endif
 #endif

@@ -176,6 +176,7 @@ VOID p2pFsmInit(IN P_ADAPTER_T prAdapter)
 				OP_MODE_P2P_DEVICE, TRUE);
 
 		p2pFsmStateTransition(prAdapter, prP2pFsmInfo, P2P_STATE_IDLE);
+		LINK_INITIALIZE(&prP2pBssInfo->rPmkidCache);
 	} while (FALSE);
 
 }				/* p2pFsmInit */
@@ -236,7 +237,7 @@ VOID p2pFsmUninit(IN P_ADAPTER_T prAdapter)
 			cnmMgtPktFree(prAdapter, prP2pBssInfo->prBeacon);
 			prP2pBssInfo->prBeacon = NULL;
 		}
-
+	    rsnFlushPmkid(prAdapter);
 	} while (FALSE);
 
 	return;
@@ -1302,7 +1303,7 @@ VOID p2pFsmRunEventStopAP(IN P_ADAPTER_T prAdapter, IN P_MSG_HDR_T prMsgHdr)
 
 		/* p2pFsmRunEventAbort(prAdapter, prAdapter->rWifiVar.prP2pFsmInfo); */
 		p2pFsmStateTransition(prAdapter, prAdapter->rWifiVar.prP2pFsmInfo, P2P_STATE_IDLE);
-
+		rsnFlushPmkid(prAdapter);
 	} while (FALSE);
 
 	if (prMsgHdr)

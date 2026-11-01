@@ -21,12 +21,6 @@
 #include <linux/mmc/mmc.h>
 #include <linux/mmc/sd.h>
 
-#ifdef CONFIG_MMC_SUPPORT_STLOG
-#include <linux/fslog.h>
-#else
-#define ST_LOG(fmt, ...)
-#endif
-
 #include "core.h"
 #include "card.h"
 #include "host.h"
@@ -690,8 +684,7 @@ MMC_DEV_ATTR(name, "%s\n", card->cid.prod_name);
 MMC_DEV_ATTR(oemid, "0x%04x\n", card->cid.oemid);
 MMC_DEV_ATTR(serial, "0x%08x\n", card->cid.serial);
 MMC_DEV_ATTR(ocr, "0x%08x\n", card->ocr);
-MMC_DEV_ATTR(caps, "0x%08x\n", (unsigned int)(card->host->caps));
-MMC_DEV_ATTR(caps2, "0x%08x\n", card->host->caps2);
+
 
 static ssize_t mmc_dsr_show(struct device *dev,
                            struct device_attribute *attr,
@@ -725,8 +718,6 @@ static struct attribute *sd_std_attrs[] = {
 	&dev_attr_serial.attr,
 	&dev_attr_ocr.attr,
 	&dev_attr_dsr.attr,
-	&dev_attr_caps.attr,
-	&dev_attr_caps2.attr,
 	NULL,
 };
 ATTRIBUTE_GROUPS(sd_std);
@@ -1245,9 +1236,11 @@ static int mmc_sd_resume(struct mmc_host *host)
 {
 	int err = 0;
 
+#ifdef CONFIG_MMC_BLOCK_DEFERRED_RESUME
 	err = _mmc_sd_resume(host);
 	pm_runtime_set_active(&host->card->dev);
 	pm_runtime_mark_last_busy(&host->card->dev);
+#endif
 	pm_runtime_enable(&host->card->dev);
 
 	return err;
@@ -1339,6 +1332,12 @@ int mmc_attach_sd(struct mmc_host *host)
 			goto err;
 	}
 
+	/*
+	 * Some SD cards claims an out of spec VDD voltage range. Let's treat
+	 * these bits as being in-valid and especially also bit7.
+	 */
+	ocr &= ~0x7FFF;
+
 	rocr = mmc_select_voltage(host, ocr);
 
 	/*
@@ -1390,8 +1389,6 @@ err:
 	mmc_detach_bus(host);
 
 	pr_err("%s: error %d whilst initialising SD card\n",
-		mmc_hostname(host), err);
-	ST_LOG("%s: error %d whilst initialising SD card\n",
 		mmc_hostname(host), err);
 
 	return err;

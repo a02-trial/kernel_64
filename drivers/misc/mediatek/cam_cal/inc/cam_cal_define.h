@@ -64,6 +64,7 @@ struct COMPAT_stCAM_CAL_INFO_STRUCT {
 	u32 sensorID;
 	u32 deviceID;
 	compat_uptr_t pu1Params;
+	u32 command;
 };
 #endif
 

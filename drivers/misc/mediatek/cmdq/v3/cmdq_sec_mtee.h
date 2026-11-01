@@ -21,7 +21,7 @@
 #include <kree/system.h>
 #include <kree/mem.h>
 
-#include "tee_client_api.h"
+//#include "tee_client_api.h"
 #if defined(CONFIG_MICROTRUST_TEE_SUPPORT)
 #include "teei_client_main.h"
 #endif
@@ -41,6 +41,8 @@ struct cmdq_sec_mtee_context {
 	KREE_SHAREDMEM_PARAM wsm_param;
 	KREE_SHAREDMEM_HANDLE wsm_ex_handle;
 	KREE_SHAREDMEM_PARAM wsm_ex_param;
+	KREE_SHAREDMEM_HANDLE wsm_ex2_handle;
+	KREE_SHAREDMEM_PARAM wsm_ex2_param;
 	KREE_SHAREDMEM_HANDLE mem_handle;
 	KREE_SHAREDMEM_PARAM mem_param;
 #if 0

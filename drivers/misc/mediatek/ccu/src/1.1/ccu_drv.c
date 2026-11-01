@@ -74,8 +74,7 @@
 
 #define CCU_DEV_NAME            "ccu"
 
-#define CCU_CLK_NUM 2
-struct clk *ccu_clock_ctrl[CCU_CLK_NUM];
+struct clk *ccu_clock_ctrl;
 
 struct ccu_device_s *g_ccu_device;
 static struct ccu_power_s power;
@@ -84,10 +83,8 @@ static uint32_t ccu_hw_base;
 static wait_queue_head_t wait_queue_deque;
 static wait_queue_head_t wait_queue_enque;
 
-#ifdef CONFIG_PM_WAKELOCKS
+#ifdef CONFIG_PM_SLEEP
 struct wakeup_source ccu_wake_lock;
-#else
-struct wake_lock ccu_wake_lock;
 #endif
 /*static  int g_bWaitLock;*/
 
@@ -124,7 +121,6 @@ static int ccu_suspend(struct platform_device *dev, pm_message_t mesg);
 
 static int ccu_resume(struct platform_device *dev);
 
-static int32_t _clk_count;
 /*---------------------------------------------------------------------------*/
 /* CCU Driver: pm operations                                                 */
 /*---------------------------------------------------------------------------*/
@@ -421,8 +417,6 @@ static int ccu_open(struct inode *inode, struct file *flip)
 	struct ccu_user_s *user;
 
 	LOG_INF_MUST("%s +", __func__);
-
-	_clk_count = 0;
 	user = NULL;
 	ccu_create_user(&user);
 	flip->private_data = user;
@@ -564,23 +558,9 @@ int ccu_clock_enable(void)
 {
 	int ret;
 
-	LOG_DBG_MUST("%s(%d), cnt: %d.\n",
-		__func__, CCU_CLK_NUM, _clk_count);
+	LOG_DBG_MUST("%s.\n", __func__);
 
-	mutex_lock(&g_ccu_device->clk_mutex);
-
-	_clk_count++;
-
-	ret = clk_prepare_enable(ccu_clock_ctrl[0]);
-	if (ret)
-		LOG_ERR("CAM_PWR enable fail.\n");
-
-	ret = clk_prepare_enable(ccu_clock_ctrl[1]);
-	if (ret)
-		LOG_ERR("CCU_CLK_CAM_CCU enable fail.\n");
-
-	mutex_unlock(&g_ccu_device->clk_mutex);
-
+	ret = clk_prepare_enable(ccu_clock_ctrl);
 	if (ret)
 		LOG_ERR("clock enable fail.\n");
 
@@ -589,15 +569,8 @@ int ccu_clock_enable(void)
 
 void ccu_clock_disable(void)
 {
-	LOG_DBG_MUST("%s %d.\n", __func__, _clk_count);
-
-	mutex_lock(&g_ccu_device->clk_mutex);
-	if (_clk_count > 0) {
-		clk_disable_unprepare(ccu_clock_ctrl[1]);
-		clk_disable_unprepare(ccu_clock_ctrl[0]);
-		_clk_count--;
-	}
-	mutex_unlock(&g_ccu_device->clk_mutex);
+	LOG_DBG_MUST("%s.\n", __func__);
+	clk_disable_unprepare(ccu_clock_ctrl);
 }
 
 static MBOOL _is_fast_cmd(enum ccu_msg_id msg_id)
@@ -832,22 +805,6 @@ static long ccu_ioctl(struct file *flip, unsigned int cmd, unsigned long arg)
 
 			break;
 		}
-	case CCU_IOCTL_SEND_CMD:	/*--todo: not used for now, remove it*/
-		{
-			struct ccu_cmd_s cmd;
-
-			ret = copy_from_user(&cmd, (void *)arg,
-				sizeof(struct ccu_cmd_s));
-
-			if (ret != 0) {
-				LOG_ERR(
-					"[%s] copy_from_user failed, ret=%d\n",
-					"CCU_IOCTL_SEND_CMD", ret);
-				return -EFAULT;
-			}
-			ccu_send_command(&cmd);
-			break;
-		}
 	case CCU_IOCTL_FLUSH_LOG:
 		{
 			ccu_flushLog(0, NULL);
@@ -1022,13 +979,13 @@ static int ccu_release(struct inode *inode, struct file *flip)
 static int ccu_mmap(struct file *flip, struct vm_area_struct *vma)
 {
 	unsigned long length = 0;
-	unsigned int pfn = 0x0;
+	unsigned long pfn = 0x0;
 
 	length = (vma->vm_end - vma->vm_start);
 	vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
 	pfn = vma->vm_pgoff << PAGE_SHIFT;
 
-	LOG_DBG("CCU_mmap: vm_pgoff(0x%lx),pfn(0x%x),phy(0x%lx), ",
+	LOG_DBG("CCU_mmap: vm_pgoff(0x%lx),pfn(0x%lx),phy(0x%lx), ",
 		vma->vm_pgoff, pfn, vma->vm_pgoff << PAGE_SHIFT);
 	LOG_DBG("vm_start(0x%lx),vm_end(0x%lx),length(0x%lx)\n",
 		vma->vm_start, vma->vm_end, length);
@@ -1037,7 +994,7 @@ static int ccu_mmap(struct file *flip, struct vm_area_struct *vma)
 
 		if (pfn == (ccu_hw_base - CCU_HW_OFFSET)) {
 			if (length > PAGE_SIZE) {
-				LOG_ERR("mmap range error :module(0x%x), ",
+				LOG_ERR("mmap range error :module(0x%lx), ",
 					pfn);
 				LOG_ERR
 				    ("length(0x%lx), CCU_HW_BASE(0x%x)!\n",
@@ -1046,7 +1003,7 @@ static int ccu_mmap(struct file *flip, struct vm_area_struct *vma)
 			}
 		} else if (pfn == CCU_CAMSYS_BASE) {
 			if (length > CCU_CAMSYS_SIZE) {
-				LOG_ERR("mmap range error :module(0x%x), ",
+				LOG_ERR("mmap range error :module(0x%lx), ",
 					pfn);
 				LOG_ERR
 				    ("length(0x%lx), %s(0x%x)!\n",
@@ -1055,7 +1012,7 @@ static int ccu_mmap(struct file *flip, struct vm_area_struct *vma)
 			}
 		} else if (pfn == CCU_PMEM_BASE) {
 			if (length > CCU_PMEM_SIZE) {
-				LOG_ERR("mmap range error :module(0x%x), ",
+				LOG_ERR("mmap range error :module(0x%lx), ",
 					pfn);
 				LOG_ERR
 				    ("length(0x%lx), CCU_PMEM_BASE_HW(0x%x)!\n",
@@ -1064,7 +1021,7 @@ static int ccu_mmap(struct file *flip, struct vm_area_struct *vma)
 			}
 		} else if (pfn == CCU_DMEM_BASE) {
 			if (length > CCU_DMEM_SIZE) {
-				LOG_ERR("mmap range error :module(0x%x), ",
+				LOG_ERR("mmap range error :module(0x%lx), ",
 					pfn);
 				LOG_ERR
 				    ("length(0x%lx), CCU_PMEM_BASE_HW(0x%x)!\n",
@@ -1257,17 +1214,11 @@ static int ccu_probe(struct platform_device *pdev)
 		}
 		/* get Clock control from device tree.  */
 		{
-			ccu_clock_ctrl[0] =
-				devm_clk_get(g_ccu_device->dev,
-					"CAM_PWR");
-			if (ccu_clock_ctrl[0] == NULL)
-				LOG_ERR("Get CAM_PWR fail.\n");
-
-			ccu_clock_ctrl[1] =
+			ccu_clock_ctrl =
 				devm_clk_get(g_ccu_device->dev,
 					"CCU_CLK_CAM_CCU");
-			if (ccu_clock_ctrl[1] == NULL)
-				LOG_ERR("Get CCU_CLK_CAM_CCU fail.\n");
+			if (ccu_clock_ctrl == NULL)
+				LOG_ERR("Get ccu clock ctrl fail.\n");
 		}
 		/**/
 		g_ccu_device->irq_num = irq_of_parse_and_map(node, 0);
@@ -1325,11 +1276,8 @@ static int ccu_probe(struct platform_device *pdev)
 					CCU_DEV_NAME, ret);
 				goto EXIT;
 			}
-#ifdef CONFIG_PM_WAKELOCKS
+#ifdef CONFIG_PM_SLEEP
 			wakeup_source_init(&ccu_wake_lock, "ccu_lock_wakelock");
-#else
-			wake_lock_init(&ccu_wake_lock,
-				WAKE_LOCK_SUSPEND, "ccu_lock_wakelock");
 #endif
 
 			/* enqueue/dequeue control in ihalpipe wrapper */
@@ -1427,7 +1375,6 @@ static int __init CCU_INIT(void)
 
 	INIT_LIST_HEAD(&g_ccu_device->user_list);
 	mutex_init(&g_ccu_device->user_mutex);
-	mutex_init(&g_ccu_device->clk_mutex);
 	init_waitqueue_head(&g_ccu_device->cmd_wait);
 
 	/* Register M4U callback */

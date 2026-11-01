@@ -19,6 +19,10 @@
 #include "mtk_cpufreq_hybrid.h"
 #include "mtk_cpufreq_platform.h"
 
+#ifdef CONFIG_MTK_CPU_MSSV
+extern unsigned int cpumssv_get_state(void);
+#endif
+
 unsigned int func_lv_mask;
 unsigned int do_dvfs_stress_test;
 unsigned int dvfs_power_mode;
@@ -109,7 +113,7 @@ static int cpufreq_power_mode_proc_show(struct seq_file *m, void *v)
 static ssize_t cpufreq_power_mode_proc_write(struct file *file,
 	const char __user *buffer, size_t count, loff_t *pos)
 {
-	unsigned int mode;
+	unsigned int mode = 0;
 
 	char *buf = _copy_from_user_for_proc(buffer, count);
 
@@ -251,6 +255,40 @@ static ssize_t cpufreq_freq_proc_write(struct file *file,
 		tag_pr_info
 		("echo khz > /proc/cpufreq/%s/cpufreq_freq\n", p->name);
 	} else {
+#ifdef CONFIG_MTK_CPU_MSSV
+		if (!cpumssv_get_state()) {
+			for (i = 0; i < p->nr_opp_tbl; i++) {
+				if (freq == p->opp_tbl[i].cpufreq_khz) {
+					found = 1;
+					break;
+				}
+			}
+		} else if (freq > 0)
+			found = 1;
+
+		if (found == 1) {
+			p->dvfs_disable_by_procfs = true;
+  #ifdef CONFIG_HYBRID_CPU_DVFS
+			if (!cpu_dvfs_is(p, MT_CPU_DVFS_CCI))
+    #ifdef SINGLE_CLUSTER
+				cpuhvfs_set_freq(cpufreq_get_cluster_id(
+					p->cpu_id), freq);
+    #else
+				cpuhvfs_set_freq(arch_get_cluster_id(
+					p->cpu_id), freq);
+    #endif
+			else
+				cpuhvfs_set_freq(MT_CPU_DVFS_CCI, freq);
+  #else
+			_mt_cpufreq_dvfs_request_wrapper(p,
+					i, MT_CPU_DVFS_NORMAL, NULL);
+  #endif
+		} else {
+			p->dvfs_disable_by_procfs = false;
+			tag_pr_info(
+		"frequency %dKHz! is not found in CPU opp table\n", freq);
+			}
+#else
 		if (freq < p->opp_tbl[p->nr_opp_tbl - 1].cpufreq_khz) {
 			if (freq != 0)
 				tag_pr_info
@@ -284,6 +322,7 @@ static ssize_t cpufreq_freq_proc_write(struct file *file,
 					    freq);
 			}
 		}
+#endif
 	}
 
 	free_page((unsigned long)buf);
@@ -334,11 +373,15 @@ static ssize_t cpufreq_volt_proc_write(struct file *file,
 		p->dvfs_disable_by_procfs = true;
 		cpufreq_lock(flags);
 #ifdef CONFIG_HYBRID_CPU_DVFS
-#if 0
+#ifdef CONFIG_MTK_CPU_MSSV
 		if (!cpu_dvfs_is(p, MT_CPU_DVFS_CCI))
+#ifdef SINGLE_CLUSTER
 			cpuhvfs_set_volt(
-				cpufreq_get_cluster_id(p->cpu_id),
-				uv / 10);
+				cpufreq_get_cluster_id(p->cpu_id), uv/10);
+#else
+			cpuhvfs_set_volt(
+				arch_get_cluster_id(p->cpu_id), uv/10);
+#endif
 #endif
 #else
 		vproc_p->fix_volt = uv / 10;
@@ -579,6 +622,8 @@ static ssize_t cpufreq_cci_mode_proc_write(struct file *file,
 #endif
 	}
 
+	free_page((unsigned long)buf);
+
 	return count;
 }
 #endif
@@ -623,7 +668,7 @@ static ssize_t cpufreq_imax_enable_proc_write(struct file *file,
 
 static int cpufreq_imax_reg_dump_proc_show(struct seq_file *m, void *v)
 {
-	unsigned int reg_val[REG_LEN];
+	unsigned int reg_val[REG_LEN] = {0};
 	unsigned int addr_arr[REG_LEN] = { 0xcd10, 0xce0c, 0xce10, 0xce14 };
 	unsigned int i;
 

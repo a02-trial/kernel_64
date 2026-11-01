@@ -25,11 +25,14 @@
 
 #include "../inc/mt6360_pmu.h"
 
+#define I2C_RETRY_CNT	3
+
 bool dbg_log_en; /* module param to enable/disable debug log */
 module_param(dbg_log_en, bool, 0644);
 
 static const struct mt6360_pmu_platform_data def_platform_data = {
 	.irq_gpio = -1,
+	.disable_lpsd = false,
 };
 
 static int mt6360_pmu_read_device(void *client, u32 addr, int len, void *dst)
@@ -52,20 +55,32 @@ int mt6360_pmu_reg_read(struct mt6360_pmu_info *mpi, u8 addr)
 {
 #ifdef CONFIG_RT_REGMAP
 	struct rt_reg_data rrd = {0};
-	int ret;
+	int ret, i;
 
 	mt_dbg(mpi->dev, "%s: reg[%02x]\n", __func__, addr);
 	mutex_lock(&mpi->io_lock);
-	ret = rt_regmap_reg_read(mpi->regmap, &rrd, addr);
+	for (i = 0; i < I2C_RETRY_CNT; ++i) {
+		ret = rt_regmap_reg_read(mpi->regmap, &rrd, addr);
+		if (ret >= 0)
+			break;
+		pr_info("%s: reg(0x%x), ret(%d), i2c_retry_cnt(%d/%d)\n",
+				__func__, addr, ret, i + 1, I2C_RETRY_CNT);
+	}
 	mutex_unlock(&mpi->io_lock);
 	return (ret < 0 ? ret : rrd.rt_data.data_u8);
 #else
 	u8 data = 0;
-	int ret;
+	int ret, i;
 
 	mt_dbg(mpi->dev, "%s: reg[%02x]\n", __func__, addr);
 	mutex_lock(&mpi->io_lock);
-	ret = mt6360_pmu_read_device(mpi->i2c, addr, 1, &data);
+	for (i = 0; i < I2C_RETRY_CNT; ++i) {
+		ret = mt6360_pmu_read_device(mpi->i2c, addr, 1, &data);
+		if (ret >= 0)
+			break;
+		pr_info("%s: reg(0x%x), ret(%d), i2c_retry_cnt(%d/%d)\n",
+				__func__, addr, ret, i + 1, I2C_RETRY_CNT);
+	}
 	mutex_unlock(&mpi->io_lock);
 	return (ret < 0 ? ret : data);
 #endif /* CONFIG_RT_REGMAP */
@@ -76,21 +91,33 @@ int mt6360_pmu_reg_write(struct mt6360_pmu_info *mpi, u8 addr, u8 data)
 {
 #ifdef CONFIG_RT_REGMAP
 	struct rt_reg_data rrd = {0};
-	int ret;
+	int ret, i;
 
 	mt_dbg(mpi->dev, "%s reg[%02x] data [%02x]\n", __func__, addr, data);
 	mutex_lock(&mpi->io_lock);
-	ret = rt_regmap_reg_write(mpi->regmap, &rrd, addr, data);
+	for (i = 0; i < I2C_RETRY_CNT; ++i) {
+		ret = rt_regmap_reg_write(mpi->regmap, &rrd, addr, data);
+		if (ret >= 0)
+			break;
+		pr_info("%s: reg(0x%x), ret(%d), i2c_retry_cnt(%d/%d)\n",
+				__func__, addr, ret, i + 1, I2C_RETRY_CNT);
+	}
 	if (ret < 0)
 		rt_regmap_cache_reload(mpi->regmap);
 	mutex_unlock(&mpi->io_lock);
 	return ret;
 #else
-	int ret;
+	int ret, i;
 
 	mt_dbg(mpi->dev, "%s reg[%02x] data [%02x]\n", __func__, addr, data);
 	mutex_lock(&mpi->io_lock);
-	ret = mt6360_pmu_write_device(mpi->i2c, addr, 1, &data);
+	for (i = 0; i < I2C_RETRY_CNT; ++i) {
+		ret = mt6360_pmu_write_device(mpi->i2c, addr, 1, &data);
+		if (ret >= 0)
+			break;
+		pr_info("%s: reg(0x%x), ret(%d), i2c_retry_cnt(%d/%d)\n",
+				__func__, addr, ret, i + 1, I2C_RETRY_CNT)
+	}
 	mutex_unlock(&mpi->io_lock);
 	return ret;
 #endif /* CONFIG_RT_REGMAP */
@@ -113,18 +140,30 @@ int mt6360_pmu_reg_update_bits(struct mt6360_pmu_info *mpi,
 	return ret;
 #else
 	u8 org = 0;
-	int ret;
+	int ret, i;
 
 	mt_dbg(mpi->dev,
 		"%s reg[%02x], mask[%02x], data[%02x]\n",
 		__func__, addr, mask, data);
 	mutex_lock(&mpi->io_lock);
-	ret = mt6360_pmu_read_device(mpi->i2c, addr, 1, &org);
+	for (i = 0; i < I2C_RETRY_CNT; ++i) {
+		ret = mt6360_pmu_read_device(mpi->i2c, addr, 1, &org);
+		if (ret >= 0)
+			break;
+		pr_info("%s: reg(0x%x), ret(%d), i2c_retry_cnt(%d/%d)\n",
+				__func__, addr, ret, i + 1, I2C_RETRY_CNT);
+	}
 	if (ret < 0)
 		goto out_update_bits;
 	org &= ~mask;
 	org |= (data & mask);
-	ret = mt6360_pmu_write_device(mpi->i2c, addr, 1, &org);
+	for (i = 0; i < I2C_RETRY_CNT; ++i) {
+		ret = mt6360_pmu_write_device(mpi->i2c, addr, 1, &org);
+		if (ret >= 0)
+			break;
+		pr_info("%s: reg(0x%x), ret(%d), i2c_retry_cnt(%d/%d)\n",
+				__func__, addr, ret, i + 1, I2C_RETRY_CNT);
+	}
 out_update_bits:
 	mutex_unlock(&mpi->io_lock);
 	return ret;
@@ -136,19 +175,31 @@ int mt6360_pmu_reg_block_read(struct mt6360_pmu_info *mpi,
 			      u8 addr, u8 len, u8 *dst)
 {
 #ifdef CONFIG_RT_REGMAP
-	int ret;
+	int ret, i;
 
 	mt_dbg(mpi->dev, "%s addr[%02x], len[%d]\n", __func__, addr, len);
 	mutex_lock(&mpi->io_lock);
-	ret = rt_regmap_block_read(mpi->regmap, addr, len, dst);
+	for (i = 0; i < I2C_RETRY_CNT; ++i) {
+		ret = rt_regmap_block_read(mpi->regmap, addr, len, dst);
+		if (ret >= 0)
+			break;
+		pr_info("%s: reg(0x%x), ret(%d), i2c_retry_cnt(%d/%d)\n",
+				__func__, addr, ret, i + 1, I2C_RETRY_CNT);
+	}
 	mutex_unlock(&mpi->io_lock);
 	return ret;
 #else
-	int ret;
+	int ret, i;
 
 	mt_dbg(mpi->dev, "%s addr[%02x], len[%d]\n", __func__, addr, len);
 	mutex_lock(&mpi->io_lock);
-	ret = mt6360_pmu_read_device(mpi->i2c, addr, len, dst);
+	for (i = 0; i < I2C_RETRY_CNT; ++i) {
+		ret = mt6360_pmu_read_device(mpi->i2c, addr, len, dst);
+		if (ret >= 0)
+			break;
+		pr_info("%s: reg(0x%x), ret(%d), i2c_retry_cnt(%d/%d)\n",
+				__func__, addr, ret, i + 1, I2C_RETRY_CNT);
+	}
 	mutex_unlock(&mpi->io_lock);
 	return ret;
 #endif /* CONFIG_RT_REGMAP */
@@ -159,19 +210,31 @@ int mt6360_pmu_reg_block_write(struct mt6360_pmu_info *mpi,
 			       u8 addr, u8 len, const u8 *src)
 {
 #ifdef CONFIG_RT_REGMAP
-	int ret = 0;
+	int ret = 0, i;
 
 	mt_dbg(mpi->dev, "%s addr[%02x], len[%d]\n", __func__, addr, len);
 	mutex_lock(&mpi->io_lock);
-	ret = rt_regmap_block_write(mpi->regmap, addr, len, src);
+	for (i = 0; i < I2C_RETRY_CNT; ++i) {
+		ret = rt_regmap_block_write(mpi->regmap, addr, len, src);
+		if (ret >= 0)
+			break;
+		pr_info("%s: reg(0x%x), ret(%d), i2c_retry_cnt(%d/%d)\n",
+				__func__, addr, ret, i + 1, I2C_RETRY_CNT);
+	}
 	mutex_unlock(&mpi->io_lock);
 	return ret;
 #else
-	int ret = 0;
+	int ret = 0, i;
 
 	mt_dbg(mpi->dev, "%s addr[%02x], len[%d]\n", __func__, addr, len);
 	mutex_lock(&mpi->io_lock);
-	ret = mt6360_pmu_write_device(mpi->i2c, addr, len, src);
+	for (i = 0; i < I2C_RETRY_CNT; ++i) {
+		ret = mt6360_pmu_write_device(mpi->i2c, addr, len, src);
+		if (ret >= 0)
+			break;
+		pr_info("%s: reg(0x%x), ret(%d), i2c_retry_cnt(%d/%d)\n",
+				__func__, addr, ret, i + 1, I2C_RETRY_CNT);
+	}
 	mutex_unlock(&mpi->io_lock);
 	return ret;
 #endif /* CONFIG_RT_REGMAP */
@@ -199,6 +262,7 @@ static int mt6360_pmu_apply_pdata(struct mt6360_pmu_info *mpi,
 
 static const struct mt6360_val_prop mt6360_val_props[] = {
 	MT6360_DT_VALPROP(int_ret, struct mt6360_pmu_platform_data),
+	MT6360_DT_VALPROP(disable_lpsd, struct mt6360_pmu_platform_data),
 };
 
 static int mt6360_pmu_parse_dt_data(struct device *dev,
@@ -264,6 +328,7 @@ static int mt6360_pmu_i2c_probe(struct i2c_client *client,
 	bool use_dt = client->dev.of_node;
 	u8 chip_rev;
 	int ret;
+	uint8_t reg_data = 0x80, reg_mask = 0x80;
 
 	dev_dbg(&client->dev, "%s\n", __func__);
 	ret = mt6360_pmu_chip_id_check(client);
@@ -323,6 +388,12 @@ static int mt6360_pmu_i2c_probe(struct i2c_client *client,
 	if (ret < 0) {
 		dev_err(&client->dev, "subdev register fail\n");
 		goto out_irq;
+	}
+	if (pdata->disable_lpsd) {
+		ret = mt6360_pmu_reg_update_bits(mpi, MT6360_PMU_CHG_PUMP,
+						reg_mask, reg_data);
+		if (ret < 0)
+			dev_err(&client->dev, "%s: LPSD set fail\n", __func__);
 	}
 	pm_runtime_enable(mpi->dev);
 	dev_info(&client->dev, "%s: successfully probed\n", __func__);

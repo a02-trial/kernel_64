@@ -2182,7 +2182,7 @@ void mtk_uart_restore(void)
 	unsigned long flags;
 	struct mtk_uart *uart;
 
-	if(console_port == NULL)
+	if (console_port == NULL)
 		return;
 
 	uart = console_port;
@@ -2255,7 +2255,7 @@ void switch_uart_gpio(int uartport, int gpioopid)
 void mtk_uart_switch_tx_to_gpio(struct mtk_uart *uart)
 {
 #if defined(CONFIG_PM) && !defined(CONFIG_FPGA_EARLY_PORTING) && !defined(CONFIG_MTK_LEGACY)
-	int uart_gpio_op = 3;	/* URAT TX CLEAR */
+	int uart_gpio_op = 0;	/* URAT RX SET */
 #endif /* defined(CONFIG_PM) && !defined(CONFIG_FPGA_EARLY_PORTING) && !defined(CONFIG_MTK_LEGACY) */
 	int uartport = uart->nport;
 
@@ -2317,7 +2317,7 @@ void mtk_uart_switch_tx_to_gpio(struct mtk_uart *uart)
 void mtk_uart_switch_to_tx(struct mtk_uart *uart)
 {
 #if defined(CONFIG_PM) && !defined(CONFIG_FPGA_EARLY_PORTING) && !defined(CONFIG_MTK_LEGACY)
-	int uart_gpio_op = 2;	/* URAT TX SET */
+	int uart_gpio_op = 0;	/* URAT RX SET */
 #endif /* defined(CONFIG_PM) && !defined(CONFIG_FPGA_EARLY_PORTING) && !defined(CONFIG_MTK_LEGACY) */
 	int uartport = uart->nport;
 

@@ -29,6 +29,10 @@
 #ifndef _IMX582MIPI_SENSOR_H
 #define _IMX582MIPI_SENSOR_H
 
+#define IMX582_OTP_PAGE_SETUP_ADDR         (0x0A02)
+#define IMX582_OTP_READ_TRANSFER_MODE_ADDR (0x0A00)
+#define IMX582_OTP_STATUS_REGISTER_ADDR    (0x0A01)
+#define IMX582_OTP_CHIP_REVISION_ADDR      (0x0018)
 
 enum IMGSENSOR_MODE {
 	IMGSENSOR_MODE_INIT,
@@ -39,6 +43,36 @@ enum IMGSENSOR_MODE {
 	IMGSENSOR_MODE_SLIM_VIDEO,
 	IMGSENSOR_MODE_CUSTOM1,
 	IMGSENSOR_MODE_CUSTOM2,
+	IMGSENSOR_MODE_CUSTOM3,
+};
+
+/*
+ *    CHIP Revision Confirmation
+ *
+ *        Chip ID   : Sensor setfile version
+ *          0x02    :      ver5.1
+ *          0x08    :      ver5.1
+ *          0x09    :      ver5.1
+ *          0x10    :      ver5.1
+ *          0x18    :      ver5.1
+ *          0x0D    :      ver6.1
+ *          0x1B    :      ver6.1
+ *          0x20    :      ver6.1
+ */
+enum IMGSENSOR_IMX582_CHID_ID {
+	IMGSENSOR_IMX582_CHIP_ID_0X02 = 0x02,
+	IMGSENSOR_IMX582_CHIP_ID_0X08 = 0x08,
+	IMGSENSOR_IMX582_CHIP_ID_0X09 = 0x09,
+	IMGSENSOR_IMX582_CHIP_ID_0X10 = 0x10,
+	IMGSENSOR_IMX582_CHIP_ID_0X18 = 0x18,
+	IMGSENSOR_IMX582_CHIP_ID_0X0D = 0x0D,
+	IMGSENSOR_IMX582_CHIP_ID_0X1B = 0x1B,
+	IMGSENSOR_IMX582_CHIP_ID_0X20 = 0x20
+};
+
+enum IMGSENSOR_IMX582_SETFILE_VER {
+	IMGSENSOR_IMX582_SETFILE_VER_5 = 0x0,
+	IMGSENSOR_IMX582_SETFILE_VER_6 = 0x1
 };
 
 struct imgsensor_mode_struct {
@@ -86,6 +120,7 @@ struct imgsensor_struct {
 	kal_uint8 ihdr_mode; /* ihdr enable or disable */
 	kal_uint8 pdaf_mode; /* ihdr enable or disable */
 	kal_uint8 i2c_write_id; /* record current sensor's i2c write id */
+
 };
 
 /* SENSOR PRIVATE STRUCT FOR CONSTANT*/
@@ -99,6 +134,7 @@ struct imgsensor_info_struct {
 	struct imgsensor_mode_struct slim_video;
 	struct imgsensor_mode_struct custom1;
 	struct imgsensor_mode_struct custom2;
+	struct imgsensor_mode_struct custom3;
 
 	kal_uint8 ae_shut_delay_frame; /* shutter delay frame for AE cycle */
 	kal_uint8 ae_sensor_gain_delay_frame;
@@ -115,6 +151,7 @@ struct imgsensor_info_struct {
 	kal_uint8 slim_video_delay_frame; /* enter slim video delay frame num */
 	kal_uint8 custom1_delay_frame; /* enter custom1 delay frame num */
 	kal_uint8 custom2_delay_frame; /* enter custom2 delay frame num */
+	kal_uint8 custom3_delay_frame; /* enter custom2 delay frame num */
 	kal_uint8 margin; /* sensor framelength & shutter margin */
 	kal_uint32 min_shutter; /* min shutter */
 	kal_uint32 min_gain;
@@ -149,7 +186,7 @@ struct imgsensor_info_struct {
 
 extern int iReadRegI2C(u8 *a_pSendData, u16 a_sizeSendData,
 	u8 *a_pRecvData, u16 a_sizeRecvData,
-		       u16 i2cId);
+		u16 i2cId);
 extern int iWriteRegI2C(u8 *a_pSendData, u16 a_sizeSendData, u16 i2cId);
 
 extern void read_imx230_eeprom(void);
@@ -161,4 +198,9 @@ extern int iWriteReg(u16 a_u2Addr, u32 a_u4Data, u32 a_u4Bytes, u16 i2cId);
 extern void kdSetI2CSpeed(u16 i2cSpeed);
 extern int iBurstWriteReg_multi(u8 *pData, u32 bytes, u16 i2cId,
 				u16 transfer_length, u16 timing);
+extern int iReadRegI2CTiming(u8 *a_pSendData, u16 a_sizeSendData,
+	u8 *a_pRecvData, u16 a_sizeRecvData,
+	u16 i2cId, u16 timing);
+extern int iWriteRegI2CTiming(u8 *a_pSendData, u16 a_sizeSendData,
+	u16 i2cId, u16 timing);
 #endif

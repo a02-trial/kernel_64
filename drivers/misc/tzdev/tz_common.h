@@ -25,18 +25,16 @@
 #include <sys/types.h>
 #endif
 
-#define UINT_PTR(a)			((void *)(unsigned long)(a))
-
 #define TZ_IOC_MAGIC			'c'
 
 #define TZIO_MEM_REGISTER		_IOW(TZ_IOC_MAGIC, 120, struct tzio_mem_register)
-#define TZIO_MEM_RELEASE		_IOW(TZ_IOC_MAGIC, 121, int)
 #define TZIO_CRYPTO_CLOCK_CONTROL	_IOW(TZ_IOC_MAGIC, 123, int)
 #define TZIO_GET_SYSCONF		_IOW(TZ_IOC_MAGIC, 124, struct tzio_sysconf)
-#define TZIO_BOOST_CONTROL		_IOW(TZ_IOC_MAGIC, 125, int)
-#define TZIO_PMF_INIT			_IOW(TZ_IOC_MAGIC, 126, struct tzio_pmf_init)
-#define TZIO_PMF_FINI			_IOW(TZ_IOC_MAGIC, 127, int)
-#define TZIO_PMF_GET_TICKS		_IOW(TZ_IOC_MAGIC, 128, int)
+#define TZIO_BOOST_ON			_IOW(TZ_IOC_MAGIC, 125, int)
+#define TZIO_BOOST_OFF			_IOW(TZ_IOC_MAGIC, 126, int)
+#define TZIO_PMF_INIT			_IOW(TZ_IOC_MAGIC, 127, struct tzio_pmf_init)
+#define TZIO_PMF_FINI			_IOW(TZ_IOC_MAGIC, 128, int)
+#define TZIO_PMF_GET_TICKS		_IOW(TZ_IOC_MAGIC, 129, int)
 
 #define TZIO_UIWSOCK_CONNECT		_IOW(TZ_IOC_MAGIC, 130, int)
 #define TZIO_UIWSOCK_WAIT_CONNECTION	_IOW(TZ_IOC_MAGIC, 131, int)
@@ -55,15 +53,33 @@
 #define SYSCONF_NWD_CPU_HOTPLUG			(1 << 1)
 #define SYSCONF_NWD_TZDEV_DEPLOY_TZAR		(1 << 2)
 
+#ifndef SHA256_DIGEST_SIZE
 #define SHA256_DIGEST_SIZE			32
+#endif
 
+#ifndef CRED_HASH_SIZE
 #define CRED_HASH_SIZE				SHA256_DIGEST_SIZE
+#endif
+
+enum cluster_type {
+	CPU_CLUSTER_BIG,
+	CPU_CLUSTER_MIDDLE,
+	CPU_CLUSTER_LITTLE,
+	CPU_CLUSTER_MAX,
+};
+
+struct sysconf_cluster_info {
+	uint32_t type;
+	uint32_t nr_cpus;
+	uint32_t mask;
+} __attribute__((__packed__));
 
 struct tzio_swd_sysconf {
 	uint32_t os_version;			/* SWd OS version */
 	uint32_t cpu_num;			/* SWd number of cpu supported */
-	uint32_t big_cpus_mask;			/* SWd big cluster cpus mask */
 	uint32_t flags;				/* SWd flags */
+	uint32_t nr_clusters;					/* Number of CPU clusters */
+	struct sysconf_cluster_info cluster_info[CPU_CLUSTER_MAX];	/* Cluster layout */
 	char version[SYSCONF_SWD_VERSION_LEN];	/* SWd OS version string */
 } __attribute__((__packed__));
 
@@ -79,7 +95,6 @@ struct tzio_sysconf {
 } __attribute__((__packed__));
 
 struct tzio_mem_register {
-	uint64_t ptr;			/* Memory region start (in) */
 	uint64_t size;			/* Memory region size (in) */
 	uint32_t write;			/* 1 - rw, 0 - ro */
 } __attribute__((__packed__));
@@ -95,32 +110,36 @@ enum {
 	TZIO_CRYPTO_CLOCK_ON,
 };
 
-/* Used for switching boosting ON/OFF */
-enum {
-	TZIO_BOOST_OFF,
-	TZIO_BOOST_ON,
-};
-
+#ifndef __USED_BY_TZSL__
 struct tz_uuid {
 	uint32_t time_low;
 	uint16_t time_mid;
 	uint16_t time_hi_and_version;
 	uint8_t clock_seq_and_node[8];
-} __attribute__((packed));
+} __attribute__((__packed__));
+
+enum {
+	TZ_CRED_UUID,
+	TZ_CRED_HASH,
+	TZ_CRED_KERNEL
+};
+#define TZ_CRED_HASH_SIZE 32
 
 struct tz_cred {
 	uint32_t pid;
 	uint32_t uid;
 	uint32_t gid;
-	uint8_t hash[CRED_HASH_SIZE];
-} __attribute__((packed));
+	union {
+		struct tz_uuid uuid;
+		uint8_t hash[TZ_CRED_HASH_SIZE];
+	};
+	uint32_t type; /* TZ_CRED_UUID/TZ_CRED_HASH */
+} __attribute__((__packed__));
 
-struct tz_swd_cred {
-	uint32_t pid;
-	uint32_t uid;
-	uint32_t gid;
-	struct tz_uuid uuid;
-} __attribute__((packed));
+#else /* __USED_BY_TZSL__ */
+#  include <tz_cred.h>
+#  include <tz_uuid.h>
+#endif /* __USED_BY_TZSL__ */
 
 struct tz_msghdr {
 	char		*msgbuf;
@@ -147,14 +166,38 @@ struct tz_cmsghdr {
 	/* followed by the actual control message data */
 };
 
+#define TZ_CMSG_ALIGN(LEN)		(((LEN) + sizeof(uint32_t) - 1) & ~(sizeof(uint32_t) - 1))
+#define TZ_CMSG_DATA(CMSG)		((void *)((char *)(CMSG) + TZ_CMSG_ALIGN(sizeof(struct tz_cmsghdr))))
+#define TZ_CMSG_SPACE(LEN)		(TZ_CMSG_ALIGN(sizeof(struct tz_cmsghdr)) + TZ_CMSG_ALIGN(LEN))
+#define TZ_CMSG_LEN(LEN)		(TZ_CMSG_ALIGN(sizeof(struct tz_cmsghdr)) + (LEN))
+
+static inline
+struct tz_cmsghdr *TZ_CMSG_FIRSTHDR(const struct tz_msghdr *msg)
+{
+	return ((msg->msg_controllen >= sizeof(struct tz_cmsghdr)) ? (struct tz_cmsghdr *)msg->msg_control : NULL);
+}
+
+static inline
+struct tz_cmsghdr *TZ_CMSG_NXTHDR(const struct tz_msghdr *msg, const struct tz_cmsghdr *cmsg)
+{
+	struct tz_cmsghdr *ret;
+	const uint32_t cmsg_len = cmsg->cmsg_len;
+	const void *ctl = msg->msg_control;
+	const size_t size = msg->msg_controllen;
+
+	if (cmsg_len < sizeof(struct tz_cmsghdr))
+		return NULL;
+
+	ret = (struct tz_cmsghdr *)(((unsigned long)cmsg) + TZ_CMSG_ALIGN(cmsg_len));
+	if ((size_t)((unsigned long)(ret + 1) - (unsigned long)ctl) > size)
+		return NULL;
+
+	return ret;
+}
+
 struct tz_cmsghdr_cred {
 	struct tz_cmsghdr cmsghdr;
 	struct tz_cred cred;
-};
-
-struct tz_cmsghdr_swd_cred {
-	struct tz_cmsghdr cmsghdr;
-	struct tz_swd_cred cred;
 };
 
 #define TZ_UIWSOCK_MAX_NAME_LENGTH	256

@@ -20,7 +20,6 @@
 #ifndef _MTK_WCN_CONSYS_HW_H_
 #define _MTK_WCN_CONSYS_HW_H_
 
-#include <sync_write.h>
 /*#include <mt_reg_base.h>*/
 #include "wmt_plat.h"
 
@@ -33,6 +32,10 @@
 #endif
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0))
+#include <linux/regmap.h>
+#endif
 
 #define ENABLE MTK_WCN_BOOL_TRUE
 #define DISABLE MTK_WCN_BOOL_FALSE
@@ -50,7 +53,10 @@
 	(*(volatile UINT32 *)(REG)) = val;\
 }
 #define CONSYS_REG_READ(addr) (*((volatile UINT32 *)(addr)))
-#define CONSYS_REG_WRITE(addr, data)  mt_reg_sync_writel(data, addr)
+#define CONSYS_REG_WRITE(addr, data) do {\
+	writel(data, (volatile void *)addr); \
+	mb(); \
+} while (0)
 #define CONSYS_REG_WRITE_RANGE(reg, data, end, begin) {\
 	UINT32 val = CONSYS_REG_READ(reg); \
 	SET_BIT_RANGE(&val, data, end, begin); \
@@ -84,6 +90,34 @@
 #define EXP_APMEM_HOST_OUTBAND_ASSERT_MAGIC_W1   (0x19b30bb1)
 
 #define DYNAMIC_DUMP_GROUP_NUM 5
+
+
+#define OPT_POWER_ON_DLM_TABLE			(0x1)
+#define OPT_SET_MCUCLK_TABLE_1_2		(0x1 << 1)
+#define OPT_SET_MCUCLK_TABLE_3_4		(0x1 << 2)
+#define OPT_QUERY_ADIE				(0x1 << 3)
+#define OPT_SET_WIFI_EXT_COMPONENT		(0x1 << 4)
+#define OPT_WIFI_LTE_COEX			(0x1 << 5)
+#define OPT_COEX_TDM_REQ_ANTSEL_NUM		(0x1 << 6)
+#define OPT_BT_TSSI_FROM_WIFI_CONFIG_NEW_OPID	(0x1 << 7)
+#define OPT_INIT_COEX_BEFORE_RF_CALIBRATION	(0x1 << 8)
+#define OPT_INIT_COEX_AFTER_RF_CALIBRATION	(0x1 << 9)
+#define OPT_COEX_CONFIG_ADJUST			(0x1 << 10)
+#define OPT_COEX_CONFIG_ADJUST_NEW_FLAG		(0x1 << 11)
+#define OPT_SET_OSC_TYPE			(0x1 << 12)
+#define OPT_SET_COREDUMP_LEVEL			(0x1 << 13)
+#define OPT_WIFI_5G_PALDO			(0x1 << 14)
+#define OPT_GPS_SYNC				(0x1 << 15)
+#define OPT_WIFI_LTE_COEX_TABLE_0		(0x1 << 16)
+#define OPT_WIFI_LTE_COEX_TABLE_1		(0x1 << 17)
+#define OPT_WIFI_LTE_COEX_TABLE_2		(0x1 << 18)
+#define OPT_WIFI_LTE_COEX_TABLE_3		(0x1 << 19)
+#define OPT_COEX_EXT_ELNA_GAIN_P1_SUPPORT	(0x1 << 20)
+#define OPT_NORMAL_PATCH_DWN_0			(0x1 << 21)
+#define OPT_NORMAL_PATCH_DWN_1			(0x1 << 22)
+#define OPT_NORMAL_PATCH_DWN_2			(0x1 << 23)
+#define OPT_NORMAL_PATCH_DWN_3			(0x1 << 24)
+#define OPT_PATCH_CHECKSUM			(0x1 << 25)
 
 /*******************************************************************************
 *                    E X T E R N A L   R E F E R E N C E S
@@ -178,7 +212,9 @@ typedef VOID(*CONSYS_IC_VCN28_HW_MODE_CTRL) (UINT32 enable);
 typedef INT32(*CONSYS_IC_HW_VCN28_CTRL) (UINT32 enable);
 typedef INT32(*CONSYS_IC_HW_WIFI_VCN33_CTRL) (UINT32 enable);
 typedef INT32(*CONSYS_IC_HW_BT_VCN33_CTRL) (UINT32 enable);
+typedef INT32(*CONSYS_IC_HW_VCN_CTRL_AFTER_IDLE) (VOID);
 typedef UINT32(*CONSYS_IC_SOC_CHIPID_GET) (VOID);
+typedef INT32(*CONSYS_IC_ADIE_CHIPID_DETECT) (VOID);
 typedef INT32(*CONSYS_IC_EMI_MPU_SET_REGION_PROTECTION) (VOID);
 typedef UINT32(*CONSYS_IC_EMI_SET_REMAPPING_REG) (VOID);
 typedef INT32(*IC_BT_WIFI_SHARE_V33_SPIN_LOCK_INIT) (VOID);
@@ -203,7 +239,8 @@ typedef INT32(*CONSYS_IC_EMI_COREDUMP_REMAPPING) (UINT8 __iomem **addr, UINT32 e
 typedef INT32(*CONSYS_IC_RESET_EMI_COREDUMP) (UINT8 __iomem *addr);
 typedef VOID(*CONSYS_IC_CLOCK_FAIL_DUMP) (VOID);
 typedef INT32(*CONSYS_IC_IS_CONNSYS_REG) (UINT32 addr);
-typedef PUINT32(*CONSYS_IC_RESUME_DUMP_INFO) (VOID);
+typedef INT32(*CONSYS_IC_IS_HOST_CSR) (SIZE_T addr);
+typedef INT32(*CONSYS_IC_DUMP_OSC_STATE) (P_CONSYS_STATE state);
 typedef VOID(*CONSYS_IC_SET_PDMA_AXI_RREADY_FORCE_HIGH) (UINT32 enable);
 typedef VOID(*CONSYS_IC_SET_MCIF_EMI_MPU_PROTECTION)(MTK_WCN_BOOL enable);
 typedef INT32(*CONSYS_IC_CALIBRATION_BACKUP_RESTORE) (VOID);
@@ -211,6 +248,17 @@ typedef VOID(*CONSYS_IC_REGISTER_DEVAPC_CB) (VOID);
 typedef VOID(*CONSYS_IC_INFRA_REG_DUMP)(VOID);
 typedef INT32(*CONSYS_IC_IS_ANT_SWAP_ENABLE_BY_HWID) (INT32 pin_num);
 typedef VOID(*CONSYS_IC_GET_ANT_SEL_CR_ADDR) (PUINT32 default_invert_cr, PUINT32 default_invert_bit);
+typedef VOID(*CONSYS_IC_EMI_ENTRY_ADDRESS) (VOID);
+typedef VOID(*CONSYS_IC_SET_XO_OSC_CTRL) (VOID);
+typedef VOID(*CONSYS_IC_IDENTIFY_ADIE) (VOID);
+typedef VOID(*CONSYS_IC_WIFI_CTRL_SETTING) (VOID);
+typedef VOID(*CONSYS_IC_BUS_TIMEOUT_CONFIG) (VOID);
+typedef VOID(*CONSYS_IC_SET_ACCESS_EMI_HW_MODE) (VOID);
+typedef INT32(*CONSYS_IC_DUMP_GATING_STATE) (P_CONSYS_STATE state);
+typedef INT32(*CONSYS_IC_SLEEP_INFO_ENABLE_CTRL) (UINT32 enable);
+typedef INT32(*CONSYS_IC_SLEEP_INFO_READ_CTRL) (WMT_SLEEP_COUNT_TYPE type, PUINT64 sleep_counter, PUINT64 sleep_timer);
+typedef INT32(*CONSYS_IC_SLEEP_INFO_CLEAR) (VOID);
+typedef UINT64(*CONSYS_IC_GET_OPTIONS) (VOID);
 
 typedef struct _WMT_CONSYS_IC_OPS_ {
 	CONSYS_IC_CLOCK_BUFFER_CTRL consys_ic_clock_buffer_ctrl;
@@ -228,7 +276,9 @@ typedef struct _WMT_CONSYS_IC_OPS_ {
 	CONSYS_IC_HW_VCN28_CTRL consys_ic_hw_vcn28_ctrl;
 	CONSYS_IC_HW_WIFI_VCN33_CTRL consys_ic_hw_wifi_vcn33_ctrl;
 	CONSYS_IC_HW_BT_VCN33_CTRL consys_ic_hw_bt_vcn33_ctrl;
+	CONSYS_IC_HW_VCN_CTRL_AFTER_IDLE consys_ic_hw_vcn_ctrl_after_idle;
 	CONSYS_IC_SOC_CHIPID_GET consys_ic_soc_chipid_get;
+	CONSYS_IC_ADIE_CHIPID_DETECT consys_ic_adie_chipid_detect;
 	CONSYS_IC_EMI_MPU_SET_REGION_PROTECTION consys_ic_emi_mpu_set_region_protection;
 	CONSYS_IC_EMI_SET_REMAPPING_REG consys_ic_emi_set_remapping_reg;
 	IC_BT_WIFI_SHARE_V33_SPIN_LOCK_INIT ic_bt_wifi_share_v33_spin_lock_init;
@@ -253,7 +303,8 @@ typedef struct _WMT_CONSYS_IC_OPS_ {
 	CONSYS_IC_RESET_EMI_COREDUMP consys_ic_reset_emi_coredump;
 	CONSYS_IC_CLOCK_FAIL_DUMP consys_ic_clock_fail_dump;
 	CONSYS_IC_IS_CONNSYS_REG consys_ic_is_connsys_reg;
-	CONSYS_IC_RESUME_DUMP_INFO consys_ic_resume_dump_info;
+	CONSYS_IC_IS_HOST_CSR consys_ic_is_host_csr;
+	CONSYS_IC_DUMP_OSC_STATE consys_ic_dump_osc_state;
 	CONSYS_IC_SET_PDMA_AXI_RREADY_FORCE_HIGH consys_ic_set_pdma_axi_rready_force_high;
 	CONSYS_IC_SET_MCIF_EMI_MPU_PROTECTION consys_ic_set_mcif_emi_mpu_protection;
 	CONSYS_IC_CALIBRATION_BACKUP_RESTORE consys_ic_calibration_backup_restore;
@@ -261,6 +312,17 @@ typedef struct _WMT_CONSYS_IC_OPS_ {
 	CONSYS_IC_INFRA_REG_DUMP consys_ic_infra_reg_dump;
 	CONSYS_IC_IS_ANT_SWAP_ENABLE_BY_HWID consys_ic_is_ant_swap_enable_by_hwid;
 	CONSYS_IC_GET_ANT_SEL_CR_ADDR consys_ic_get_ant_sel_cr_addr;
+	CONSYS_IC_EMI_ENTRY_ADDRESS consys_ic_emi_entry_address;
+	CONSYS_IC_SET_XO_OSC_CTRL consys_ic_set_xo_osc_ctrl;
+	CONSYS_IC_IDENTIFY_ADIE consys_ic_identify_adie;
+	CONSYS_IC_WIFI_CTRL_SETTING consys_ic_wifi_ctrl_setting;
+	CONSYS_IC_BUS_TIMEOUT_CONFIG consys_ic_bus_timeout_config;
+	CONSYS_IC_SET_ACCESS_EMI_HW_MODE consys_ic_set_access_emi_hw_mode;
+	CONSYS_IC_DUMP_GATING_STATE consys_ic_dump_gating_state;
+	CONSYS_IC_SLEEP_INFO_ENABLE_CTRL consys_ic_sleep_info_enable_ctrl;
+	CONSYS_IC_SLEEP_INFO_READ_CTRL consys_ic_sleep_info_read_ctrl;
+	CONSYS_IC_SLEEP_INFO_CLEAR consys_ic_sleep_info_clear;
+	CONSYS_IC_GET_OPTIONS consys_ic_get_options;
 } WMT_CONSYS_IC_OPS, *P_WMT_CONSYS_IC_OPS;
 /*******************************************************************************
 *                            P U B L I C   D A T A
@@ -276,6 +338,11 @@ extern CONSYS_EMI_ADDR_INFO mtk_wcn_emi_addr_info;
 
 extern UINT64 gConEmiSize;
 extern phys_addr_t gConEmiPhyBase;
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0))
+extern struct regmap *g_regmap;
+#endif
+
 
 /*******************************************************************************
 *                           P R I V A T E   D A T A
@@ -304,7 +371,7 @@ INT32 mtk_wcn_consys_hw_state_show(VOID);
 PUINT8 mtk_wcn_consys_emi_virt_addr_get(UINT32 ctrl_state_offset);
 P_CONSYS_EMI_ADDR_INFO mtk_wcn_consys_soc_get_emi_phy_add(VOID);
 UINT32 mtk_wcn_consys_read_cpupcr(VOID);
-PUINT32 mtk_wcn_consys_read_dump_info_reg(VOID);
+
 VOID mtk_wcn_force_trigger_assert_debug_pin(VOID);
 INT32 mtk_wcn_consys_read_irq_info_from_dts(PINT32 irq_num, PUINT32 irq_flag);
 INT32 mtk_wcn_consys_reg_ctrl(UINT32 is_write, enum CONSYS_BASE_ADDRESS_INDEX index, UINT32 offset,
@@ -319,6 +386,8 @@ UINT32 mtk_wcn_consys_jtag_flag_ctrl(UINT32 en);
 UINT32 mtk_wcn_consys_hw_osc_en_ctrl(UINT32 en);
 #endif
 UINT32 mtk_wcn_consys_soc_chipid(VOID);
+UINT32 mtk_wcn_consys_get_adie_chipid(VOID);
+INT32 mtk_wcn_consys_detect_adie_chipid(UINT32 co_clock_type);
 #if !defined(CONFIG_MTK_GPIO_LEGACY)
 struct pinctrl *mtk_wcn_consys_get_pinctrl(VOID);
 #endif
@@ -329,6 +398,7 @@ INT32 mtk_wdt_swsysret_config(INT32 bit, INT32 set_value);
 VOID mtk_wcn_consys_hang_debug(VOID);
 UINT32 mtk_consys_get_gps_lna_pin_num(VOID);
 INT32 mtk_consys_check_reg_readable(VOID);
+INT32 mtk_consys_check_reg_readable_by_addr(SIZE_T addr);
 VOID mtk_wcn_consys_clock_fail_dump(VOID);
 INT32 mtk_consys_is_connsys_reg(UINT32 addr);
 VOID mtk_consys_set_mcif_mpu_protection(MTK_WCN_BOOL enable);
@@ -336,7 +406,12 @@ INT32 mtk_consys_is_calibration_backup_restore_support(VOID);
 VOID mtk_consys_set_chip_reset_status(INT32 status);
 INT32 mtk_consys_chip_reset_status(VOID);
 INT32 mtk_consys_is_ant_swap_enable_by_hwid(VOID);
-INT32 mtk_consys_resume_dump_info(VOID);
+INT32 mtk_consys_dump_osc_state(P_CONSYS_STATE state);
 VOID mtk_wcn_consys_ic_get_ant_sel_cr_addr(PUINT32 default_invert_cr, PUINT32 default_invert_bit);
+INT32 mtk_wcn_consys_dump_gating_state(P_CONSYS_STATE state);
+INT32 mtk_wcn_consys_sleep_info_read_all_ctrl(P_CONSYS_STATE state);
+INT32 mtk_wcn_consys_sleep_info_clear(VOID);
+INT32 mtk_wcn_consys_sleep_info_restore(VOID);
+UINT64 mtk_wcn_consys_get_options(VOID);
 #endif /* _MTK_WCN_CONSYS_HW_H_ */
 

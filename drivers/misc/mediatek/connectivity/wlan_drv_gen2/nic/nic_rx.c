@@ -144,6 +144,7 @@ VOID nicRxInitialize(IN P_ADAPTER_T prAdapter)
 #endif
 
 	pucMemHandle = prRxCtrl->pucRxCached;
+printk(KERN_ERR "RXDBG n=%u stride=%lu total=%u base=%px\n", (UINT_32)CFG_RX_MAX_PKT_NUM, (unsigned long)ALIGN_4(sizeof(SW_RFB_T)), prRxCtrl->u4RxCachedSize, prRxCtrl->pucRxCached);
 	for (i = CFG_RX_MAX_PKT_NUM; i != 0; i--) {
 		prSwRfb = (P_SW_RFB_T) pucMemHandle;
 

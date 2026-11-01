@@ -1346,6 +1346,57 @@ int disp_lcm_power_enable(struct disp_lcm_handle *plcm, unsigned int enable)
 	DISPERR("lcm_drv is null\n");
 	return -1;
 }
+
+int disp_lcm_disable(struct disp_lcm_handle *plcm)
+{
+	struct LCM_DRIVER *lcm_drv = NULL;
+
+	DISPMSG("%s+\n", __func__);
+	if (_is_lcm_inited(plcm)) {
+		lcm_drv = plcm->drv;
+		if (lcm_drv->disable) {
+			lcm_drv->disable();
+		} else {
+			DISPERR("FATAL ERROR, lcm_drv->disable is null\n");
+			return -1;
+		}
+		return 0;
+	}
+
+	DISPERR("lcm_drv is null\n");
+	return -1;
+}
+
+int disp_lcm_cmdq(struct disp_lcm_handle *plcm, unsigned int enable)
+{
+	struct LCM_DRIVER *lcm_drv = NULL;
+
+	DISPMSG("%s, enable:%d\n", __func__, enable);
+	if (_is_lcm_inited(plcm)) {
+		lcm_drv = plcm->drv;
+		if (lcm_drv->cmdq) {
+			lcm_drv->cmdq(enable);
+		} else {
+			return -1;
+		}
+		return 0;
+	}
+
+	DISPERR("lcm_drv is null\n");
+	return -1;
+}
+
+int disp_lcm_path_lock(bool lock, struct disp_lcm_handle *plcm)
+{
+	if (!_is_lcm_inited(plcm)) {
+		DISPERR("lcm_drv is null\n");
+		return -1;
+	}
+
+	plcm->drv->path_lock(lock);
+
+	return 0;
+}
 #endif
 
 int disp_lcm_resume(struct disp_lcm_handle *plcm)
@@ -1393,27 +1444,7 @@ int disp_lcm_aod(struct disp_lcm_handle *plcm, int enter)
 	DISPERR("lcm_drv is null\n");
 	return -1;
 }
-#if defined(CONFIG_SMCDSD_PANEL)
-int disp_lcm_disable(struct disp_lcm_handle *plcm)
-{
-	struct LCM_DRIVER *lcm_drv = NULL;
 
-	DISPMSG("%s+\n", __func__);
-	if (_is_lcm_inited(plcm)) {
-		lcm_drv = plcm->drv;
-		if (lcm_drv->disable) {
-			lcm_drv->disable();
-		} else {
-			DISPERR("FATAL ERROR, lcm_drv->disable is null\n");
-			return -1;
-		}
-		return 0;
-	}
-
-	DISPERR("lcm_drv is null\n");
-	return -1;
-}
-#endif
 int disp_lcm_is_support_adjust_fps(struct disp_lcm_handle *plcm)
 {
 	struct LCM_DRIVER *lcm_drv = NULL;

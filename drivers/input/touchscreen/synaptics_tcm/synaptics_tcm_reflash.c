@@ -49,7 +49,7 @@
 #define CUSTOM_DIR_NAME "custom"
 
 #define FW_IMAGE_NAME "tsp_synaptics/"\
-		"PR3160762_TD4150_A3CORE_01020001.img"
+		"PR2100000870-td4150b0_01010011_20200504.img"
 
 #define FW_IMAGE_NAME_MANUAL "synaptics/reflash_firmware_manual.img"
 

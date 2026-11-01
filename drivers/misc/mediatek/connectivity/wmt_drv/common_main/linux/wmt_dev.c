@@ -59,6 +59,7 @@
 #include "wmt_lib.h"
 #include "wmt_conf.h"
 #include "wmt_dbg.h"
+#include "wmt_user_proc.h"
 #include "psm_core.h"
 #include "stp_core.h"
 #include "stp_exp.h"
@@ -67,6 +68,8 @@
 #include "wmt_detect.h"
 #include "hif_sdio.h"
 #include "wmt_step.h"
+#include "wmt_proc_dbg.h"
+#include "wmt_alarm.h"
 
 #include "connsys_debug_utility.h"
 
@@ -159,22 +162,6 @@ UINT32 currentLpbkStatus;
 #define TEMP_THRESHOLD   60
 static INT32 gTemperatureThreshold = TEMP_THRESHOLD;
 
-
-#if CFG_WMT_PROC_FOR_AEE
-static struct proc_dir_entry *gWmtAeeEntry;
-#define WMT_AEE_PROCNAME "driver/wmt_aee"
-#define WMT_PROC_AEE_SIZE 3072
-static UINT32 g_buf_len;
-static PUINT8 pBuf;
-#endif
-
-#if CFG_WMT_PROC_FOR_DUMP_INFO
-static struct proc_dir_entry *gWmtdumpinfoEntry;
-#define WMT_DUMP_INFO_PROCNAME "driver/wmt_dump_info"
-static UINT32 g_dump_info_buf_len;
-static PUINT8 dump_info_pBuf;
-#endif
-
 #if WMT_CREATE_NODE_DYNAMIC
 struct class *wmt_class;
 struct device *wmt_dev;
@@ -194,8 +181,6 @@ static atomic_t g_late_pwr_on_for_blank = ATOMIC_INIT(0); /* PwrOnOff Late flag 
 
 /* Prevent race condition when wmt_dev_tm_temp_query is called concurrently */
 static OSAL_UNSLEEPABLE_LOCK g_temp_query_spinlock;
-static OSAL_SLEEPABLE_LOCK g_aee_read_lock;
-static OSAL_SLEEPABLE_LOCK g_dump_info_read_lock;
 
 #ifdef CONFIG_EARLYSUSPEND
 static VOID wmt_dev_early_suspend(struct early_suspend *h)
@@ -365,190 +350,6 @@ MTK_WCN_BOOL wmt_dev_get_early_suspend_state(VOID)
 	/* WMT_INFO_FUNC("bRet:%d\n", bRet); */
 	return bRet;
 }
-
-#if CFG_WMT_PROC_FOR_AEE
-static ssize_t wmt_dev_proc_for_aee_read(struct file *filp, char __user *buf, size_t count,
-		loff_t *f_pos)
-{
-	INT32 retval = 0;
-	UINT32 len = 0;
-
-	WMT_INFO_FUNC("%s: count %lu pos %lld\n", __func__, count, *f_pos);
-
-	if (osal_lock_sleepable_lock(&g_aee_read_lock)) {
-		WMT_ERR_FUNC("lock failed\n");
-		return 0;
-	}
-
-	if (*f_pos == 0) {
-		pBuf = wmt_lib_get_cpupcr_xml_format(&len);
-		g_buf_len = len;
-		WMT_INFO_FUNC("wmt_dev:wmt for aee buffer len(%d)\n", g_buf_len);
-	}
-
-	if (g_buf_len >= count) {
-		retval = copy_to_user(buf, pBuf, count);
-		if (retval) {
-			WMT_ERR_FUNC("copy to aee buffer failed, ret:%d\n", retval);
-			retval = -EFAULT;
-			goto err_exit;
-		}
-
-		*f_pos += count;
-		g_buf_len -= count;
-		pBuf += count;
-		WMT_INFO_FUNC("wmt_dev:after read,wmt for aee buffer len(%d)\n", g_buf_len);
-
-		retval = count;
-	} else if (g_buf_len != 0) {
-		retval = copy_to_user(buf, pBuf, g_buf_len);
-		if (retval) {
-			WMT_ERR_FUNC("copy to aee buffer failed, ret:%d\n", retval);
-			retval = -EFAULT;
-			goto err_exit;
-		}
-
-		*f_pos += g_buf_len;
-		len = g_buf_len;
-		g_buf_len = 0;
-		pBuf += len;
-		retval = len;
-		WMT_INFO_FUNC("wmt_dev:after read,wmt for aee buffer len(%d)\n", g_buf_len);
-	} else {
-		WMT_INFO_FUNC("wmt_dev: no data available for aee\n");
-		retval = 0;
-	}
-
-err_exit:
-	osal_unlock_sleepable_lock(&g_aee_read_lock);
-
-	return retval;
-}
-
-static ssize_t wmt_dev_proc_for_aee_write(struct file *filp, const char __user *buf, size_t count,
-		loff_t *f_pos)
-{
-	WMT_TRC_FUNC();
-	return 0;
-}
-
-INT32 wmt_dev_proc_for_aee_setup(VOID)
-{
-	static const struct file_operations wmt_aee_fops = {
-		.owner = THIS_MODULE,
-		.read = wmt_dev_proc_for_aee_read,
-		.write = wmt_dev_proc_for_aee_write,
-	};
-
-	gWmtAeeEntry = proc_create(WMT_AEE_PROCNAME, 0664, NULL, &wmt_aee_fops);
-	if (gWmtAeeEntry == NULL) {
-		WMT_ERR_FUNC("Unable to create /proc entry\n\r");
-		return -1;
-	}
-
-	return 0;
-}
-
-INT32 wmt_dev_proc_for_aee_remove(VOID)
-{
-	if (gWmtAeeEntry != NULL)
-		remove_proc_entry(WMT_AEE_PROCNAME, NULL);
-
-	return 0;
-}
-#endif /* CFG_WMT_PROC_FOR_AEE */
-
-#if CFG_WMT_PROC_FOR_DUMP_INFO
-static ssize_t wmt_dev_proc_for_dump_info_read(struct file *filp, char __user *buf, size_t count,
-		loff_t *f_pos)
-{
-	INT32 retval = 0;
-	UINT32 len = 0;
-
-	WMT_INFO_FUNC("%s: count %lu pos %lld\n", __func__, count, *f_pos);
-
-	if (osal_lock_sleepable_lock(&g_dump_info_read_lock)) {
-		WMT_ERR_FUNC("lock failed\n");
-		return 0;
-	}
-
-	if (*f_pos == 0) {
-		dump_info_pBuf = wmt_lib_get_cpupcr_reg_info(&len, mtk_wcn_consys_read_dump_info_reg());
-		g_dump_info_buf_len = len;
-		WMT_INFO_FUNC("wmt_dev:wmt for dump info buffer len(%d)\n", g_dump_info_buf_len);
-	}
-
-	if (g_dump_info_buf_len >= count) {
-		retval = copy_to_user(buf, dump_info_pBuf, count);
-		if (retval) {
-			WMT_ERR_FUNC("copy to dump info buffer failed, ret:%d\n", retval);
-			retval = -EFAULT;
-			goto dump_info_err_exit;
-		}
-
-		*f_pos += count;
-		g_dump_info_buf_len -= count;
-		dump_info_pBuf += count;
-		WMT_INFO_FUNC("wmt_dev:after read,wmt for dump info buffer len(%d)\n", g_dump_info_buf_len);
-
-		retval = count;
-	} else if (g_dump_info_buf_len != 0) {
-		retval = copy_to_user(buf, dump_info_pBuf, g_dump_info_buf_len);
-		if (retval) {
-			WMT_ERR_FUNC("copy to dump info buffer failed, ret:%d\n", retval);
-			retval = -EFAULT;
-			goto dump_info_err_exit;
-		}
-
-		*f_pos += g_dump_info_buf_len;
-		len = g_dump_info_buf_len;
-		g_dump_info_buf_len = 0;
-		dump_info_pBuf += len;
-		retval = len;
-		WMT_INFO_FUNC("wmt_dev:after read,wmt for dump info buffer len(%d)\n", g_dump_info_buf_len);
-	} else {
-		WMT_INFO_FUNC("wmt_dev: no data available for dump info\n");
-		retval = 0;
-	}
-
-dump_info_err_exit:
-	osal_unlock_sleepable_lock(&g_dump_info_read_lock);
-
-	return retval;
-}
-
-static ssize_t wmt_dev_proc_for_dump_info_write(struct file *filp, const char __user *buf, size_t count,
-		loff_t *f_pos)
-{
-	WMT_TRC_FUNC();
-	return 0;
-}
-
-INT32 wmt_dev_proc_for_dump_info_setup(VOID)
-{
-	static const struct file_operations wmt_dump_info_fops = {
-		.owner = THIS_MODULE,
-		.read = wmt_dev_proc_for_dump_info_read,
-		.write = wmt_dev_proc_for_dump_info_write,
-	};
-
-	gWmtdumpinfoEntry = proc_create(WMT_DUMP_INFO_PROCNAME, 0664, NULL, &wmt_dump_info_fops);
-	if (gWmtdumpinfoEntry == NULL) {
-		WMT_ERR_FUNC("Unable to create /proc entry\n\r");
-		return -1;
-	}
-
-	return 0;
-}
-
-INT32 wmt_dev_proc_for_dump_info_remove(VOID)
-{
-	if (gWmtdumpinfoEntry != NULL)
-		remove_proc_entry(WMT_DUMP_INFO_PROCNAME, NULL);
-
-	return 0;
-}
-#endif /* CFG_WMT_PROC_FOR_DUMP_INFO */
 
 VOID wmt_dev_rx_event_cb(VOID)
 {
@@ -760,10 +561,12 @@ LONG wmt_dev_tm_temp_query(VOID)
 {
 #define HISTORY_NUM       3
 #define REFRESH_TIME    300	/* sec */
+#define ONE_DAY_LONG    86400	/* sec */
 
 	static INT32 s_temp_table[HISTORY_NUM] = { 99 };	/* not query yet. */
 	static INT32 s_idx_temp_table;
 	static struct timeval s_query_time;
+	static struct timeval sync_log_last_time = {0, 0};
 
 	INT32 temp_table[HISTORY_NUM];
 	INT32 idx_temp_table;
@@ -793,7 +596,7 @@ LONG wmt_dev_tm_temp_query(VOID)
 		}
 	}
 
-	do_gettimeofday(&now_time);
+	osal_do_gettimeofday(&now_time);
 #if 1
 	/* Query condition 2: */
 	/* Moniter the bus activity to decide if we have the need to query temperature. */
@@ -840,6 +643,13 @@ LONG wmt_dev_tm_temp_query(VOID)
 		}
 	}
 
+	/* update utc time for fw once a day */
+	if ((now_time.tv_sec < sync_log_last_time.tv_sec) ||
+			((now_time.tv_sec - sync_log_last_time.tv_sec) > ONE_DAY_LONG)) {
+		sync_log_last_time.tv_sec = now_time.tv_sec;
+		wmt_lib_utc_time_sync();
+	}
+
 	if (query_cond) {
 		/* update the temperature record */
 		mtk_wcn_wmt_therm_ctrl(WMTTHERM_ENABLE);
@@ -852,7 +662,7 @@ LONG wmt_dev_tm_temp_query(VOID)
 			osal_memcpy(s_temp_table, temp_table, sizeof(s_temp_table));
 			s_idx_temp_table = (s_idx_temp_table + 1) % HISTORY_NUM;
 			s_temp_table[s_idx_temp_table] = current_temp;
-			do_gettimeofday(&s_query_time);
+			osal_do_gettimeofday(&s_query_time);
 			index = -1;
 		} else {
 			index = s_idx_temp_table;
@@ -911,7 +721,7 @@ ssize_t WMT_write(struct file *filp, const char __user *buf, size_t count, loff_
 	UINT8 wrBuf[NAME_MAX + 1] = { 0 };
 	INT32 copySize = (count < NAME_MAX) ? count : NAME_MAX;
 
-	WMT_LOUD_FUNC("count:%lu copySize:%d\n", count, copySize);
+	WMT_LOUD_FUNC("count:%zu copySize:%d\n", count, copySize);
 
 	if (copySize > 0) {
 		if (copy_from_user(wrBuf, buf, copySize)) {
@@ -1137,7 +947,7 @@ LONG WMT_unlocked_ioctl(struct file *filp, UINT32 cmd, ULONG arg)
 			pOp->op.au4OpData[1] = (SIZE_T)&gLpbkBuf[0];	/* packet buffer pointer */
 			memcpy(&gLpbkBufLog, &gLpbkBuf[((effectiveLen >= 4) ? effectiveLen - 4 : 0)], 4);
 			pSignal->timeoutValue = MAX_EACH_WMT_CMD;
-			WMT_INFO_FUNC("OPID(%d) type(%lu) start\n", pOp->op.opId, pOp->op.au4OpData[0]);
+			WMT_INFO_FUNC("OPID(%d) type(%zu) start\n", pOp->op.opId, pOp->op.au4OpData[0]);
 			if (DISABLE_PSM_MONITOR()) {
 				WMT_ERR_FUNC("wake up failed,OPID(%d) type(%d) abort\n",
 					     pOp->op.opId, pOp->op.au4OpData[0]);
@@ -1408,7 +1218,7 @@ LONG WMT_unlocked_ioctl(struct file *filp, UINT32 cmd, ULONG arg)
 			pOp->op.opId = WMT_OPID_BGW_DS;
 			pOp->op.au4OpData[0] = effectiveLen;	/* packet length */
 			pOp->op.au4OpData[1] = (SIZE_T)&desense_buf[0];	/* packet buffer pointer */
-			pSignal->timeoutValue = MAX_EACH_WMT_CMD;
+			pSignal->timeoutValue = MAX_WMT_OP_TIMEOUT;
 			WMT_INFO_FUNC("OPID(%d) start\n", pOp->op.opId);
 			if (DISABLE_PSM_MONITOR()) {
 				WMT_ERR_FUNC("wake up failed,opid(%d) abort\n", pOp->op.opId);
@@ -1423,7 +1233,7 @@ LONG WMT_unlocked_ioctl(struct file *filp, UINT32 cmd, ULONG arg)
 				iRet = -1;
 				break;
 			}
-			WMT_INFO_FUNC("OPID(%d) length(%d) ok\n", pOp->op.opId, pOp->op.au4OpData[0]);
+			WMT_INFO_FUNC("OPID(%d) length(%zu) ok\n", pOp->op.opId, pOp->op.au4OpData[0]);
 			iRet = pOp->op.au4OpData[0];
 
 		} while (0);
@@ -1696,23 +1506,25 @@ static INT32 WMT_mmap(struct file *pFile, struct vm_area_struct *pVma)
 	unsigned long bufId = pVma->vm_pgoff;
 	P_CONSYS_EMI_ADDR_INFO emiInfo = mtk_wcn_consys_soc_get_emi_phy_add();
 
+	pVma->vm_flags &= ~(VM_WRITE | VM_MAYWRITE);
 	WMT_INFO_FUNC("WMT_mmap start:%lu end:%lu size: %lu buffer id=%lu\n",
 		pVma->vm_start, pVma->vm_end,
 		pVma->vm_end - pVma->vm_start, bufId);
 
 	if (bufId == 0) {
 		if (pVma->vm_end - pVma->vm_start > gConEmiSize)
-			return -1;
+			return -EINVAL;
 		WMT_INFO_FUNC("WMT_mmap size: %lu\n", pVma->vm_end - pVma->vm_start);
 		if (remap_pfn_range(pVma, pVma->vm_start, gConEmiPhyBase >> PAGE_SHIFT,
 			pVma->vm_end - pVma->vm_start, pVma->vm_page_prot))
 			return -EAGAIN;
+		return 0;
 	} else if (bufId == 1) {
 		if (emiInfo == NULL)
-			return -1;
+			return -EINVAL;
 		if (emiInfo->emi_direct_path_size == 0 ||
 		    pVma->vm_end - pVma->vm_start > emiInfo->emi_direct_path_size)
-			return -1;
+			return -EINVAL;
 		WMT_INFO_FUNC("MD direct path size=%d map size=%lu\n",
 			emiInfo->emi_direct_path_size,
 			pVma->vm_end - pVma->vm_start);
@@ -1720,8 +1532,10 @@ static INT32 WMT_mmap(struct file *pFile, struct vm_area_struct *pVma)
 			emiInfo->emi_direct_path_ap_phy_addr >> PAGE_SHIFT,
 			pVma->vm_end - pVma->vm_start, pVma->vm_page_prot))
 			return -EAGAIN;
+		return 0;
 	}
-	return 0;
+	/* Invalid buff id */
+	return -EINVAL;
 }
 
 const struct file_operations gWmtFops = {
@@ -1772,6 +1586,9 @@ static INT32 WMT_init(VOID)
 	/*static allocate chrdev */
 	gWmtInitStatus = WMT_INIT_START;
 	init_waitqueue_head((wait_queue_head_t *) &gWmtInitWq);
+
+	osal_unsleepable_lock_init(&g_temp_query_spinlock);
+
 #if (MTK_WCN_REMOVE_KO)
 	/* called in do_common_drv_init() */
 #else
@@ -1835,14 +1652,10 @@ static INT32 WMT_init(VOID)
 #if CFG_WMT_DBG_SUPPORT
 	wmt_dev_dbg_setup();
 #endif
+	wmt_dev_user_proc_setup();
 
-#if CFG_WMT_PROC_FOR_AEE
-	wmt_dev_proc_for_aee_setup();
-#endif
-
-#if CFG_WMT_PROC_FOR_DUMP_INFO
-	wmt_dev_proc_for_dump_info_setup();
-#endif
+	wmt_dev_proc_init();
+	wmt_alarm_init();
 
 	WMT_STEP_INIT_FUNC();
 
@@ -1850,10 +1663,6 @@ static INT32 WMT_init(VOID)
 	if (chip_type == WMT_CHIP_TYPE_COMBO)
 		mtk_wcn_hif_sdio_update_cb_reg(wmt_dev_tra_sdio_update);
 
-	WMT_DBG_FUNC("wmt_dev register thermal cb\n");
-	osal_unsleepable_lock_init(&g_temp_query_spinlock);
-	osal_sleepable_lock_init(&g_aee_read_lock);
-	osal_sleepable_lock_init(&g_dump_info_read_lock);
 	wmt_lib_register_thermal_ctrl_cb(wmt_dev_tm_temp_query);
 	wmt_lib_register_trigger_assert_cb(wmt_lib_trigger_assert);
 
@@ -1891,6 +1700,7 @@ error:
 #if CFG_WMT_DBG_SUPPORT
 	wmt_dev_dbg_remove();
 #endif
+	wmt_dev_user_proc_remove();
 #if WMT_CREATE_NODE_DYNAMIC
 	if (!(IS_ERR(wmt_dev)))
 		device_destroy(wmt_class, devID);
@@ -1922,8 +1732,6 @@ static VOID WMT_exit(VOID)
 		return;
 
 	osal_unsleepable_lock_deinit(&g_temp_query_spinlock);
-	osal_sleepable_lock_deinit(&g_aee_read_lock);
-	osal_sleepable_lock_deinit(&g_dump_info_read_lock);
 #ifdef CONFIG_EARLYSUSPEND
 	unregister_early_suspend(&wmt_early_suspend_handler);
 	WMT_INFO_FUNC("unregister_early_suspend finished\n");
@@ -1944,14 +1752,10 @@ static VOID WMT_exit(VOID)
 #if CFG_WMT_DBG_SUPPORT
 	wmt_dev_dbg_remove();
 #endif
+	wmt_dev_user_proc_remove();
 
-#if CFG_WMT_PROC_FOR_AEE
-	wmt_dev_proc_for_aee_remove();
-#endif
-
-#if CFG_WMT_PROC_FOR_DUMP_INFO
-	wmt_dev_proc_for_dump_info_remove();
-#endif
+	wmt_dev_proc_deinit();
+	wmt_alarm_deinit();
 
 #if WMT_CREATE_NODE_DYNAMIC
 	if (wmt_dev) {

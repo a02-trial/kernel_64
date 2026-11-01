@@ -22,6 +22,17 @@
 #endif
 
 #include "mtk_gadget.h"
+
+
+#ifdef CONFIG_MTK_USB2JTAG_SUPPORT
+#include <mt-plat/mtk_usb2jtag.h>
+#endif
+
+#ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
+#include "function/u_ether.h"
+extern int terminal_ctrl_request(struct usb_composite_dev *cdev,
+	const struct usb_ctrlrequest *ctrl);
+#endif
 #ifdef CONFIG_USB_CONFIGFS_F_ACC
 extern int acc_ctrlrequest(struct usb_composite_dev *cdev,
 				const struct usb_ctrlrequest *ctrl);
@@ -36,39 +47,13 @@ int serial_idx;
 
 #ifdef CONFIG_USB_TYPEC_MANAGER_NOTIFIER
 void set_usb_enumeration_state(int state);
-void set_usb_enable_state(void);
 #else
 static int usb_enum_state;
-static int usb210_count;
-static int usb310_count;
 void set_usb_enumeration_state(int state)
 {
-	if(usb_enum_state != state) {
+	if(usb_enum_state != state)
 		usb_enum_state = state;
-		if(usb_enum_state == 0x310)
-			usb310_count++;
-		else if(usb_enum_state == 0x210)
-			usb210_count++;
-	}
 }
-
-int microusb_get_usb210_count(void)
-{
-	int ret;
-	ret = usb210_count;
-	usb210_count = 0;
-	return ret;
-}
-EXPORT_SYMBOL(microusb_get_usb210_count);
-
-int microusb_get_usb310_count(void)
-{
-	int ret;
-	ret = usb310_count;
-	usb310_count = 0;
-	return ret;
-}
-EXPORT_SYMBOL(microusb_get_usb310_count);
 
 bool get_usb_enumeration_state(void)
 {
@@ -148,6 +133,8 @@ struct gadget_info {
 	bool use_os_desc;
 	char b_vendor_code;
 	char qw_sign[OS_STRING_QW_SIGN_LEN];
+	spinlock_t spinlock;
+	bool unbind;
 #ifdef CONFIG_USB_CONFIGFS_UEVENT
 	bool connected;
 	bool sw_connected;
@@ -331,9 +318,16 @@ static ssize_t gadget_dev_desc_bcdUSB_store(struct config_item *item,
 
 static ssize_t gadget_dev_desc_UDC_show(struct config_item *item, char *page)
 {
-	char *udc_name = to_gadget_info(item)->composite.gadget_driver.udc_name;
+	struct gadget_info *gi = to_gadget_info(item);
+	char *udc_name;
+	int ret;
 
-	return sprintf(page, "%s\n", udc_name ?: "");
+	mutex_lock(&gi->lock);
+	udc_name = gi->composite.gadget_driver.udc_name;
+	ret = sprintf(page, "%s\n", udc_name ?: "");
+	mutex_unlock(&gi->lock);
+
+	return ret;
 }
 
 static int unregister_gadget(struct gadget_info *gi)
@@ -367,6 +361,8 @@ static ssize_t gadget_dev_desc_UDC_store(struct config_item *item,
 	int length = 0;
 #endif
 
+	if (strlen(page) < len)
+		return -EOVERFLOW;
 	pr_info("%s: +++\n", __func__);
 
 	name = kstrdup(page, GFP_KERNEL);
@@ -401,7 +397,7 @@ static ssize_t gadget_dev_desc_UDC_store(struct config_item *item,
 			cfg = container_of(c, struct config_usb_cfg, c);
 			list_for_each_entry_safe(f, tmp, &cfg->func_list, list) {
 				if ( length + strlen(f->name) > sizeof(usb_mode)) {
-					printk("usb: %s overflow usb mode buffer \n",__func__);
+					printk("usb: overflow usb mode buffer \n",__func__);
 					break;
 				}
 				if (!strcmp(f->name, "conn_gadget")) {
@@ -529,6 +525,12 @@ static int config_usb_cfg_link(
 			struct usb_function_instance, group);
 	struct usb_function_instance *a_fi;
 	struct usb_function *f;
+#ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
+	static u8	   ethaddr[ETH_ALEN]={0,};
+	int i;
+	char *src;
+	struct gadget_strings *gs;
+#endif
 	int ret;
 
 	pr_info("%s %s<-->%s\n", __func__,
@@ -554,6 +556,30 @@ static int config_usb_cfg_link(
 			goto out;
 		}
 	}
+	/* usb tethering */
+#ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
+	if (fi->set_inst_eth_addr) {
+		list_for_each_entry(gs, &gi->string_list, list) {
+			src = gs->serialnumber;
+		}
+
+		if (src) {
+			for (i = 0; i < ETH_ALEN; i++)
+				ethaddr[i] = 0;
+			/* create a fake MAC address from our serial number.
+			 * first byte is 0x02 to signify locally administered.
+			 */
+			ethaddr[0] = 0x02;
+			for (i = 0; (i < 256) && *src; i++) {
+				/* XOR the USB serial across the remaining bytes */
+				ethaddr[i % (ETH_ALEN - 1) + 1] ^= *src++;
+			}
+
+			fi->set_inst_eth_addr(fi, ethaddr);
+		}
+	}
+#endif
+
 
 	f = usb_get_function(fi);
 	if (IS_ERR(f)) {
@@ -1418,6 +1444,7 @@ static int configfs_composite_bind(struct usb_gadget *gadget,
 	pr_info("%s\n", __func__);
 
 	/* the gi->lock is hold by the caller */
+	gi->unbind = 0;
 	cdev->gadget = gadget;
 	set_gadget_data(gadget, cdev);
 	ret = composite_dev_prepare(composite, cdev);
@@ -1589,28 +1616,26 @@ static void android_work(struct work_struct *data)
 #ifdef CONFIG_USB_NOTIFY_PROC_LOG
 		store_usblog_notify(NOTIFY_USBSTATE, (void *)connected[0], NULL);
 #endif
-		if (cdev->desc.bcdUSB == 0x310) {
-			set_usb_enumeration_state(0x310); // Super-Speed
-		} else {
-			set_usb_enumeration_state(0x210); // High-Speed
-		}
+		set_usb_enumeration_state(cdev->desc.bcdUSB);
 	}
 
 	if (status[1]) {
-#ifdef CONFIG_MTPROF
-		static int first_shot = 1;
-
-		if (first_shot) {
-			log_boot("USB configured");
-			first_shot = 0;
-		}
-#endif
 		kobject_uevent_env(&android_device->kobj,
 					KOBJ_CHANGE, configured);
 		pr_info("%s: sent uevent %s\n", __func__, configured[0]);
-		uevent_sent = true;		
+		uevent_sent = true;
 #ifdef CONFIG_USB_NOTIFY_PROC_LOG
 		store_usblog_notify(NOTIFY_USBSTATE, (void *)configured[0], NULL);
+#endif
+#ifdef CONFIG_MTPROF
+		if (status[1]) {
+			static int first_shot = 1;
+
+			if (first_shot) {
+				log_boot("USB configured");
+				first_shot = 0;
+			}
+		}
 #endif
 	}
 
@@ -1623,7 +1648,7 @@ static void android_work(struct work_struct *data)
 		store_usblog_notify(NOTIFY_USBSTATE, (void *)disconnected[0], NULL);
 #endif
 #ifndef CONFIG_USB_TYPEC_MANAGER_NOTIFIER
-		usb_enum_state = 0;
+		set_usb_enumeration_state(0);
 #endif
 	}
 
@@ -1638,21 +1663,119 @@ static void configfs_composite_unbind(struct usb_gadget *gadget)
 {
 	struct usb_composite_dev	*cdev;
 	struct gadget_info		*gi;
+	unsigned long flags;
 
 	pr_info("%s\n", __func__);
 	/* the gi->lock is hold by the caller */
 
 	cdev = get_gadget_data(gadget);
 	gi = container_of(cdev, struct gadget_info, cdev);
+	spin_lock_irqsave(&gi->spinlock, flags);
+	gi->unbind = 1;
+	spin_unlock_irqrestore(&gi->spinlock, flags);
 
 	kfree(otg_desc[0]);
 	otg_desc[0] = NULL;
 	purge_configs_funcs(gi);
 	composite_dev_cleanup(cdev);
 	usb_ep_autoconfig_reset(cdev->gadget);
+	spin_lock_irqsave(&gi->spinlock, flags);
 	cdev->gadget = NULL;
 	set_gadget_data(gadget, NULL);
+	spin_unlock_irqrestore(&gi->spinlock, flags);
 }
+
+static int configfs_composite_setup(struct usb_gadget *gadget,
+		const struct usb_ctrlrequest *ctrl)
+{
+	struct usb_composite_dev *cdev;
+	struct gadget_info *gi;
+	unsigned long flags;
+	int ret;
+
+	cdev = get_gadget_data(gadget);
+	if (!cdev)
+		return 0;
+
+	gi = container_of(cdev, struct gadget_info, cdev);
+	spin_lock_irqsave(&gi->spinlock, flags);
+	cdev = get_gadget_data(gadget);
+	if (!cdev || gi->unbind) {
+		spin_unlock_irqrestore(&gi->spinlock, flags);
+		return 0;
+	}
+
+	ret = composite_setup(gadget, ctrl);
+	spin_unlock_irqrestore(&gi->spinlock, flags);
+	return ret;
+}
+
+static void configfs_composite_disconnect(struct usb_gadget *gadget)
+{
+	struct usb_composite_dev *cdev;
+	struct gadget_info *gi;
+	unsigned long flags;
+
+	cdev = get_gadget_data(gadget);
+	if (!cdev)
+		return;
+
+	gi = container_of(cdev, struct gadget_info, cdev);
+	spin_lock_irqsave(&gi->spinlock, flags);
+	cdev = get_gadget_data(gadget);
+	if (!cdev || gi->unbind) {
+		spin_unlock_irqrestore(&gi->spinlock, flags);
+		return;
+	}
+
+	composite_disconnect(gadget);
+	spin_unlock_irqrestore(&gi->spinlock, flags);
+}
+
+static void configfs_composite_suspend(struct usb_gadget *gadget)
+{
+	struct usb_composite_dev *cdev;
+	struct gadget_info *gi;
+	unsigned long flags;
+
+	cdev = get_gadget_data(gadget);
+	if (!cdev)
+		return;
+
+	gi = container_of(cdev, struct gadget_info, cdev);
+	spin_lock_irqsave(&gi->spinlock, flags);
+	cdev = get_gadget_data(gadget);
+	if (!cdev || gi->unbind) {
+		spin_unlock_irqrestore(&gi->spinlock, flags);
+		return;
+	}
+
+	composite_suspend(gadget);
+	spin_unlock_irqrestore(&gi->spinlock, flags);
+}
+
+static void configfs_composite_resume(struct usb_gadget *gadget)
+{
+	struct usb_composite_dev *cdev;
+	struct gadget_info *gi;
+	unsigned long flags;
+
+	cdev = get_gadget_data(gadget);
+	if (!cdev)
+		return;
+
+	gi = container_of(cdev, struct gadget_info, cdev);
+	spin_lock_irqsave(&gi->spinlock, flags);
+	cdev = get_gadget_data(gadget);
+	if (!cdev || gi->unbind) {
+		spin_unlock_irqrestore(&gi->spinlock, flags);
+		return;
+	}
+
+	composite_resume(gadget);
+	spin_unlock_irqrestore(&gi->spinlock, flags);
+}
+
 #ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
 static void android_gadget_complete(struct usb_ep *ep, struct usb_request *req)
 {
@@ -1661,25 +1784,31 @@ static void android_gadget_complete(struct usb_ep *ep, struct usb_request *req)
 				req->status, req->actual, req->length);
 }
 #endif
+
 #ifdef CONFIG_USB_CONFIGFS_UEVENT
 static int android_setup(struct usb_gadget *gadget,
 			const struct usb_ctrlrequest *c)
 {
 	struct usb_composite_dev *cdev = get_gadget_data(gadget);
 	unsigned long flags;
-	struct gadget_info *gi = container_of(cdev, struct gadget_info, cdev);
+	struct gadget_info *gi;
 	int value = -EOPNOTSUPP;
 #ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
 	struct usb_configuration *configuration;
 	struct usb_function *f;
-	struct usb_request		*req = cdev->req;
-
-	req->complete = android_gadget_complete;
+	struct usb_request *req;
 #else
 	struct usb_function_instance *fi;
 #endif
-
-	pr_info("usb: %s\n", __func__);
+	
+	if (!cdev)
+		return 0;
+	
+	gi = container_of(cdev, struct gadget_info, cdev);
+#ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
+	req = cdev->req;
+	req->complete = android_gadget_complete;
+#endif
 
 	spin_lock_irqsave(&cdev->lock, flags);
 	if (!gi->connected) {
@@ -1687,6 +1816,13 @@ static int android_setup(struct usb_gadget *gadget,
 		schedule_work(&gi->work);
 	}
 	spin_unlock_irqrestore(&cdev->lock, flags);
+
+	spin_lock_irqsave(&gi->spinlock, flags);
+	if (gi->unbind) {
+		spin_unlock_irqrestore(&gi->spinlock, flags);
+		return 0;
+	}
+
 #ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
 	list_for_each_entry(configuration, &cdev->configs, list) {
 		list_for_each_entry(f, &configuration->functions, list) {
@@ -1714,6 +1850,7 @@ static int android_setup(struct usb_gadget *gadget,
 
 	if (value < 0)
 		value = composite_setup(gadget, c);
+	spin_unlock_irqrestore(&gi->spinlock, flags);
 
 	spin_lock_irqsave(&cdev->lock, flags);
 	if (c->bRequest == USB_REQ_SET_CONFIGURATION &&
@@ -1769,12 +1906,12 @@ static const struct usb_gadget_driver configfs_driver_template = {
 	.reset          = android_disconnect,
 	.disconnect     = android_disconnect,
 #else
-	.setup          = composite_setup,
-	.reset          = composite_disconnect,
-	.disconnect     = composite_disconnect,
+	.setup          = configfs_composite_setup,
+	.reset          = configfs_composite_disconnect,
+	.disconnect     = configfs_composite_disconnect,
 #endif
-	.suspend	= composite_suspend,
-	.resume		= composite_resume,
+	.suspend	= configfs_composite_suspend,
+	.resume		= configfs_composite_resume,
 
 	.max_speed	= USB_SPEED_SUPER,
 	.driver = {
@@ -1871,9 +2008,23 @@ out:
 
 static DEVICE_ATTR(state, S_IRUGO, state_show, NULL);
 
+#ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
+static ssize_t
+bcdUSB_show(struct device *pdev, struct device_attribute *attr, char *buf)
+{
+	struct gadget_info *dev = dev_get_drvdata(pdev);
+
+	return sprintf(buf, "%04x\n", dev->cdev.desc.bcdUSB);
+
+}
+static DEVICE_ATTR(bcdUSB, S_IRUGO, bcdUSB_show, NULL);
+#endif
 static struct device_attribute *android_usb_attributes[] = {
 	&dev_attr_state,
 	&dev_attr_iSerial,
+#ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
+	&dev_attr_bcdUSB,
+#endif
 	NULL
 };
 
@@ -1978,7 +2129,9 @@ static struct config_group *gadgets_make(
 	gi->composite.resume = NULL;
 	gi->composite.max_speed = USB_SPEED_SUPER;
 
+	spin_lock_init(&gi->spinlock);
 	mutex_init(&gi->lock);
+	spin_lock_init(&gi->spinlock);
 	INIT_LIST_HEAD(&gi->string_list);
 	INIT_LIST_HEAD(&gi->available_func);
 

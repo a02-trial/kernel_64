@@ -2,7 +2,7 @@
  * Copyright (C) 2010 - 2018 Novatek, Inc.
  *
  * $Revision: 52752 $
- * $Date: 2019-11-06 18:05:46 +0800 (?�三, 06 ?��???2019) $
+ * $Date: 2019-11-06 18:05:46 +0800 (週三, 06 十一月 2019) $
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -980,12 +980,12 @@ static int32_t nvt_download_firmware(void)
 		 */
 #if NVT_TOUCH_SUPPORT_HW_RST
 		gpio_set_value(ts->reset_gpio, 0);
-		usleep_range(1 * 1000, 1 * 1000);
+		mdelay(1);	//wait 1ms
 #endif
 		nvt_eng_reset();
 #if NVT_TOUCH_SUPPORT_HW_RST
 		gpio_set_value(ts->reset_gpio, 1);
-		usleep_range(10 * 1000, 10 * 1000);//wait tRT2BRST after TP_RST
+		mdelay(10);	//wait tRT2BRST after TP_RST
 #endif
 		nvt_bootloader_reset();
 

@@ -23,42 +23,6 @@
 
 #include "core/sysdep.h"
 
-int sysdep_idr_alloc(struct idr *idr, void *mem)
-{
-	return sysdep_idr_alloc_in_range(idr, mem, 1, 0);
-}
-
-int sysdep_idr_alloc_in_range(struct idr *idr, void *mem,
-		unsigned long start, unsigned long end)
-{
-	int res;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 8, 0)
-	res = idr_alloc(idr, mem, start, end, GFP_KERNEL);
-#else
-	int tmp_id;
-	do {
-		if (!idr_pre_get(idr, GFP_KERNEL)) {
-			res = -ENOMEM;
-			break;
-		}
-
-		/* Reserving zero value helps with special case handling elsewhere */
-		res = idr_get_new_above(idr, mem, start, &tmp_id);
-		if (res == 0 && end && tmp_id >= end) {
-			res = -ENOSPC;
-			idr_remove(idr, tmp_id);
-			break;
-		}
-		if (res != -EAGAIN)
-			break;
-	} while (1);
-
-	/* Simulate behaviour of new version */
-	res = res ? -ENOMEM : tmp_id;
-#endif
-	return res;
-}
-
 static __maybe_unused unsigned int gup_flags(int write, int force)
 {
 	unsigned int flags = 0;
@@ -122,9 +86,24 @@ int sysdep_vfs_getattr(struct file *filp, struct kstat *stat)
 	p.dentry = filp->f_path.dentry;
 
 	return vfs_getattr(&p, stat, STATX_SIZE, KSTAT_QUERY_FLAGS);
-#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(3,9,0))
-	return vfs_getattr(&filp->f_path, stat);
 #else
-	return vfs_getattr(filp->f_path.mnt, filp->f_path.dentry, stat);
+	return vfs_getattr(&filp->f_path, stat);
+#endif
+}
+
+void sysdep_shash_desc_init(struct shash_desc *desc, struct crypto_shash *tfm)
+{
+		desc->tfm = tfm;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 2, 0)
+		desc->flags = 0;
+#endif
+}
+
+int sysdep_pid_refcount_read(struct pid *pid)
+{
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 3, 0)
+	return atomic_read(&pid->count);
+#else
+	return refcount_read(&pid->count);
 #endif
 }

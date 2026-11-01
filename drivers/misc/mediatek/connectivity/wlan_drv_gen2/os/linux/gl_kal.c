@@ -22,6 +22,7 @@
 */
 #include "gl_os.h"
 #include "gl_wext.h"
+#include "gl_kal.h"
 #include "precomp.h"
 #if CFG_TC1_FEATURE
 #include <tc1_partition.h>
@@ -117,7 +118,7 @@ typedef enum _ENUM_WMTHWVER_TYPE_T {
 */
 VOID kalHifAhbKalWakeLockTimeout(IN P_GLUE_INFO_T prGlueInfo)
 {
-	KAL_WAKE_LOCK_TIMEOUT(prGlueInfo->prAdapter, &(prGlueInfo->rAhbIsrWakeLock), (HZ / 10));	/* 100ms */
+	KAL_WAKE_LOCK_TIMEOUT(prGlueInfo->prAdapter, (prGlueInfo->rAhbIsrWakeLock), (HZ / 10));	/* 100ms */
 }
 
 #if CFG_ENABLE_FW_DOWNLOAD
@@ -379,7 +380,7 @@ WLAN_STATUS kalFirmwareLoad(IN P_GLUE_INFO_T prGlueInfo, OUT PVOID prBuf, IN UIN
 	} else {
 		filp->f_pos = u4Offset;
 		DBGLOG(INIT, INFO, "kalFirmwareLoad read start!\n");
-		*pu4Size = vfs_read(filp, (__force void __user *)prBuf, *pu4Size, &filp->f_pos);
+		*pu4Size = __vfs_read(filp, (__force void __user *)prBuf, *pu4Size, &filp->f_pos);
 	}
 
 	return WLAN_STATUS_SUCCESS;
@@ -683,7 +684,7 @@ VOID kalPacketFree(IN P_GLUE_INFO_T prGlueInfo, IN PVOID pvPacket)
 /*----------------------------------------------------------------------------*/
 PVOID kalPacketAlloc(IN P_GLUE_INFO_T prGlueInfo, IN UINT_32 u4Size, OUT PPUINT_8 ppucData)
 {
-	struct sk_buff *prSkb = dev_alloc_skb(u4Size);
+	struct sk_buff *prSkb = alloc_skb(u4Size + NET_SKB_PAD, GFP_ATOMIC); if (prSkb) skb_reserve(prSkb, NET_SKB_PAD);
 
 	if (prSkb)
 		*ppucData = (PUINT_8) (prSkb->data);
@@ -1087,7 +1088,8 @@ kalIndicateStatusAndComplete(IN P_GLUE_INFO_T prGlueInfo, IN WLAN_STATUS eStatus
 			ssid.aucSsid[(ssid.u4SsidLen >= PARAM_MAX_LEN_SSID) ?
 				     (PARAM_MAX_LEN_SSID - 1) : ssid.u4SsidLen] = '\0';
 			DBGLOG(AIS, INFO, " %s netif_carrier_on [ssid:%s %pM ], status=%u\n",
-					prGlueInfo->prDevHandler->name, ssid.aucSsid, arBssid, eStatus);
+					prGlueInfo->prDevHandler->name,
+					HIDE(ssid.aucSsid), arBssid, eStatus);
 		} while (0);
 
 		if (prGlueInfo->fgIsRegistered == TRUE) {
@@ -1150,7 +1152,7 @@ kalIndicateStatusAndComplete(IN P_GLUE_INFO_T prGlueInfo, IN WLAN_STATUS eStatus
 					if (!bss) {
 						DBGLOG(SCN, WARN,
 							"inform_bss failed, BSSID[%pM/%pM] SSID[%s] Chnl[%d/%d] RCPI[%d] IELng[%d] Bcn[%d]\n",
-							prBssDesc->aucBSSID, arBssid, prBssDesc->aucSSID,
+							prBssDesc->aucBSSID, arBssid, HIDE(prBssDesc->aucSSID),
 							prBssDesc->ucChannelNum, ucChannelNum,
 							RCPI_TO_dBm(prBssDesc->ucRCPI),
 							prBssDesc->u2IELength, prBssDesc->u2BeaconInterval);
@@ -1160,7 +1162,7 @@ kalIndicateStatusAndComplete(IN P_GLUE_INFO_T prGlueInfo, IN WLAN_STATUS eStatus
 					} else {
 						DBGLOG(SCN, INFO,
 							"inform_bss, BSSID[%pM/%pM] SSID[%s] Chnl[%d/%d] RCPI[%d] IELng[%d] Bcn[%d]\n",
-							prBssDesc->aucBSSID, arBssid, prBssDesc->aucSSID,
+							prBssDesc->aucBSSID, arBssid, HIDE(prBssDesc->aucSSID),
 							prBssDesc->ucChannelNum, ucChannelNum,
 							RCPI_TO_dBm(prBssDesc->ucRCPI),
 							prBssDesc->u2IELength, prBssDesc->u2BeaconInterval);
@@ -2385,7 +2387,7 @@ int tx_thread(void *data)
 		}
 
 		if (prGlueInfo->ulFlag & GLUE_FLAG_HALT) {
-			KAL_WAKE_UNLOCK(prGlueInfo->prAdapter, &(prGlueInfo->prAdapter)->rTxThreadWakeLock);
+			KAL_WAKE_UNLOCK(prGlueInfo->prAdapter, (prGlueInfo->prAdapter)->rTxThreadWakeLock);
 			DBGLOG(INIT, INFO, "tx_thread should stop now...\n");
 			break;
 		}
@@ -2395,11 +2397,11 @@ int tx_thread(void *data)
 		 * (2) GLUE_FLAG_OID (3) GLUE_FLAG_TXREQ (4) GLUE_FLAG_HALT
 		 *
 		 */
-		KAL_WAKE_UNLOCK(prGlueInfo->prAdapter, &(prGlueInfo->prAdapter)->rTxThreadWakeLock);
+		KAL_WAKE_UNLOCK(prGlueInfo->prAdapter, (prGlueInfo->prAdapter)->rTxThreadWakeLock);
 
 		ret = wait_event_interruptible(prGlueInfo->waitq, (prGlueInfo->ulFlag != 0));
 
-		KAL_WAKE_LOCK(prGlueInfo->prAdapter, &(prGlueInfo->prAdapter)->rTxThreadWakeLock);
+		KAL_WAKE_LOCK(prGlueInfo->prAdapter, (prGlueInfo->prAdapter)->rTxThreadWakeLock);
 
 /* #if (CONF_HIF_LOOPBACK_AUTO == 1) */
 /* if (test_and_clear_bit(GLUE_FLAG_HIF_LOOPBK_AUTO_BIT, &prGlueInfo->u4Flag)) { */
@@ -2430,7 +2432,7 @@ int tx_thread(void *data)
 		}
 
 		if (prGlueInfo->ulFlag & GLUE_FLAG_HALT) {
-			KAL_WAKE_UNLOCK(prGlueInfo->prAdapter, &(prGlueInfo->prAdapter)->rTxThreadWakeLock);
+			KAL_WAKE_UNLOCK(prGlueInfo->prAdapter, (prGlueInfo->prAdapter)->rTxThreadWakeLock);
 			DBGLOG(INIT, INFO, "<1>tx_thread should stop now...\n");
 			break;
 		}
@@ -2671,8 +2673,8 @@ int rx_thread(void *data)
 	KAL_WAKELOCK_DECLARE(rRxThreadWakeLock);
 
 	prAdapter = prGlueInfo->prAdapter;
-	KAL_WAKE_LOCK_INIT(prAdapter, &rRxThreadWakeLock, "WLAN rx_thread");
-	KAL_WAKE_LOCK(prAdapter, &rRxThreadWakeLock);
+	KAL_WAKE_LOCK_INIT(prAdapter, rRxThreadWakeLock, "WLAN rx_thread");
+	KAL_WAKE_LOCK(prAdapter, rRxThreadWakeLock);
 
 	if (current->policy == SCHED_NORMAL)
 		current->static_prio = DEFAULT_PRIO - 19;
@@ -2686,7 +2688,7 @@ int rx_thread(void *data)
 		}
 		/* Unlock wakelock if rx_thread going to idle */
 		if (!(prGlueInfo->ulFlag & GLUE_FLAG_RX_PROCESS))
-			KAL_WAKE_UNLOCK(prAdapter, &rRxThreadWakeLock);
+			KAL_WAKE_UNLOCK(prAdapter, rRxThreadWakeLock);
 		/*
 		* sleep on waitqueue if no events occurred.
 		*/
@@ -2695,7 +2697,7 @@ int rx_thread(void *data)
 				((prGlueInfo->ulFlag & GLUE_FLAG_RX_PROCESS) != 0));
 		} while (ret);
 		if (!KAL_WAKE_LOCK_ACTIVE(prAdapter, &rRxThreadWakeLock))
-			KAL_WAKE_LOCK(prAdapter, &rRxThreadWakeLock);
+			KAL_WAKE_LOCK(prAdapter, rRxThreadWakeLock);
 		if (test_and_clear_bit(GLUE_FLAG_RX_BIT, &prGlueInfo->ulFlag)) {
 			prRxCtrl->ucNumIndPacket = 0;
 			prRxCtrl->ucNumRetainedPacket = 0;
@@ -2738,14 +2740,14 @@ int rx_thread(void *data)
 						  (UINT_32) prRxCtrl->ucNumIndPacket);
 			#endif
 			}
-			KAL_WAKE_LOCK_TIMEOUT(prAdapter, &prGlueInfo->rTimeoutWakeLock,
+			KAL_WAKE_LOCK_TIMEOUT(prAdapter, prGlueInfo->rTimeoutWakeLock,
 				MSEC_TO_JIFFIES(WAKE_LOCK_RX_TIMEOUT));
 		}
 	}
 	complete(&prGlueInfo->rRxHaltComp);
 	if (KAL_WAKE_LOCK_ACTIVE(prAdapter, &rRxThreadWakeLock))
-		KAL_WAKE_UNLOCK(prAdapter, &rRxThreadWakeLock);
-	KAL_WAKE_LOCK_DESTROY(prAdapter, &rRxThreadWakeLock);
+		KAL_WAKE_UNLOCK(prAdapter, rRxThreadWakeLock);
+	KAL_WAKE_LOCK_DESTROY(prAdapter, rRxThreadWakeLock);
 	return 0;
 }
 #endif
@@ -3118,10 +3120,13 @@ VOID kalOsTimerInitialize(IN P_GLUE_INFO_T prGlueInfo, IN PVOID prTimerHandler)
 {
 
 	ASSERT(prGlueInfo);
-
+#if KERNEL_VERSION(4, 15, 0) <= CFG80211_VERSION_CODE
+	timer_setup(&prGlueInfo->tickfn, prTimerHandler, 0);
+#else
 	init_timer(&(prGlueInfo->tickfn));
 	prGlueInfo->tickfn.function = prTimerHandler;
 	prGlueInfo->tickfn.data = (ULONG) prGlueInfo;
+#endif
 }
 
 /* Todo */
@@ -3227,11 +3232,18 @@ UINT_32 kalRandomNumber(VOID)
  * \retval (none)
  */
 /*----------------------------------------------------------------------------*/
+#if KERNEL_VERSION(4, 15, 0) <= CFG80211_VERSION_CODE
+VOID kalTimeoutHandler(struct timer_list *timer)
+#else
 VOID kalTimeoutHandler(ULONG arg)
+#endif
 {
-
+#if KERNEL_VERSION(4, 15, 0) <= CFG80211_VERSION_CODE
+	P_GLUE_INFO_T prGlueInfo =
+		from_timer(prGlueInfo, timer, tickfn);
+#else
 	P_GLUE_INFO_T prGlueInfo = (P_GLUE_INFO_T) arg;
-
+#endif
 	ASSERT(prGlueInfo);
 
 	/* Notify tx thread  for timeout event */
@@ -3993,6 +4005,11 @@ kalReadyOnChannel(IN P_GLUE_INFO_T prGlueInfo,
 			break;
 		}
 
+		if (!prChannel) {
+			DBGLOG(AIS, ERROR, "prChannel is NULL, return!");
+			return;
+		}
+
 		cfg80211_ready_on_channel(prGlueInfo->prDevHandler->ieee80211_ptr, u8Cookie, prChannel, u4DurationMs,
 					  GFP_KERNEL);
 	}
@@ -4047,6 +4064,11 @@ kalRemainOnChannelExpired(IN P_GLUE_INFO_T prGlueInfo,
 		default:
 			rChannelType = NL80211_CHAN_HT20;
 			break;
+		}
+
+		if (!prChannel) {
+			DBGLOG(AIS, ERROR, "prChannel is NULL, return!");
+			return;
 		}
 
 		cfg80211_remain_on_channel_expired(prGlueInfo->prDevHandler->ieee80211_ptr, u8Cookie, prChannel,
@@ -4168,13 +4190,19 @@ nla_put_failure:
 
 struct proc_dir_entry *pMetProcDir;
 void *pMetGlobalData;
+
+#if 0
 static unsigned long __read_mostly tracing_mark_write_addr;
+#endif
 
 static inline void __mt_update_tracing_mark_write_addr(void)
 {
+#if 0
 	if (unlikely(tracing_mark_write_addr == 0))
 		tracing_mark_write_addr = kallsyms_lookup_name("tracing_mark_write");
+#endif
 }
+
 
 VOID kalMetProfilingStart(IN P_GLUE_INFO_T prGlueInfo, IN struct sk_buff *prSkb)
 {
@@ -4206,7 +4234,7 @@ VOID kalMetProfilingStart(IN P_GLUE_INFO_T prGlueInfo, IN struct sk_buff *prSkb)
 					 * trace_printk("S|%d|%s|%d\n", current->tgid, "WIFI-CHIP", u2RtpSn);
 					 * //frm_sequence);
 					 */
-#ifdef CONFIG_TRACING
+#if 0
 					__mt_update_tracing_mark_write_addr();
 					if (tracing_mark_write_addr != 0) {
 						KERNEL_event_trace_printk(tracing_mark_write_addr, "S|%d|%s|%d\n",
@@ -4251,7 +4279,7 @@ VOID kalMetProfilingFinish(IN P_ADAPTER_T prAdapter, IN P_MSDU_INFO_T prMsduInfo
 					 * trace_printk("F|%d|%s|%d\n", current->tgid, "WIFI-CHIP", u2RtpSn);
 					 * //frm_sequence);
 					 */
-#ifdef CONFIG_TRACING
+#if 0
 					__mt_update_tracing_mark_write_addr();
 					if (tracing_mark_write_addr != 0) {
 						KERNEL_event_trace_printk(tracing_mark_write_addr, "F|%d|%s|%d\n",
@@ -5073,3 +5101,139 @@ const uint8_t *kalFindIeMatchMask(uint8_t eid,
 	}
 	return NULL;
 }
+
+u_int8_t kalIsValidMacAddr(IN const uint8_t *addr)
+{
+	return (addr != NULL) && is_valid_ether_addr(addr);
+}
+
+#if (KERNEL_VERSION(3, 19, 0) <= CFG80211_VERSION_CODE)
+void kalParseRandomMac(
+	P_BSS_INFO_T prBssInfo, IN uint8_t *pucMacAddr,
+	IN uint8_t *pucMacAddrMask, OUT uint8_t *pucRandomMac)
+{
+	uint8_t ucMacAddr[MAC_ADDR_LEN];
+	uint8_t ucMacAddrMask[MAC_ADDR_LEN];
+
+	if (!prBssInfo) {
+		DBGLOG(SCN, ERROR, "Invalid BssInfo\n");
+		return;
+	}
+
+	ASSERT(pucMacAddr);
+	ASSERT(pucRandomMac);
+
+	if (pucMacAddr)
+		COPY_MAC_ADDR(ucMacAddr, pucMacAddr);
+	else
+		eth_zero_addr(ucMacAddr);
+
+	/* Set all 6bytes MAC to be random*/
+	get_random_mask_addr(pucRandomMac, ucMacAddr, pucMacAddrMask);
+
+
+	DBGLOG(SCN, INFO, "random mac=" MACSTR " mac_addr=" MACSTR
+		", mac_addr_mask=%pM\n", MAC2STR(pucRandomMac),
+		MAC2STR(ucMacAddr), ucMacAddrMask);
+}
+
+void kalScanParseRandomMac(
+	P_BSS_INFO_T prBssInfo,
+	const struct cfg80211_scan_request *request,
+	uint8_t *pucRandomMac)
+{
+	uint8_t ucMacAddr[MAC_ADDR_LEN];
+	uint8_t ucMacAddrMask[MAC_ADDR_LEN];
+
+	if (!request || !pucRandomMac) {
+		DBGLOG(SCN, WARN,
+			"kalScanParseRandomMac, NULL check (0x%x 0x%x)!\n",
+			request, pucRandomMac);
+		return;
+	}
+
+	if (!(request->flags & NL80211_SCAN_FLAG_RANDOM_ADDR)) {
+		DBGLOG(SCN, TRACE, "Scan random mac is not set\n");
+		return;
+	}
+
+#if KERNEL_VERSION(4, 10, 0) <= CFG80211_VERSION_CODE
+	{
+		if (kalIsValidMacAddr(request->bssid)) {
+			COPY_MAC_ADDR(pucRandomMac, request->bssid);
+			DBGLOG(SCN, INFO, "random mac=" MACSTR "\n",
+				pucRandomMac);
+			return;
+		}
+	}
+#endif
+	COPY_MAC_ADDR(ucMacAddr, request->mac_addr);
+	COPY_MAC_ADDR(ucMacAddrMask, request->mac_addr_mask);
+
+	kalParseRandomMac(prBssInfo, ucMacAddr, ucMacAddrMask, pucRandomMac);
+}
+
+BOOLEAN kalSchedScanParseRandomMac(
+	P_BSS_INFO_T prBssInfo,
+	const struct cfg80211_sched_scan_request *request,
+	uint8_t *pucRandomMac, uint8_t *pucRandomMacMask)
+{
+	uint8_t ucMacAddr[MAC_ADDR_LEN];
+
+	ASSERT(pucRandomMac);
+	if (!request) {
+		DBGLOG(SCN, WARN, "kalScanParseRandomMac, request is NULL!\n");
+		return FALSE;
+	}
+
+	if (!(request->flags & NL80211_SCAN_FLAG_RANDOM_ADDR)) {
+		DBGLOG(SCN, TRACE, "Scan random mac is not set\n");
+		return FALSE;
+	}
+	COPY_MAC_ADDR(ucMacAddr, request->mac_addr);
+	COPY_MAC_ADDR(pucRandomMacMask, request->mac_addr_mask);
+
+	kalParseRandomMac(prBssInfo, ucMacAddr, pucRandomMacMask,
+			pucRandomMac);
+	return TRUE;
+}
+
+#else /* if (KERNEL_VERSION(3, 19, 0) <= CFG80211_VERSION_CODE) */
+void kalScanParseRandomMac(P_BSS_INFO_T prBssInfo,
+	const struct cfg80211_scan_request *request, uint8_t *pucRandomMac)
+{
+	/* Do nothing */
+}
+
+BOOLEAN kalSchedScanParseRandomMac(const struct net_device *ndev,
+	const struct cfg80211_sched_scan_request *request,
+	uint8_t *pucRandomMac, uint8_t *pucRandomMacMask)
+{
+	return FALSE;
+}
+
+#endif
+
+int _kalSnprintf(char *buf, size_t size, const char *fmt, ...)
+{
+	int retval;
+	va_list ap;
+
+	va_start(ap, fmt);
+	retval = vsnprintf(buf, size, fmt, ap);
+	va_end(ap);
+	return (retval < 0)?(0):(retval);
+}
+
+int _kalSprintf(char *buf, const char *fmt, ...)
+{
+	int retval;
+	va_list ap;
+
+	va_start(ap, fmt);
+	retval = vsprintf(buf, fmt, ap);
+	va_end(ap);
+	return (retval < 0)?(0):(retval);
+}
+
+

@@ -43,6 +43,9 @@ int wmt_step_test_check_write_tp(struct step_action_list *p_act_list, enum step_
 	if (g_step_test_check.step_check_result == TEST_FAIL)
 		return 0;
 
+	if (index < 0)
+		return 0;
+
 	g_step_test_check.step_check_index++;
 
 	if (g_step_test_check.step_check_test_tp_id[index] != -1) {
@@ -244,7 +247,7 @@ int wmt_step_test_check_create_write_reg(struct step_reigster_info *p_reg_info,
 			p_reg_info->offset != check_params[check_index + 2] ||
 			p_reg_info->value != check_params[check_index + 3]) {
 			WMT_ERR_FUNC(
-				"%s, C2 reg params: %d, %p, %d, %d\n",
+				"%s, C2 reg params: %d, %d, %d, %d\n",
 				err_result, p_reg_info->is_write, p_reg_info->address_type,
 				p_reg_info->offset, p_reg_info->value);
 			result = TEST_FAIL;
@@ -593,20 +596,20 @@ void wmt_step_test_check_reg_write_act(unsigned int len, ...)
 		if (g_step_test_check.step_check_write_value == value) {
 			g_step_test_check.step_check_result = TEST_PASS;
 		} else {
-			WMT_ERR_FUNC("STEP test failed: Value is %d, expect %lu", value,
+			WMT_ERR_FUNC("STEP test failed: Value is %d, expect %zu", value,
 				g_step_test_check.step_check_write_value);
 			g_step_test_check.step_check_result = TEST_FAIL;
 		}
 	} else {
 		if ((mask & value) != (mask & g_step_test_check.step_check_write_value)) {
-			WMT_ERR_FUNC("STEP test failed: Overrite:%d, expect:%lu origin %d mask %d",
+			WMT_ERR_FUNC("STEP test failed: Overrite:%d, expect:%zu origin %d mask %d",
 				value,
 				g_step_test_check.step_check_write_value,
 				g_step_test_check.step_recovery_value,
 				mask);
 			g_step_test_check.step_check_result = TEST_FAIL;
 		} else if ((~mask & value) != (~mask & g_step_test_check.step_recovery_value)) {
-			WMT_ERR_FUNC("STEP test failed: No change:%d, expect:%lu origin %d mask %d",
+			WMT_ERR_FUNC("STEP test failed: No change:%d, expect:%zu origin %d mask %d",
 				value,
 				g_step_test_check.step_check_write_value,
 				g_step_test_check.step_recovery_value,
@@ -622,7 +625,7 @@ void wmt_step_test_check_reg_write_act(unsigned int len, ...)
 
 void wmt_step_test_check_show_act(unsigned int len, ...)
 {
-	char *content;
+	char *content = NULL;
 	va_list args;
 
 	va_start(args, len);
@@ -2790,8 +2793,10 @@ void wmt_step_test_check_register_symbol(struct step_test_report *p_report)
 		for (i = 1; i <= symbol_num; i++) {
 			wmt_step_test_clear_parameter(params);
 			params[0] = "0";
-			snprintf(buf, 4, "#%d", i);
-			params[1] = buf;
+			if (snprintf(buf, 4, "#%d", i) < 0)
+				WMT_INFO_FUNC("[%s::%d] snprintf buf fail\n", __func__, __LINE__);
+			else
+				params[1] = buf;
 			params[2] = "0x9c";
 			params[3] = "1";
 			params[4] = "10";
@@ -3142,7 +3147,10 @@ int wmt_step_test_get_emi_wmt_offset(unsigned char buf[], int offset)
 
 	emi_phy_addr = mtk_wcn_consys_soc_get_emi_phy_add();
 	if (emi_phy_addr != NULL) {
-		snprintf(buf, 11, "0x%08x", ((unsigned int)emi_phy_addr->emi_core_dump_offset + offset));
+		if (snprintf(buf, 11, "0x%08x", ((unsigned int)emi_phy_addr->emi_core_dump_offset + offset)) < 0) {
+			WMT_INFO_FUNC("[%s::%d] snprintf buf fail\n", __func__, __LINE__);
+			return -1;
+		}
 	} else {
 		WMT_ERR_FUNC("STEP test failed: emi_phy_addr is NULL\n");
 		return -1;
@@ -3614,7 +3622,8 @@ void wmt_step_test_do_register_action(struct step_test_report *p_report)
 		WMT_ERR_FUNC("STEP test: Do register action init can_write_offset failed\n");
 		return;
 	}
-	snprintf(can_write_offset_char, 11, "0x%08x", can_write_offset);
+	if (snprintf(can_write_offset_char, 11, "0x%08x", can_write_offset) < 0)
+		WMT_INFO_FUNC("[%s::%d] snprintf can_write_offset_char fail\n", __func__, __LINE__);
 
 	osal_gettimeofday(&sec_begin, &usec_begin);
 	act_id = STEP_ACTION_INDEX_REGISTER;
@@ -3890,7 +3899,8 @@ void wmt_step_test_do_cond_register_action(struct step_test_report *p_report)
 		WMT_ERR_FUNC("STEP test: Do register action init can_write_offset failed\n");
 		return;
 	}
-	snprintf(can_write_offset_char, 11, "0x%08x", can_write_offset);
+	if (snprintf(can_write_offset_char, 11, "0x%08x", can_write_offset) < 0)
+		WMT_INFO_FUNC("[%s::%d] snprintf can_write_offset_char fail\n", __func__, __LINE__);
 
 	osal_gettimeofday(&sec_begin, &usec_begin);
 	act_id = STEP_ACTION_INDEX_CONDITION_REGISTER;
@@ -4909,7 +4919,7 @@ void wmt_step_test_create_periodic_dump(struct step_test_report *p_report)
 	int usec_begin = 0;
 	int sec_end = 0;
 	int usec_end = 0;
-	struct step_pd_entry *p_current;
+	struct step_pd_entry *p_current = NULL;
 	bool is_thread_run_for_test = 0;
 
 	WMT_INFO_FUNC("STEP test: Create periodic dump start\n");

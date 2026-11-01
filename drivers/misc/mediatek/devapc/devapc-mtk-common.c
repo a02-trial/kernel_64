@@ -199,8 +199,42 @@ static void print_vio_mask_sta(void)
 	}
 }
 
+/* dumping spm register for mt6768 MMSYS_CONFIG vio issue */
+#ifdef CONFIG_DEVAPC_MT6768
+#define DUMP_SPM
+#endif
+
+#ifdef DUMP_SPM
+#define MON_VIO_IDX 155  /* MMSYS_CONFIG */
+#define SPM_OFFSET 0x30C
+
+static phys_addr_t spm_pa = 0x10006000;
+static void __iomem *spm_va;
+
+static noinline void spm_reg_ioremap(void)
+{
+	spm_va = ioremap(spm_pa, SZ_4K);
+	if (spm_va)
+		pr_info(PFX "%s spm_pa:%pa, spm_va:0x%px\n",
+					__func__, &spm_pa, spm_va);
+}
+#endif
+
 static void devapc_test_cb(void)
 {
+#ifdef DUMP_SPM
+	uint32_t value;
+
+	pr_info(PFX "%s spm_pa:%pa, spm_va:0x%px\n",
+				__func__, &spm_pa, spm_va);
+
+	if (spm_va) {
+		value = readl(spm_va + SPM_OFFSET);
+		pr_info(PFX "%s read spm_va+SPM_OFFSET:0x%px, value:0x%x\n",
+					__func__, spm_va + SPM_OFFSET, value);
+	}
+#endif
+
 	DEVAPC_MSG("%s success !\n", __func__);
 }
 
@@ -257,6 +291,10 @@ static void start_devapc(void)
 
 	print_vio_mask_sta();
 
+#ifdef DUMP_SPM
+	spm_reg_ioremap();
+#endif
+
 	register_devapc_vio_callback(&devapc_test_handle);
 }
 
@@ -269,9 +307,11 @@ static void devapc_violation_triggered(uint32_t vio_idx,
 	enum infra_subsys_id id = DEVAPC_SUBSYS_RESERVED;
 	const struct mtk_device_info *device_info;
 	struct mtk_devapc_dbg_status *dbg_stat;
+	int sramrom_vio_idx;
 
 	device_info = mtk_devapc_ctx->soc->device_info;
 	dbg_stat = mtk_devapc_ctx->soc->dbg_stat;
+	sramrom_vio_idx = mtk_devapc_ctx->soc->vio_info->sramrom_vio_idx;
 
 	if (unlikely(dbg_stat == NULL || device_info == NULL)) {
 		pr_err(PFX "%s:%d NULL pointer\n", __func__, __LINE__);
@@ -313,6 +353,15 @@ static void devapc_violation_triggered(uint32_t vio_idx,
 
 	if (id != DEVAPC_SUBSYS_RESERVED) {
 		list_for_each_entry(viocb, &viocb_list, list) {
+
+#ifdef DUMP_SPM
+			if (viocb->id == DEVAPC_SUBSYS_TEST &&
+					viocb->debug_dump && vio_idx == MON_VIO_IDX) {
+				viocb->debug_dump();
+				continue;
+			}
+#endif
+
 			if (viocb->id == id && viocb->debug_dump)
 				viocb->debug_dump();
 
@@ -329,7 +378,7 @@ static void devapc_violation_triggered(uint32_t vio_idx,
 		DEVAPC_MSG("Device APC Violation Issue/%s", subsys_str);
 
 		/* Connsys will trigger EE instead of AP KE */
-		if (id != INFRA_SUBSYS_CONN)
+		if (id != INFRA_SUBSYS_CONN && vio_idx != sramrom_vio_idx)
 			BUG();
 	} else if (dbg_stat->enable_AEE) {
 
@@ -734,6 +783,119 @@ static void devapc_ut(uint32_t cmd)
 	}
 }
 
+#ifdef CONFIG_DEVAPC_SWP_SUPPORT
+static struct devapc_swp_context {
+	void __iomem *devapc_swp_base;
+	bool swp_enable;
+	bool swp_clr;
+	bool swp_rw;
+	uint32_t swp_phy_addr;
+	uint32_t swp_rg;
+	uint32_t swp_wr_val;
+	uint32_t swp_wr_mask;
+} devapc_swp_ctx[1];
+
+static ssize_t set_swp_addr_show(struct device_driver *driver, char *buf)
+{
+	return snprintf(buf, PAGE_SIZE,
+		"%s:%s\n\t%s:%s\n\t%s:0x%x\n\t%s:0x%x\n\t%s:0x%x\n\t%s:0x%x\n",
+			"devapc_swp",
+			devapc_swp_ctx->swp_enable ? "enable" : "disable",
+			"swp_rw",
+			devapc_swp_ctx->swp_rw ? "write" : "read",
+			"swp_physical_addr", devapc_swp_ctx->swp_phy_addr,
+			"swp_rg", devapc_swp_ctx->swp_rg,
+			"swp_wr_val", devapc_swp_ctx->swp_wr_val,
+			"swp_wr_mask", devapc_swp_ctx->swp_wr_mask
+		       );
+}
+
+static ssize_t set_swp_addr_store(struct device_driver *driver,
+		const char *buf, size_t count)
+{
+	char *cmd_str, *param_str;
+	unsigned int param;
+	int err;
+
+	pr_info(PFX "buf: %s", buf);
+
+	cmd_str = strsep((char **)&buf, " ");
+	if (!cmd_str)
+		return -EINVAL;
+
+	param_str = strsep((char **)&buf, " ");
+	if (!param_str)
+		return -EINVAL;
+
+	err = kstrtou32(param_str, 16, &param);
+	if (err)
+		return err;
+
+	if (!strncmp(cmd_str, "enable_swp", sizeof("enable_swp"))) {
+		devapc_swp_ctx->swp_enable = (param != 0);
+		pr_info(PFX "devapc_swp_enable = %s\n",
+			devapc_swp_ctx->swp_enable ? "enable" : "disable");
+
+		writel(param, devapc_swp_ctx->devapc_swp_base);
+		if (!devapc_swp_ctx->swp_enable)
+			devapc_swp_ctx->swp_phy_addr = 0x0;
+
+	} else if (!strncmp(cmd_str, "set_swp_clr", sizeof("set_swp_clr"))) {
+		pr_info(PFX "set swp clear: 0x%x\n", param);
+		devapc_swp_ctx->swp_clr = (param != 0);
+
+		if (devapc_swp_ctx->swp_clr)
+			writel(0x1 << DEVAPC_SWP_CON_CLEAR,
+			       devapc_swp_ctx->devapc_swp_base);
+
+	} else if (!strncmp(cmd_str, "set_swp_rw", sizeof("set_swp_rw"))) {
+		pr_info(PFX "set swp r/w: %s\n", param ? "write" : "read");
+		devapc_swp_ctx->swp_rw = (param != 0);
+
+		if (devapc_swp_ctx->swp_rw)
+			writel(0x1 << DEVAPC_SWP_CON_RW,
+			       devapc_swp_ctx->devapc_swp_base);
+
+	} else if (!strncmp(cmd_str, "set_swp_addr", sizeof("set_swp_addr"))) {
+		pr_info(PFX "set swp physical addr: 0x%x\n", param);
+		devapc_swp_ctx->swp_phy_addr = param;
+
+		writel(devapc_swp_ctx->swp_phy_addr,
+		       devapc_swp_ctx->devapc_swp_base + DEVAPC_SWP_SA_OFFSET);
+
+	} else if (!strncmp(cmd_str, "set_swp_rg", sizeof("set_swp_rg"))) {
+		pr_info(PFX "set swp range: 0x%x\n", param);
+		devapc_swp_ctx->swp_rg = param;
+
+		writel(devapc_swp_ctx->swp_rg,
+		       devapc_swp_ctx->devapc_swp_base + DEVAPC_SWP_RG_OFFSET);
+
+	} else if (!strncmp(cmd_str, "set_swp_wr_val",
+				sizeof("set_swp_wr_val"))) {
+		pr_info(PFX "set swp write value: 0x%x\n", param);
+		devapc_swp_ctx->swp_wr_val = param;
+
+		writel(devapc_swp_ctx->swp_wr_val,
+		       devapc_swp_ctx->devapc_swp_base +
+		       DEVAPC_SWP_WR_VAL_OFFSET);
+
+	} else if (!strncmp(cmd_str, "set_swp_wr_mask",
+				sizeof("set_swp_wr_mask"))) {
+		pr_info(PFX "set swp write mask: 0x%x\n", param);
+		devapc_swp_ctx->swp_wr_mask = param;
+
+		writel(devapc_swp_ctx->swp_wr_mask,
+		       devapc_swp_ctx->devapc_swp_base +
+		       DEVAPC_SWP_WR_MASK_OFFSET);
+
+	} else
+		return -EINVAL;
+
+	return count;
+}
+static DRIVER_ATTR_RW(set_swp_addr);
+#endif /* CONFIG_DEVAPC_SWP_SUPPORT */
+
 int mtk_devapc_probe(struct platform_device *pdev,
 		struct mtk_devapc_soc *soc)
 {
@@ -752,20 +914,14 @@ int mtk_devapc_probe(struct platform_device *pdev,
 			DT_DEVAPC_PD_IDX);
 	mtk_devapc_ctx->devapc_ao_base = of_iomap(node,
 			DT_DEVAPC_AO_IDX);
+	mtk_devapc_ctx->sramrom_base = of_iomap(node,
+			DT_SRAMROM_IDX);
 	mtk_devapc_ctx->devapc_irq = irq_of_parse_and_map(node,
 			DT_DEVAPC_PD_IDX);
 
 	DEVAPC_DBG_MSG("devapc_pd_base: %p, IRQ: %d\n",
 			mtk_devapc_ctx->devapc_pd_base,
 			mtk_devapc_ctx->devapc_irq);
-
-	ret = request_irq(mtk_devapc_ctx->devapc_irq,
-			(irq_handler_t)devapc_violation_irq,
-			IRQF_TRIGGER_LOW, "devapc", NULL);
-	if (ret) {
-		pr_err(PFX "Failed to request devapc irq, ret(%d)\n", ret);
-		return ret;
-	}
 
 	/* CCF (Common Clock Framework) */
 	mtk_devapc_ctx->devapc_infra_clk = devm_clk_get(&pdev->dev,
@@ -776,8 +932,26 @@ int mtk_devapc_probe(struct platform_device *pdev,
 		return PTR_ERR(mtk_devapc_ctx->devapc_infra_clk);
 	}
 
-	clk_prepare_enable(mtk_devapc_ctx->devapc_infra_clk);
+	if (clk_prepare_enable(mtk_devapc_ctx->devapc_infra_clk))
+		return -EINVAL;
+
 	start_devapc();
+
+	ret = request_irq(mtk_devapc_ctx->devapc_irq,
+			(irq_handler_t)devapc_violation_irq,
+			IRQF_TRIGGER_LOW, "devapc", NULL);
+	if (ret) {
+		pr_err(PFX "Failed to request devapc irq, ret(%d)\n", ret);
+		return ret;
+	}
+
+#ifdef CONFIG_DEVAPC_SWP_SUPPORT
+	devapc_swp_ctx->devapc_swp_base = of_iomap(node, 2);
+	ret = driver_create_file(pdev->dev.driver,
+			&driver_attr_set_swp_addr);
+	if (ret)
+		pr_info(PFX "create SWP sysfs file failed, ret:%d\n", ret);
+#endif
 
 	return 0;
 }
@@ -822,8 +996,8 @@ ssize_t mtk_devapc_dbg_write(struct file *file, const char __user *buffer,
 	char *parm_str = NULL;
 	char *pinput = NULL;	/* pointer to input */
 	unsigned long param = 0;
-	uint32_t ret;
-	int err = 0, len = 0, apc_set_idx;
+	uint32_t ret, len;
+	int err = 0, apc_set_idx;
 	long slave_type = 0, domain = 0, index = 0;
 	struct arm_smccc_res res;
 	struct mtk_devapc_dbg_status *dbg_stat;
@@ -833,7 +1007,6 @@ ssize_t mtk_devapc_dbg_write(struct file *file, const char __user *buffer,
 		pr_err(PFX "%s:%d NULL pointer\n", __func__, __LINE__);
 		return -EINVAL;
 	}
-
 
 	len = (count < (sizeof(input) - 1)) ? count : (sizeof(input) - 1);
 	if (copy_from_user(input, buffer, len)) {

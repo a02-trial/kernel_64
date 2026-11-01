@@ -23,7 +23,6 @@
 #include <linux/uaccess.h>
 
 #include "lens_info.h"
-#include "imgsensor_sysfs.h"
 
 #define AF_DRVNAME "FP5519AF_DRV"
 #define AF_I2C_SLAVE_ADDR 0x18
@@ -37,7 +36,6 @@
 #endif
 
 #define mDELAY(ms)       usleep_range(ms*1000, ms*1000)
-#define uDELAY(us)       udelay(us)
 
 static struct i2c_client *g_pstAF_I2Cclient;
 static int *g_pAF_Opened;
@@ -156,39 +154,29 @@ static u8 read_data(u8 addr)
 /* initAF include driver initialization and standby mode */
 static int initAF(void)
 {
-	int ret = 0;
-	struct cam_hw_param *hw_param = NULL;
+
 	u8 data = 0xFF;
 
 	LOG_INF("+\n");
 
-	mDELAY(5); //Reduced delay time to optimize wide camera's entry time. (10ms -> 5ms)
+	mDELAY(5);
 
 	data = read_data(0x00);
 	LOG_INF("module id:%d\n", data);
-
-	//initialization: PD
-	ret |= s4AF_WriteReg(0x02, 0x01);
-	ret |= s4AF_WriteReg(0x02, 0x00);
+	s4AF_WriteReg(0x02, 0x01);
+	s4AF_WriteReg(0x02, 0x00);
 	mDELAY(5);
-
-	//RING mode=1
-	ret |= s4AF_WriteReg(0x02, 0x02);//ring
+	s4AF_WriteReg(0x02, 0x02);//ring
 	//s4AF_WriteReg(0x06, 0xA4);//101__100 sac4 with x8
-
-	//ACC mode: ACC & SLE(scale)
-	ret |= s4AF_WriteReg(0x06, 0x61);//0110 0001 SAC3 with x1
-	// Removed delay time to optimize wide camera's enrty time. (5ms)
-
-	//Acceleration time
-	ret |= s4AF_WriteReg(0x07, 0x36);// 0011 0110 SACT
+	s4AF_WriteReg(0x06, 0x61);//0110 0001 SAC3 with x1
+	mDELAY(5);
+	s4AF_WriteReg(0x07, 0x36);// 0011 0110 SACT
 	//s4AF_WriteReg(0x07, 0x00);//00111111 SACT
-	//Removed delay time to optimize wide camera's entry time. (1ms)
-
-	ret |= s4AF_WriteReg(0x0A, 0x00); //PRESET
-	ret |= s4AF_WriteReg(0x0B, 0x01); //Landing
-	ret |= s4AF_WriteReg(0x0C, 0xFF); //Land_step
-	ret |= s4AF_WriteReg(0x11, 0x00); //Decay ratio
+	mDELAY(1);
+	s4AF_WriteReg(0x0A, 0x00);
+	s4AF_WriteReg(0x0B, 0x01);
+	s4AF_WriteReg(0x0C, 0xFF);
+	s4AF_WriteReg(0x11, 0x00);
 
 	if (*g_pAF_Opened == 1) {
 
@@ -198,11 +186,6 @@ static int initAF(void)
 
 	}
 
-	if (ret != 0) {
-		imgsensor_sec_get_hw_param(&hw_param, SENSOR_POSITION_REAR);
-		if (hw_param)
-			hw_param->i2c_af_err_cnt++;
-	}
 	LOG_INF("-\n");
 
 	return 0;
@@ -309,8 +292,7 @@ int FP5519AF_Release(struct inode *a_pstInode, struct file *a_pstFile)
 		for (i = 0; i < ARRAY_SIZE(noTickSoundDAC); i++) {
 			LOG_INF("now at dac %d\n", noTickSoundDAC[i]);
 			moveAF(noTickSoundDAC[i]);
-			while (read_data(0x05) != 0x00)
-				mDELAY(1);
+			mDELAY(8);
 			g_u4CurrPosition = noTickSoundDAC[i];
 		}
 	}

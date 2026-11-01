@@ -256,7 +256,7 @@ int s2mu005_irq_init(struct s2mu005_dev *s2mu005)
 					 handle_level_irq);
 		irq_set_nested_thread(cur_irq, 1);
 #ifdef CONFIG_ARM
-		set_irq_flags(cur_irq, IRQF_VALID);
+		irq_clear_status_flags(cur_irq, IRQ_NOREQUEST);
 #else
 		irq_set_noprobe(cur_irq);
 #endif

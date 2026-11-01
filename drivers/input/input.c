@@ -285,6 +285,7 @@ static int input_get_disposition(struct input_dev *dev,
 
 	case EV_KEY:
 		if (is_event_supported(code, dev->keybit, KEY_MAX)) {
+
 			/* auto-repeat bypasses state updates */
 			if (value == 2) {
 				disposition = INPUT_PASS_TO_HANDLERS;

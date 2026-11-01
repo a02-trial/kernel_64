@@ -1686,7 +1686,8 @@ nicConfigPowerSaveProfile(IN P_ADAPTER_T prAdapter,
 
 	ASSERT(prAdapter);
 
-	if (eNetTypeIndex >= NETWORK_TYPE_INDEX_NUM) {
+	if (eNetTypeIndex >= NETWORK_TYPE_INDEX_NUM ||
+			eNetTypeIndex < NETWORK_TYPE_AIS_INDEX) {
 		ASSERT(0);
 		return WLAN_STATUS_NOT_SUPPORTED;
 	}

@@ -534,11 +534,12 @@ static int zeroflash_get_fw_image(void)
 		}
 	}
 
-	input_info(true, tcm_hcd->pdev->dev.parent,
-			"Firmware image size = %d\n", (unsigned int)zeroflash_hcd->fw_entry->size);
+	if (zeroflash_hcd->fw_entry != NULL) { /* add condtion for only prevent */
+		input_info(true, tcm_hcd->pdev->dev.parent,
+				"Firmware image size = %d\n", (unsigned int)zeroflash_hcd->fw_entry->size);
 
-	zeroflash_hcd->image = zeroflash_hcd->fw_entry->data;
-
+		zeroflash_hcd->image = zeroflash_hcd->fw_entry->data;
+	}
 update:
 	retval = zeroflash_parse_fw_image();
 	if (retval < 0) {
@@ -1031,7 +1032,7 @@ static int zeroflash_download_app_fw(void)
 
 static void zeroflash_do_f35_firmware_download(void)
 {
-	int retval;
+	int retval = 0;
 	struct rmi_f35_data data;
 	struct syna_tcm_hcd *tcm_hcd = zeroflash_hcd->tcm_hcd;
 	static unsigned int retry_count;

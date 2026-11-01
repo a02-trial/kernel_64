@@ -15,10 +15,11 @@
 #define __IW_MESSAGES_H__
 
 #ifndef __USED_BY_TZSL__
-#include "core/cred.h"
+#  include <tz_common.h>
 #else
-#include <stdint.h>
-#include <uuid/uuid.h>
+#  include <stdint.h>
+#  include <sys/types.h>
+#  include <tz_uuid.h>
 #endif
 
 #define PROFILE_NAME_LEN		16
@@ -36,14 +37,8 @@
 
 #define IWD_TIMEOUT_INFINITY		((uint64_t)(-1))
 
-#define USERBOOT_SOCK			"/service/userboot"
-#define ROOT_TASK_SOCK			"/service/root_task"
-
-#ifndef __USED_BY_TZSL__
-typedef struct tz_uuid tz_uuid_t;
-#else
-typedef uuid_t tz_uuid_t;
-#endif
+#define USERBOOT_SOCK			"userboot"
+#define ROOT_TASK_SOCK			"root_task"
 
 /*
   Used to transfer information about TEE_Param between SW and NW, and for inter ta communication
@@ -154,7 +149,7 @@ struct cmd_reply_set_shared_memory_rights {
 
 struct cmd_prepare_session {
     struct cmd_request base;
-    tz_uuid_t ta_uuid;
+    struct tz_uuid ta_uuid;
     uint32_t ctx_id;
     struct shared_buffer_description buf_desc;
 } IW_STRUCTURE;
@@ -174,7 +169,7 @@ struct cmd_open_session {
 
 struct cmd_reply_open_session {
     struct cmd_reply base;
-    tz_uuid_t session_id;
+    struct tz_uuid session_id;
     struct tee_operation op;
 } IW_STRUCTURE;
 
@@ -231,7 +226,7 @@ struct cmd_ta_image {
     struct cmd_request base;
     char name[MAX_TA_NAME_LEN];
     char new_name[MAX_TA_NAME_LEN];
-    tz_uuid_t uuid;
+    struct tz_uuid uuid;
 } IW_STRUCTURE;
 
 struct cmd_reply_ta_image {
@@ -242,7 +237,7 @@ struct cmd_reply_ta_image {
 
 struct cmd_shutdown_ta {
     struct cmd_request base;
-    tz_uuid_t uuid;
+    struct tz_uuid uuid;
     uint32_t error_code;
 } IW_STRUCTURE;
 
@@ -250,16 +245,6 @@ struct cmd_reply_shutdown_ta {
     struct cmd_reply base;
     uint32_t ta_in_progress;
 } IW_STRUCTURE;
-
-//TODO: remove this code when TEEGRIS-1646 get closed
-struct cmd_unlock_tmf_ta {
-    struct cmd_request base;
-} IW_STRUCTURE;
-
-struct cmd_reply_unlock_tmf_ta {
-    struct cmd_reply base;
-} IW_STRUCTURE;
-//end TODO
 
 struct cmd_sync_tee_state {
     struct cmd_request base;
@@ -271,13 +256,12 @@ struct cmd_reply_sync_tee_state {
 
 struct cmd_request_tmf_parent_sd_uuid {
     struct cmd_request base;
-    tz_uuid_t uuid; /* Currently, structs TEEC_UUID and uuid_t and tz_uuid_t are equal
-                     * and already packed */
+    struct tz_uuid uuid;
 } IW_STRUCTURE;
 
 struct cmd_reply_tmf_parent_sd_uuid {
     struct cmd_reply base;
-    tz_uuid_t parent_uuid;
+    struct tz_uuid parent_uuid;
     uint32_t error_code;
 } IW_STRUCTURE;
 

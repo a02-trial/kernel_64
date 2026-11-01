@@ -85,6 +85,7 @@
 
 static unsigned int session_config[MAX_SESSION_COUNT];
 static DEFINE_MUTEX(disp_session_lock);
+static DEFINE_MUTEX(disp_layer_lock);
 
 static dev_t mtk_disp_mgr_devno;
 static struct cdev *mtk_disp_mgr_cdev;
@@ -1023,6 +1024,9 @@ static int _ioctl_wait_all_jobs_done(unsigned long arg)
 	struct frame_queue_head_t *head;
 	int ret = 0;
 
+	if (session_id > MAX_SESSION_COUNT - 1)
+		return -EINVAL;
+
 	head = get_frame_queue_head(session_id);
 	if (!head) {
 		disp_aee_print("%s:error to get frame queue!!\n", __func__);
@@ -1230,7 +1234,9 @@ int _ioctl_query_valid_layer(unsigned long arg)
 		return -EINVAL;
 	}
 
+	mutex_lock(&disp_layer_lock);
 	ret = layering_rule_start(&disp_info_user, 0);
+	mutex_unlock(&disp_layer_lock);
 
 	if (copy_to_user(argp, &disp_info_user, sizeof(disp_info_user))) {
 		DISPERR("[FB]: copy_to_user failed! line:%d\n", __LINE__);

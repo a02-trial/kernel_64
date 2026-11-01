@@ -191,6 +191,13 @@ typedef enum _ENUM_DEBUG_TRAFFIC_CLASS_INDEX_T {
 /* The pre-defined format to dump the MAC type value with its name shown. */
 #define DUMPMACADDR(addr)                   (#addr " = %pM\n", (addr))
 
+/* for HIDE some information for user load */
+#ifdef BUILD_QA_DBG
+#define HIDE(_str) _str
+#else
+#define HIDE(_str) "***"
+#endif
+
 /* Basiclly, we just do renaming of KAL functions although they should
  * be defined as "Nothing to do" if DBG=0. But in some compiler, the macro
  * syntax does not support  #define LOG_FUNC(x,...)

@@ -34,6 +34,7 @@
 #include "core/iwsock.h"
 #include "core/log.h"
 #include "core/mem.h"
+#include "core/subsystem.h"
 #include "core/sysdep.h"
 #include "lib/circ_buf.h"
 #include "lib/circ_buf_packet.h"
@@ -400,7 +401,7 @@ static int tz_fsdev_get_wp_command(struct file *file, void __user *ubuf)
 	struct tz_fsdev_packet *packet = session_ctx->session_buf;
 	ssize_t read_cnt;
 	struct tz_msghdr msg;
-	struct tz_cmsghdr_swd_cred msg_cred;
+	struct tz_cmsghdr_cred msg_cred;
 	struct tz_fsdev_data *data = ubuf;
 
 	msg.msgbuf = (char *)packet;
@@ -595,7 +596,7 @@ static struct tz_cdev tz_fsdev_cdev = {
 	.owner = THIS_MODULE,
 };
 
-static int __init tz_fsdev_init(void)
+int tz_fsdev_init(void)
 {
 	int rc;
 
@@ -613,11 +614,11 @@ static int __init tz_fsdev_init(void)
 	return 0;
 }
 
-static void __exit tz_fsdev_exit(void)
+void tz_fsdev_exit(void)
 {
 	tz_cdev_unregister(&tz_fsdev_cdev);
 	release_session_ctx(nwfs_daemon_ctx);
 }
 
-module_init(tz_fsdev_init);
-module_exit(tz_fsdev_exit);
+tzdev_initcall(tz_fsdev_init);
+tzdev_exitcall(tz_fsdev_exit);

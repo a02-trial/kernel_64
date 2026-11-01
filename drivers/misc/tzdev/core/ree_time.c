@@ -17,6 +17,7 @@
 #include "tzdev_internal.h"
 #include "core/iwsock.h"
 #include "core/ree_time.h"
+#include "core/subsystem.h"
 
 MODULE_AUTHOR("Konstantin Karasev");
 MODULE_DESCRIPTION("REE Time service");
@@ -84,7 +85,7 @@ out:
 	return ret;
 }
 
-static int __init tz_ree_time_init(void)
+int tz_ree_time_init(void)
 {
 	ree_time_kthread = kthread_run(tz_ree_time_kthread, NULL, "ree_time");
 	if (IS_ERR(ree_time_kthread))
@@ -93,10 +94,10 @@ static int __init tz_ree_time_init(void)
 	return 0;
 }
 
-static void __init tz_ree_time_fini(void)
+void tz_ree_time_fini(void)
 {
 	kthread_stop(ree_time_kthread);
 }
 
-module_init(tz_ree_time_init);
-module_exit(tz_ree_time_fini);
+tzdev_initcall(tz_ree_time_init);
+tzdev_exitcall(tz_ree_time_fini);

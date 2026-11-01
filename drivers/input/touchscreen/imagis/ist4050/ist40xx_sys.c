@@ -23,7 +23,7 @@
 #include "ist40xx_update.h"
 
 #ifdef CONFIG_TRUSTONIC_TRUSTED_UI
-#include <linux/trustedui.h>
+#include <linux/t-base-tui.h>
 #endif
 
 /******************************************************************************
@@ -142,6 +142,7 @@ int ist40xx_i2c_transfer(struct i2c_client *client, struct i2c_msg *msgs,
 	u8 *msg_buf = NULL;
 	u8 *pbuf = NULL;
 	int trans_size, max_size = 0;
+	struct ist40xx_data *data = i2c_get_clientdata(client);
 
 #ifdef CONFIG_INPUT_SEC_SECURE_TOUCH
 	struct ist40xx_data *data = i2c_get_clientdata(client);
@@ -197,8 +198,8 @@ int ist40xx_i2c_transfer(struct i2c_client *client, struct i2c_msg *msgs,
 			break;
 		}
 
-/*
-		{
+
+		if (data->debug_string) {
 			int i;
 
 			pr_info("sec_input: I2C: %s\n", __func__);
@@ -217,7 +218,7 @@ int ist40xx_i2c_transfer(struct i2c_client *client, struct i2c_msg *msgs,
 				pr_cont("\n");
 			}
 		}
-*/
+
 		if (msg_num == WRITE_CMD_MSG_LEN)
 			pbuf += trans_size;
 		else
@@ -275,6 +276,12 @@ int ist40xx_read_buf(struct i2c_client *client, u32 cmd, u32 *buf, u16 len)
 	mutex_lock(&data->i2c_lock);
 
 	msg_buf = kmalloc(len * IST40XX_DATA_LEN, GFP_KERNEL);
+	if (!msg_buf) {
+		kfree(t_u8_reg);
+		mutex_unlock(&data->i2c_lock);
+		return -ENOMEM;
+	}
+
 	memcpy(msg_buf, buf, len * IST40XX_DATA_LEN);
 	msg[1].buf = (u8 *)msg_buf;
 
@@ -314,7 +321,14 @@ int ist40xx_write_buf(struct i2c_client *client, u32 cmd, u32 *buf, u16 len)
 	}
 
 	cmd_buf = kmalloc(IST40XX_DATA_LEN, GFP_KERNEL);
+	if (!cmd_buf)
+		return -ENOMEM;
+	
 	msg_buf = kmalloc((len + 1) * IST40XX_DATA_LEN, GFP_KERNEL);
+	if (!msg_buf) {
+		kfree(cmd_buf);
+		return -ENOMEM;
+	}
 
 	put_unaligned_be32(cmd, cmd_buf);
 
@@ -414,6 +428,12 @@ int ist40xx_read_reg(struct i2c_client *client, u32 reg, u32 *buf)
 	mutex_lock(&data->i2c_lock);
 
 	msg_buf = kmalloc(IST40XX_DATA_LEN, GFP_KERNEL);
+	if (!msg_buf) {
+		kfree(t_u8_reg);
+		mutex_unlock(&data->i2c_lock);
+		return -ENOMEM;
+	}
+
 	memcpy(msg_buf, buf, IST40XX_DATA_LEN);
 	msg[1].buf = (u8 *)msg_buf;
 
@@ -429,8 +449,8 @@ int ist40xx_read_reg(struct i2c_client *client, u32 reg, u32 *buf)
 		return -EIO;
 	}
 
-/*
-	{
+
+	if (data->debug_string) {
 		int i;
 
 		pr_info("sec_input: I2C: %s\n", __func__);
@@ -447,7 +467,7 @@ int ist40xx_read_reg(struct i2c_client *client, u32 reg, u32 *buf)
 		}
 		pr_cont("\n");
 	}
-*/
+
 	*buf = cpu_to_be32(*msg_buf);
 
 	kfree(msg_buf);
@@ -563,11 +583,15 @@ int ts_power_enable(struct ist40xx_data *data, int en)
 				input_err(true, &data->client->dev,
 					  "%s: Failed to enable avdd: %d\n",
 					  __func__, ret);
-				return ret;
 			}
 		} else {
 			if (regulator_is_enabled(regulator_avdd))
-				regulator_disable(regulator_avdd);
+				ret = regulator_disable(regulator_avdd);
+				if (ret) {
+					input_err(true, &data->client->dev,
+						  "%s: Failed to disable avdd: %d\n",
+						  __func__, ret);
+				}
 		}
 
 		regulator_put(regulator_avdd);

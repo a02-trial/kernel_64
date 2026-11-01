@@ -66,10 +66,8 @@
 #include <linux/compat.h>
 #endif
 
-#ifdef CONFIG_PM_WAKELOCKS
+#ifdef CONFIG_PM_SLEEP
 #include <linux/pm_wakeup.h>
-#else
-#include <linux/wakelock.h>
 #endif
 
 #ifdef CONFIG_OF
@@ -145,7 +143,7 @@ static u32 target_clk;
 #define LOG_VRB(format, args...) \
 		pr_debug(MyTag "[%s] " format, __func__, ##args)
 
-#define ISP_DEBUG
+// #define ISP_DEBUG
 #ifdef ISP_DEBUG
 #define LOG_DBG(format, args...) \
 		pr_info(MyTag "[%s] " format, __func__, ##args)
@@ -359,10 +357,8 @@ static unsigned int m_CurrentPPB;
 static struct isp_sec_dapc_reg lock_reg;
 static unsigned int sec_on;
 
-#ifdef CONFIG_PM_WAKELOCKS
+#ifdef CONFIG_PM_SLEEP
 struct wakeup_source isp_wake_lock;
-#else
-struct wake_lock isp_wake_lock;
 #endif
 static int g_WaitLockCt;
 
@@ -685,10 +681,11 @@ static struct SV_LOG_STR gSvLog[ISP_IRQ_TYPE_AMOUNT];
 		usec = do_div(sec, 1000000);\
 	}
 
-#define IRQ_LOG_KEEPER(irq, ppb, logT, fmt, ...) do {\
+#define IRQ_LOG_KEEPER(irq, ppb_in, logT_in, fmt, ...) do {\
 	char *ptr; \
 	char *pDes;\
 	int avaLen;\
+	unsigned int ppb = ppb_in, logT = logT_in;\
 	unsigned int *ptr2 = &gSvLog[irq]._cnt[ppb][logT];\
 	unsigned int str_leng;\
 	unsigned int i;\
@@ -706,10 +703,12 @@ static struct SV_LOG_STR gSvLog[ISP_IRQ_TYPE_AMOUNT];
 		gSvLog[irq]._str[ppb][logT][gSvLog[irq]._cnt[ppb][logT]]);\
 	avaLen = str_leng - 1 - gSvLog[irq]._cnt[ppb][logT];\
 	if (avaLen > 1) {\
-		snprintf((char *)(pDes), avaLen, "[%d.%06d]" fmt,\
+		if (snprintf((char *)(pDes), avaLen, "[%d.%06d]" fmt,\
 			gSvLog[irq]._lastIrqTime.sec, gSvLog[irq]\
 			._lastIrqTime.usec,\
-			##__VA_ARGS__);   \
+			##__VA_ARGS__) < 0) {\
+			LOG_NOTICE("[Error] %s: snprintf failed", __func__);\
+		} \
 		if ('\0' != gSvLog[irq]._str[ppb][logT][str_leng - 1]) {\
 			LOG_NOTICE("log str over flow(%d)", irq);\
 		} \
@@ -774,7 +773,11 @@ static struct SV_LOG_STR gSvLog[ISP_IRQ_TYPE_AMOUNT];
 			ptr = pDes = (char *)&(\
 				pSrc->_str[ppb][logT][pSrc->_cnt[ppb][logT]]);\
 			ptr2 = &(pSrc->_cnt[ppb][logT]);\
-			snprintf((char *)(pDes), avaLen, fmt, ##__VA_ARGS__);\
+			if (snprintf((char *)(pDes), avaLen,\
+					fmt, ##__VA_ARGS__) < 0) {\
+				LOG_NOTICE("[Error] %s: snprintf failed",\
+					   __func__);\
+			} \
 			while (*ptr++ != '\0') {\
 				(*ptr2)++;\
 			} \
@@ -788,8 +791,8 @@ static struct SV_LOG_STR gSvLog[ISP_IRQ_TYPE_AMOUNT];
 	struct SV_LOG_STR *pSrc = &gSvLog[irq];\
 	char *ptr;\
 	unsigned int i;\
-	int ppb;\
-	int logT;\
+	unsigned int ppb;\
+	unsigned int logT;\
 	if (ppb_in > 1) {\
 		ppb = 1;\
 	} else{\
@@ -1657,7 +1660,7 @@ static int ISP_WriteReg(struct ISP_REG_IO_STRUCT *pRegIo)
 	int Ret = 0;
 	struct ISP_REG_STRUCT *pData = NULL;
 
-	if (pRegIo->Count > 0xFFFFFFFF) {
+	if ((pRegIo->Count * sizeof(struct ISP_REG_STRUCT)) > 0xFFFFF000) {
 		LOG_NOTICE("pRegIo->Count error");
 		Ret = -EFAULT;
 		goto EXIT;
@@ -1745,7 +1748,8 @@ static long ISP_Buf_CTRL_FUNC(unsigned long Param)
 	/*  */
 	if (copy_from_user(&rt_buf_ctrl, (void __user *)Param,
 		  sizeof(struct ISP_BUFFER_CTRL_STRUCT)) == 0) {
-		if (rt_buf_ctrl.module >= ISP_IRQ_TYPE_AMOUNT) {
+		if (rt_buf_ctrl.module >= ISP_IRQ_TYPE_AMOUNT ||
+		    rt_buf_ctrl.module < 0) {
 			LOG_NOTICE("[rtbc]not supported module:0x%x\n",
 			  rt_buf_ctrl.module);
 			return -EFAULT;
@@ -1758,7 +1762,8 @@ static long ISP_Buf_CTRL_FUNC(unsigned long Param)
 		}
 
 		rt_dma = rt_buf_ctrl.buf_id;
-		if (rt_dma >= _cam_max_) {
+		if (rt_dma >= _cam_max_ ||
+		    rt_dma < 0) {
 			LOG_NOTICE("[rtbc]buf_id error:0x%x\n", rt_dma);
 			return -EFAULT;
 		}
@@ -2027,19 +2032,21 @@ static int ISP_FLUSH_IRQ(struct ISP_WAIT_IRQ_STRUCT *irqinfo)
 		irqinfo->Type, irqinfo->EventInfo.UserKey,
 		irqinfo->EventInfo.St_type, irqinfo->EventInfo.Status);
 
-	if (irqinfo->Type >= ISP_IRQ_TYPE_AMOUNT) {
+	if (irqinfo->Type >= ISP_IRQ_TYPE_AMOUNT ||
+	    irqinfo->Type < 0) {
 		LOG_NOTICE("FLUSH_IRQ: type error(%d)", irqinfo->Type);
 		return -EFAULT;
 	}
 
-	if (irqinfo->EventInfo.St_type >= ISP_IRQ_ST_AMOUNT) {
+	if (irqinfo->EventInfo.St_type >= ISP_IRQ_ST_AMOUNT ||
+	    irqinfo->EventInfo.St_type < 0) {
 		LOG_NOTICE("FLUSH_IRQ: st_type error(%d)",
 			irqinfo->EventInfo.St_type);
 		return -EFAULT;
 	}
 
 	if (irqinfo->EventInfo.UserKey >= IRQ_USER_NUM_MAX ||
-		irqinfo->EventInfo.UserKey < 0) {
+	    irqinfo->EventInfo.UserKey < 0) {
 		LOG_NOTICE("FLUSH_IRQ: userkey error(%d)",
 			irqinfo->EventInfo.UserKey);
 		return -EFAULT;
@@ -2082,19 +2089,21 @@ static int ISP_WaitIrq(struct ISP_WAIT_IRQ_STRUCT *WaitIrq)
 	time_getrequest.tv_usec = (unsigned int)usec;
 	time_getrequest.tv_sec = (unsigned int)sec;
 
-	if (WaitIrq->Type >= ISP_IRQ_TYPE_AMOUNT) {
+	if (WaitIrq->Type >= ISP_IRQ_TYPE_AMOUNT ||
+	    WaitIrq->Type < 0) {
 		LOG_NOTICE("WaitIrq: type error(%d)", WaitIrq->Type);
 		return -EFAULT;
 	}
 
-	if (WaitIrq->EventInfo.St_type >= ISP_IRQ_ST_AMOUNT) {
+	if (WaitIrq->EventInfo.St_type >= ISP_IRQ_ST_AMOUNT ||
+	    WaitIrq->EventInfo.St_type < 0) {
 		LOG_NOTICE("WaitIrq: st_type error(%d)",
 			WaitIrq->EventInfo.St_type);
 		return -EFAULT;
 	}
 
 	if (WaitIrq->EventInfo.UserKey >= IRQ_USER_NUM_MAX ||
-		WaitIrq->EventInfo.UserKey < 0) {
+	    WaitIrq->EventInfo.UserKey < 0) {
 		LOG_NOTICE("WaitIrq: userkey error(%d)",
 			WaitIrq->EventInfo.UserKey);
 		return -EFAULT;
@@ -2642,10 +2651,8 @@ static long ISP_ioctl(struct file *pFile, unsigned int Cmd, unsigned long Param)
 					LOG_DBG("add wakelock cnt(%d)\n",
 					  g_WaitLockCt);
 				} else {
-#ifdef CONFIG_PM_WAKELOCKS
+#ifdef CONFIG_PM_SLEEP
 					__pm_stay_awake(&isp_wake_lock);
-#else
-					wake_lock(&isp_wake_lock);
 #endif
 					g_WaitLockCt++;
 					LOG_DBG("wakelock enable!! cnt(%d)\n",
@@ -2659,10 +2666,8 @@ static long ISP_ioctl(struct file *pFile, unsigned int Cmd, unsigned long Param)
 					LOG_DBG("subtract wakelock cnt(%d)\n",
 					  g_WaitLockCt);
 				else {
-#ifdef CONFIG_PM_WAKELOCKS
+#ifdef CONFIG_PM_SLEEP
 					__pm_relax(&isp_wake_lock);
-#else
-					wake_unlock(&isp_wake_lock);
 #endif
 					LOG_DBG("wakelock disable!! cnt(%d)\n",
 					  g_WaitLockCt);
@@ -3261,7 +3266,7 @@ static long ISP_ioctl(struct file *pFile, unsigned int Cmd, unsigned long Param)
 		{
 		#ifdef CONFIG_MTK_QOS_SUPPORT
 			int result = 0;
-			u64 freq_steps[ISP_CLK_LEVEL_CNT];
+			u64 freq_steps[ISP_CLK_LEVEL_CNT] = {0};
 
 			/* Call mmdvfs_qos_get_freq_steps to
 			 * get supported frequency
@@ -4776,10 +4781,8 @@ static int ISP_release(
 	/* the power-saving mode */
 	if (g_WaitLockCt) {
 		LOG_INF("wakelock disable!! cnt(%d)\n", g_WaitLockCt);
-#ifdef CONFIG_PM_WAKELOCKS
+#ifdef CONFIG_PM_SLEEP
 		__pm_relax(&isp_wake_lock);
-#else
-		wake_unlock(&isp_wake_lock);
 #endif
 		g_WaitLockCt = 0;
 	}
@@ -5197,11 +5200,8 @@ static int ISP_probe(struct platform_device *pDev)
 		for (i = 0 ; i < ISP_IRQ_TYPE_AMOUNT; i++)
 			init_waitqueue_head(&IspInfo.WaitQueueHead[i]);
 
-#ifdef CONFIG_PM_WAKELOCKS
+#ifdef CONFIG_PM_SLEEP
 		wakeup_source_init(&isp_wake_lock, "isp_lock_wakelock");
-#else
-		wake_lock_init(&isp_wake_lock,
-					WAKE_LOCK_SUSPEND, "isp_lock_wakelock");
 #endif
 
 		for (i = 0; i < ISP_IRQ_TYPE_AMOUNT; i++)
@@ -5336,8 +5336,9 @@ static int ISP_suspend(
 )
 {
 	unsigned int regVal;
-	int IrqType, ret, module;
-	char moduleName[128];
+	unsigned int IrqType;
+	int ret, module;
+	char moduleName[128] = {'\0'};
 
 	unsigned int regTGSt, loopCnt;
 	struct ISP_WAIT_IRQ_STRUCT waitirq;
@@ -5346,7 +5347,8 @@ static int ISP_suspend(
 
 	ret = 0;
 	module = -1;
-	strncpy(moduleName, pDev->dev.of_node->name, 127);
+	strncpy(moduleName, pDev->dev.of_node->name, sizeof(moduleName)-1);
+	moduleName[sizeof(moduleName)-1] = '\0';
 
 	/* update device node count*/
 	atomic_dec(&G_u4DevNodeCt);
@@ -5517,12 +5519,14 @@ EXIT:
 static int ISP_resume(struct platform_device *pDev)
 {
 	unsigned int regVal;
-	int IrqType, ret, module;
-	char moduleName[128];
+	unsigned int IrqType;
+	int ret, module;
+	char moduleName[128] = {'\0'};
 
 	ret = 0;
 	module = -1;
-	strncpy(moduleName, pDev->dev.of_node->name, 127);
+	strncpy(moduleName, pDev->dev.of_node->name, sizeof(moduleName)-1);
+	moduleName[sizeof(moduleName)-1] = '\0';
 
 	/* update device node count*/
 	atomic_inc(&G_u4DevNodeCt);
@@ -5786,7 +5790,11 @@ static int __init ISP_Init(void)
 
 		for (i = 0; i < ARRAY_SIZE(SMI_LARB_BASE); i++) {
 
-			snprintf(comp_str, 64, "mediatek,smi_larb%d", i);
+			if (snprintf(comp_str, 64,
+					"mediatek,smi_larb%d", i) < 0) {
+				LOG_NOTICE("[Error] %s: snprintf failed",
+					   __func__);
+			}
 			LOG_INF("Finding SMI_LARB compatible: %s\n", comp_str);
 
 			node = of_find_compatible_node(NULL, NULL, comp_str);
@@ -6105,25 +6113,25 @@ enum CAM_FrameST Irq_CAM_FrameStatus(
 				enum ISP_IRQ_TYPE_ENUM irq_mod,
 				unsigned int delayCheck)
 {
-	int dma_arry_map[_cam_max_] = {
+	unsigned int dma_arry_map[_cam_max_] = {
 		/*      0,  1,  2,  3,  4,  5,  6,  7,  8,  9,*/
 		 0, /* _imgo_*/
 		 1, /* _rrzo_ */
 		 2, /* _ufeo_ */
-		-1, /* _aao_ */
-		-1, /* _afo_ */
+	 _cam_max_, /* _aao_ */
+	 _cam_max_, /* _afo_ */
 		 3, /* _lcso_ */
-		-1, /* _pdo_ */
+	 _cam_max_, /* _pdo_ */
 		 4, /* _lmvo_ */
-		-1, /* _flko_ */
+	 _cam_max_, /* _flko_ */
 		 5, /* _rsso_ */
-		-1, /* _pso_ */
+	 _cam_max_, /* _pso_ */
 		 6 /* _ufgo_ */
 	};
 
 	unsigned int dma_en;
-	union FBC_CTRL_1 fbc_ctrl1[7];
-	union FBC_CTRL_2 fbc_ctrl2[7];
+	union FBC_CTRL_1 fbc_ctrl1[_cam_max_ + 1];
+	union FBC_CTRL_2 fbc_ctrl2[_cam_max_ + 1];
 	bool bQueMode = MFALSE;
 	unsigned int product = 1;
 	/* TSTP_V3 unsigned int frmPeriod = */
@@ -6212,7 +6220,7 @@ enum CAM_FrameST Irq_CAM_FrameStatus(
 	}
 
 	for (i = 0; i < _cam_max_; i++) {
-		if (dma_arry_map[i] >= 0) {
+		if (dma_arry_map[i] != _cam_max_) {
 			if (fbc_ctrl1[dma_arry_map[i]].Raw != 0) {
 				bQueMode =
 				    fbc_ctrl1[dma_arry_map[i]].Bits.FBC_MODE;
@@ -6223,7 +6231,7 @@ enum CAM_FrameST Irq_CAM_FrameStatus(
 
 	if (bQueMode) {
 		for (i = 0; i < _cam_max_; i++) {
-			if (dma_arry_map[i] < 0)
+			if (dma_arry_map[i] == _cam_max_)
 				continue;
 
 			if (fbc_ctrl1[dma_arry_map[i]].Raw != 0) {
@@ -6282,7 +6290,7 @@ enum CAM_FrameST Irq_CAM_FrameStatus(
 		}
 	} else {
 		for (i = 0; i < _cam_max_; i++) {
-			if (dma_arry_map[i] < 0)
+			if (dma_arry_map[i] == _cam_max_)
 				continue;
 
 			if (fbc_ctrl1[dma_arry_map[i]].Raw != 0) {
@@ -7219,7 +7227,7 @@ irqreturn_t ISP_Irq_CAMSV(
 			(unsigned int)(sec);
 
 		if (IspInfo.DebugMask & ISP_DBG_INT) {
-			IRQ_LOG_KEEPER(module, m_CurrentPPB, _LOG_INF,
+			IRQ_LOG_KEEPER(module, m_CurrentPPB, _LOG_DBG,
 				"%s P1_DON_%d(0x%08x_0x%08x) stamp[0x%08x]\n",
 				str,
 				(sof_count[module]) ?
@@ -7252,7 +7260,7 @@ irqreturn_t ISP_Irq_CAMSV(
 			}
 
 			IRQ_LOG_KEEPER(
-				module, m_CurrentPPB, _LOG_INF,
+				module, m_CurrentPPB, _LOG_DBG,
 				"%s P1_SOF_%d_%d(0x%08x_0x%08x,0x%08x),int_us:0x%08x, stamp[0x%08x]\n",
 				str,
 				sof_count[module], cur_v_cnt,

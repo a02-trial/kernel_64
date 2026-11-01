@@ -186,10 +186,6 @@ static void *uid_seq_next(struct seq_file *seq, void *v, loff_t *pos)
 
 static void uid_seq_stop(struct seq_file *seq, void *v) { }
 
-#ifdef CONFIG_SEC_PM
-#define SKIP_START_INDEX 1
-#define SKIP_INDEX_COUNT 8
-#endif
 static int uid_time_in_state_seq_show(struct seq_file *m, void *v)
 {
 	struct uid_entry *uid_entry;
@@ -204,11 +200,6 @@ static int uid_time_in_state_seq_show(struct seq_file *m, void *v)
 				continue;
 			last_freqs = freqs;
 			for (i = 0; i < freqs->max_state; i++) {
-#ifdef CONFIG_SEC_PM
-				if (i >= SKIP_START_INDEX &&
-						i < SKIP_START_INDEX + SKIP_INDEX_COUNT)
-					continue;
-#endif
 				seq_put_decimal_ull(m, " ",
 						    freqs->freq_table[i]);
 			}
@@ -224,11 +215,6 @@ static int uid_time_in_state_seq_show(struct seq_file *m, void *v)
 			seq_putc(m, ':');
 		}
 		for (i = 0; i < uid_entry->max_state; ++i) {
-#ifdef CONFIG_SEC_PM
-			if (i >= SKIP_START_INDEX &&
-					i < SKIP_START_INDEX + SKIP_INDEX_COUNT)
-				continue;
-#endif
 			u64 time = nsec_to_clock_t(uid_entry->time_in_state[i]);
 			seq_put_decimal_ull(m, " ", time);
 		}
@@ -511,18 +497,8 @@ void cpufreq_times_create_policy(struct cpufreq_policy *policy)
 	freqs = tmp;
 	freqs->max_state = count;
 
-#ifdef CONFIG_SEC_PM
-	index = count;
-	cpufreq_for_each_valid_entry(pos, table) {
-		if (index <= 0)
-			break;
-
-		freqs->freq_table[--index] = pos->frequency;
-	}
-#else
 	cpufreq_for_each_valid_entry(pos, table)
 		freqs->freq_table[index++] = pos->frequency;
-#endif /* CONFIG_SEC_PM */
 
 	index = cpufreq_times_get_index(freqs, policy->cur);
 	if (index >= 0)

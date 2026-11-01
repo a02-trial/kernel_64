@@ -31,6 +31,8 @@
 #include "core/iwio.h"
 #include "core/log.h"
 #include "core/notifier.h"
+#include "core/subsystem.h"
+#include "debug/profiler.h"
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Eugene Mandrenko <i.mandrenko@samsung.com>");
@@ -70,21 +72,45 @@ struct profiler_buf_entry {
 	struct circ_buf *tzio_buf;
 };
 
+/* Specifies if the buffer pool is initialized */
 static DECLARE_COMPLETION(tzprofiler_pool_completion);
 
+/* There are two lists. One list contains buffers that wait for reading data from them
+ * (data from one of them is currently read). Another list contains buffers that have been read.
+ * After reading of all data from a buffer from the first list the buffer moves to the second
+ * list, and the next buffer in the first list begin to be read. When all buffers are moved from
+ * the first list to the second one, the lists swap roles, and after that the second list contains
+ * buffer that have to be read, and after reading they move to the first list. This process is
+ * cyclic. current_full_pool variable specifies list with buffers that have currently to be read. */
 LIST_HEAD(profiler_buf_list1);
 LIST_HEAD(profiler_buf_list2);
 static int current_full_pool = TZPROFILER_LIST1_NEED_CLEAN;
 
+/* 1 if Profiler is initialized, 0 otherwise */
 static atomic_t tzprofiler_init_done = ATOMIC_INIT(0);
+/* Number of threads in SWd */
 static atomic_t sk_is_active_count = ATOMIC_INIT(0);
+/* Check if the data is currently being read */
 static atomic_t tzprofiler_data_is_being_written = ATOMIC_INIT(0);
+/* Specifies how many additional idle iterations remain to do after exit from SWd.
+ * The value of the variable is set in post-SMC and decreases in reading loop at each
+ * iteration when its value is nonzero and no data was read. We need it in order to read
+ * remaining data that might be written from SWd in buffers that at the time of exit from
+ * SWd are located in the list where the buffers move to after reading. */
 static atomic_t tzprofiler_last_passing = ATOMIC_INIT(0);
 
+/* Waitqueue for waiting until SWd becomes active */
 static DECLARE_WAIT_QUEUE_HEAD(sk_wait);
+/* Waitqueue for waiting until data reading finish */
 static DECLARE_WAIT_QUEUE_HEAD(tzprofiler_data_writing);
-static DEFINE_MUTEX(tzprofiler_mutex);
 
+/**
+ * Initialize buffer pool in which profiling data will being written in SWd
+ * @param[in] bufs_cnt	number of buffers
+ * @param[in] buf_pg_cnt	number of pages in each buffer
+ * @return 0 if succeess, -ENOMEM if memory allocation failed, -ENXIO if IW
+ * channel allocation failed
+ */
 static int tzprofiler_init_buf_pool(unsigned int bufs_cnt, unsigned int buf_pg_cnt)
 {
 	struct profiler_buf_entry *profiler_buf;
@@ -110,6 +136,11 @@ static int tzprofiler_init_buf_pool(unsigned int bufs_cnt, unsigned int buf_pg_c
 	return 0;
 }
 
+/**
+ * Set depth (max number of nested functions to be profiled) in SWd
+ * @param[in] depth
+ * @return result of SMC
+ */
 static int tzprofiler_set_depth(unsigned int depth)
 {
 	int ret;
@@ -127,6 +158,10 @@ static int tzprofiler_set_depth(unsigned int depth)
 	return ret;
 }
 
+/**
+ * Start profiler in SWd
+ * @return result of SMC
+ */
 static int tzprofiler_start(void)
 {
 	int ret;
@@ -144,6 +179,10 @@ static int tzprofiler_start(void)
 	return ret;
 }
 
+/**
+ * Stop profiler in SWd
+ * @return result of SMC
+ */
 static int tzprofiler_stop(void)
 {
 	int ret;
@@ -161,6 +200,11 @@ static int tzprofiler_stop(void)
 	return ret;
 }
 
+/**
+ * Set UUID of the app to be profiled
+ * @param[in] uuid
+ * @return result of SMC
+ */
 static int tzprofiler_set_uuid(struct tz_uuid *uuid)
 {
 	int ret = 0;
@@ -183,6 +227,11 @@ static int tzprofiler_set_uuid(struct tz_uuid *uuid)
 	return ret;
 }
 
+/**
+ * Set start address (the address, after which profiling will be performed)
+ * @param[in] addr
+ * @return result of SMC
+ */
 static int tzprofiler_set_start_addr(uint64_t *addr)
 {
 	int ret;
@@ -205,6 +254,11 @@ static int tzprofiler_set_start_addr(uint64_t *addr)
 	return ret;
 }
 
+/**
+ * Set stop address (the address, before which profiling will be performed)
+ * @param[in] addr
+ * @return result of SMC
+ */
 static int tzprofiler_set_stop_addr(uint64_t *addr)
 {
 	int ret;
@@ -227,6 +281,11 @@ static int tzprofiler_set_stop_addr(uint64_t *addr)
 	return ret;
 }
 
+/**
+ * Set steps number (the number of function calls under profiler)
+ * @param[in] steps
+ * @return result of SMC
+ */
 static int tzprofiler_set_steps_number(uint32_t steps)
 {
 	int ret;
@@ -249,6 +308,12 @@ static int tzprofiler_set_steps_number(uint32_t steps)
 	return ret;
 }
 
+/**
+ * Add buffers to the buffer pool
+ * @param[in] number	number of buffers to be added
+ * @return 0 if succeess, -ENOMEM if memory allocation failed, -ENXIO if IW
+ * channel allocation failed
+ */
 static int tzprofiler_add_buffers(unsigned int number)
 {
 	int ret;
@@ -272,8 +337,18 @@ static int tzprofiler_add_buffers(unsigned int number)
 	return ret;
 }
 
+/**
+ * Read data from s_buf (kernel space memory) to d_buf (user space memory)
+ * @param[in] s_buf	the buffer which the data is read from
+ * @param[in] quantity	number of bytes to read
+ * @param[out] d_buf	the buffer which the data is written to
+ * @param[inout] saved_count	pointer to a variable that contains beginning position of writing
+ * to d_buf. The variable is increased by the number of currently written bytes.
+ * @param[in] count	full size of s_buf
+ * @return number of currently written bytes
+ */
 static ssize_t tzprofiler_write_buf(unsigned char *s_buf, ssize_t quantity,
-		unsigned char *d_buf, ssize_t *saved_count, size_t count)
+		unsigned char __user *d_buf, ssize_t *saved_count, size_t count)
 {
 	ssize_t real_saved;
 
@@ -290,6 +365,14 @@ static ssize_t tzprofiler_write_buf(unsigned char *s_buf, ssize_t quantity,
 	return real_saved;
 }
 
+/**
+ * Read count bytes from the buffer pool to buf
+ * @param[out] buf	output buffer of the driver's reading operation
+ * @param[in] count	max number of bytes to read
+ * @param[inout] head	list of buffers from which data is currently read
+ * @param[inout] cleaned_head	list of buffers that have been read
+ * @return number of actually read symbols
+ */
 static ssize_t __read(char __user *buf, size_t count, struct list_head *head,
 		struct list_head *cleaned_head)
 {
@@ -297,6 +380,8 @@ static ssize_t __read(char __user *buf, size_t count, struct list_head *head,
 	struct profiler_buf_entry *profiler_buf, *tmp;
 	ssize_t bytes, quantity, write_count, saved_count = 0;
 
+	/* Iterate through each buffer of list "head" until "head" become empty or
+	 * some data will be read from a buffer */
 	list_for_each_entry_safe(profiler_buf, tmp, head, list) {
 		tzio_buf = profiler_buf->tzio_buf;
 		if (tzio_buf->read_count == tzio_buf->write_count) {
@@ -332,6 +417,9 @@ static ssize_t __read(char __user *buf, size_t count, struct list_head *head,
 	return saved_count;
 }
 
+/**
+ * Reading operation handler of the char driver. It reads the data from the buffer pool
+ */
 static ssize_t tzprofiler_read(struct file *filp, char __user *buf, size_t count,
 		loff_t *f_pos)
 {
@@ -341,16 +429,22 @@ static ssize_t tzprofiler_read(struct file *filp, char __user *buf, size_t count
 
 	atomic_set(&tzprofiler_data_is_being_written, 0);
 
-	while(1) {
+	/* Hung in the loop until some data is read. It is implemented since reading operation handler
+	 * is required to read some data, otherwise reading of zero-length data might be considered
+	 * as the end of all data. */
+	while (1) {
 		if ((atomic_read(&sk_is_active_count) == 0) && (atomic_read(&tzprofiler_last_passing) == 0)) {
+			/* Wait until a thread switches to SWd, a signal is received or 5 seconds expire.
+			* It is implemented to avoid continuous looping while there are no threads in SWd. */
 			ret = wait_event_interruptible_timeout(sk_wait,
 					atomic_read(&sk_is_active_count) != 0, msecs_to_jiffies(5000));
 			if (ret < 0)
 				return (ssize_t)-EINTR;
 		}
 
+		/* Wait until the buffer pool is initialized */
 		ret = wait_for_completion_interruptible(&tzprofiler_pool_completion);
-		if (ret < 0)
+		if (unlikely(ret < 0))
 			return (ssize_t)-EINTR;
 
 		if (current_full_pool == TZPROFILER_LIST1_NEED_CLEAN) {
@@ -360,16 +454,20 @@ static ssize_t tzprofiler_read(struct file *filp, char __user *buf, size_t count
 			current_head = &profiler_buf_list2;
 			cleaned_head = &profiler_buf_list1;
 		}
+		/* Read data from the buffer pool to buf */
 		saved_count = __read(buf, count, current_head, cleaned_head);
+		/* Check if some data has been read */
 		if (saved_count) {
 			atomic_set(&tzprofiler_data_is_being_written, 1);
 			return saved_count;
 		}
 
+		/* The following code (to the end of the loop) is executed only if no data has been read */
 		wake_up(&tzprofiler_data_writing);
 		if (atomic_read(&tzprofiler_last_passing) > 0)
 			atomic_dec(&tzprofiler_last_passing);
 
+		/* Swap lists' roles */
 		if (current_full_pool == TZPROFILER_LIST1_NEED_CLEAN)
 			current_full_pool = TZPROFILER_LIST2_NEED_CLEAN;
 		else
@@ -379,11 +477,17 @@ static ssize_t tzprofiler_read(struct file *filp, char __user *buf, size_t count
 	return 0;
 }
 
+/**
+ * Opening operation handler of the char driver.
+ */
 static int tzprofiler_open(struct inode *inode, struct file *filp)
 {
 	return 0;
 }
 
+/**
+ * unlocked_ioctl operation handler of the char driver.
+ */
 static long tzprofiler_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	int ret;
@@ -426,13 +530,16 @@ static long tzprofiler_unlocked_ioctl(struct file *file, unsigned int cmd, unsig
 		break;
 	default:
 		ret = -ENOTTY;
-		log_error(tzdev_profiler, "Unexpected command %d\n", cmd);
+		log_error(tzdev_profiler, "Unexpected command %u\n", cmd);
 		break;
 	}
 
 	return ret;
 }
 
+/**
+ * Releasing operation handler of the char driver.
+ */
 static int tzprofiler_release(struct inode *inode, struct file *filp)
 {
 	atomic_set(&tzprofiler_data_is_being_written, 0);
@@ -458,29 +565,25 @@ static struct tz_cdev tzprofiler_cdev = {
 	.owner = THIS_MODULE,
 };
 
-static int tzprofiler_pre_smc_call(struct notifier_block *cb, unsigned long code, void *unused)
+/**
+ * The function will be invoked before each SMC
+ */
+void tzprofiler_pre_smc_call_direct(void)
 {
-	(void)cb;
-	(void)code;
-	(void)unused;
-
 	atomic_inc(&sk_is_active_count);
 	atomic_set(&tzprofiler_last_passing, 2);
 	wake_up(&sk_wait);
-
-	return NOTIFY_DONE;
 }
 
-static int tzprofiler_post_smc_call(struct notifier_block *cb, unsigned long code, void *unused)
+/**
+ * Wait until all data will be read from the buffer pool
+ */
+static void tzprofiler_wait_for_bufs(void)
 {
 	int ret;
 
-	(void)cb;
-	(void)code;
-	(void)unused;
-
 	if (atomic_read(&tzprofiler_data_is_being_written) == 0)
-		return NOTIFY_DONE;
+		return;
 
 	if (!in_atomic()) {
 		ret = wait_event_interruptible(tzprofiler_data_writing,
@@ -491,22 +594,23 @@ static int tzprofiler_post_smc_call(struct notifier_block *cb, unsigned long cod
 			atomic_set(&tzprofiler_data_is_being_written, 0);
 		}
 	}
+}
+
+/**
+ * The function will be invoked after each SMC
+ */
+void tzprofiler_post_smc_call_direct(void)
+{
+	tzprofiler_wait_for_bufs();
 
 	atomic_set(&tzprofiler_last_passing, 2);
 	wake_up(&sk_wait);
 	atomic_dec(&sk_is_active_count);
-
-	return NOTIFY_DONE;
 }
 
-static struct notifier_block tzprofiler_pre_smc_notifier = {
-	.notifier_call = tzprofiler_pre_smc_call,
-};
-
-static struct notifier_block tzprofiler_post_smc_notifier = {
-	.notifier_call = tzprofiler_post_smc_call,
-};
-
+/**
+ * Profiler initialization
+ */
 static int tzprofiler_init_call(struct notifier_block *cb, unsigned long code, void *unused)
 {
 	int rc;
@@ -519,17 +623,9 @@ static int tzprofiler_init_call(struct notifier_block *cb, unsigned long code, v
 	if (rc)
 		return NOTIFY_DONE;
 
-	rc = tzdev_atomic_notifier_register(TZDEV_PRE_SMC_NOTIFIER, &tzprofiler_pre_smc_notifier);
-	if (rc)
-		return NOTIFY_DONE;
-
-	rc = tzdev_atomic_notifier_register(TZDEV_POST_SMC_NOTIFIER, &tzprofiler_post_smc_notifier);
-	if (rc)
-		goto post_smc_notifier_fail;
-
 	rc = tzprofiler_start();
 	if (rc)
-		goto profiler_start_failed;
+		return NOTIFY_DONE;
 
 	rc = tz_cdev_register(&tzprofiler_cdev);
 	if (rc)
@@ -543,20 +639,22 @@ static int tzprofiler_init_call(struct notifier_block *cb, unsigned long code, v
 
 profiler_device_reg_failed:
 	tzprofiler_stop();
-profiler_start_failed:
-	tzdev_atomic_notifier_unregister(TZDEV_POST_SMC_NOTIFIER, &tzprofiler_post_smc_notifier);
-post_smc_notifier_fail:
-	tzdev_atomic_notifier_unregister(TZDEV_PRE_SMC_NOTIFIER, &tzprofiler_pre_smc_notifier);
+
+	log_error(tzdev_profiler, "Profiler initialization failed!\n");
 
 	return NOTIFY_DONE;
 }
 
+/**
+ * Profiler finalization
+ */
 static int tzprofiler_fini_call(struct notifier_block *cb, unsigned long code, void *unused)
 {
 	(void)cb;
 	(void)code;
 	(void)unused;
 
+	/* Check if the profiler is initialized */
 	if (!atomic_cmpxchg(&tzprofiler_init_done, 1, 0)) {
 		log_info(tzdev_profiler, "Profile not initialized.\n");
 		return NOTIFY_DONE;
@@ -564,8 +662,6 @@ static int tzprofiler_fini_call(struct notifier_block *cb, unsigned long code, v
 
 	tz_cdev_unregister(&tzprofiler_cdev);
 	tzprofiler_stop();
-	tzdev_atomic_notifier_unregister(TZDEV_PRE_SMC_NOTIFIER, &tzprofiler_pre_smc_notifier);
-	tzdev_atomic_notifier_unregister(TZDEV_POST_SMC_NOTIFIER, &tzprofiler_post_smc_notifier);
 
 	log_info(tzdev_profiler, "Profiler finalization done.\n");
 
@@ -580,7 +676,11 @@ static struct notifier_block tzprofiler_fini_notifier = {
 	.notifier_call = tzprofiler_fini_call,
 };
 
-static int __init tzprofiler_init(void)
+/**
+ * Profiler's driver initialization. It registers profiler's initialization
+ * and finalization function in corresponding global notifiers.
+ */
+int tzprofiler_init(void)
 {
 	int rc;
 
@@ -598,4 +698,4 @@ static int __init tzprofiler_init(void)
 	return 0;
 }
 
-early_initcall(tzprofiler_init);
+tzdev_early_initcall(tzprofiler_init);

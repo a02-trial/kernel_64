@@ -17,5 +17,6 @@
 int tz_iwservice_init(void);
 unsigned long tz_iwservice_get_cpu_mask(void);
 unsigned long tz_iwservice_get_user_cpu_mask(void);
+void tz_iwservice_set_cpu_freq(unsigned int cpu, unsigned int cpu_freq);
 
 #endif /* __TZ_IWSERVICE_H__ */

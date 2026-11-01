@@ -26,9 +26,6 @@
 #include <linux/regulator/consumer.h>
 #include <linux/sensor/sensors_core.h>
 #include "lis2ds_core.h"
-#ifdef CONFIG_SEC_VIB_NOTIFIER
-#include <linux/vibrator/sec_vibrator_notifier.h>
-#endif
 
 #define LIS2DS_SENSORHUB_OUT1_ADDR		0x06
 #define LIS2DS_SENSORHUB_OUT2_ADDR		0x07
@@ -437,27 +434,6 @@ u8 degree_tb[TILT_DEGREE_MAX_CNT] = {
 	0x69, 0x68, 0x66, 0x65, 0x64,
 	0x62, 0x61, 0x5F, 0x5E, 0x5C, 0x5B
 };
-#ifdef CONFIG_SEC_VIB_NOTIFIER
-#define MOTOR_OFF	0
-#define MOTOR_ON	1
-#define MOTOR_VIB	2
-
-struct notifier_block motor_nb;
-static int motor_state = MOTOR_OFF;
-
-int accel_motor_notify(struct notifier_block *nb,
-	unsigned long enable, void *v)
-{
-	struct vib_notifier_context *vib = (struct vib_notifier_context *)v;
-
-	SENSOR_INFO("%s: %s, idx: %d timeout: %d\n",
-		__func__, enable ? "ON" : "OFF", vib->index, vib->timeout);
-
-	motor_state = (int)enable;
-
-	return 0;
-}
-#endif
 static int lis2ds_set_tilt_degree(struct lis2ds_data *cdata) {
 	u8 value = 0x00;
 
@@ -713,17 +689,7 @@ static void lis2ds_acc_work_func(struct work_struct *work)
 	cdata->accel_data[0] = tmp_data[0] - cdata->accel_cal_data[0];
 	cdata->accel_data[1] = tmp_data[1] - cdata->accel_cal_data[1];
 	cdata->accel_data[2] = tmp_data[2] - cdata->accel_cal_data[2];
-#ifdef CONFIG_SEC_VIB_NOTIFIER
-	if (motor_state >= MOTOR_ON && cdata->lpf_on) {
-		if (motor_state == MOTOR_VIB) {
-			cdata->accel_data[0] = ((cdata->accel_prev_data[0] / 100) * 95) + ((cdata->accel_data[0] / 100) * 5);
-			cdata->accel_data[1] = ((cdata->accel_prev_data[1] / 100) * 95) + ((cdata->accel_data[1] / 100) * 5);
-			cdata->accel_data[2] = ((cdata->accel_prev_data[2] / 100) * 95) + ((cdata->accel_data[2] / 100) * 5);
-		} else {
-			motor_state = MOTOR_VIB;
-		}
-	}
-#endif
+
 	lis2ds_check_chip_reset(cdata);
 
 	time_hi = (int)((timestamp_new & TIME_HI_MASK) >> TIME_HI_SHIFT);
@@ -2827,12 +2793,7 @@ int lis2ds_common_probe(struct lis2ds_data *cdata)
 	cdata->accel_prev_data[0] = 0;
 	cdata->accel_prev_data[1] = 0;
 	cdata->accel_prev_data[2] = 0;
-	cdata->lpf_on = ON;
-#ifdef CONFIG_SEC_VIB_NOTIFIER
-	motor_nb.notifier_call = accel_motor_notify;
-	motor_nb.priority = 1;
-	sec_vib_notifier_register(&motor_nb);
-#endif
+
 	/* the timer just fires off a work queue request.  we need a thread
 	   to read the i2c (can be slow and blocking). */
 	cdata->accel_wq = create_singlethread_workqueue("accel_wq");

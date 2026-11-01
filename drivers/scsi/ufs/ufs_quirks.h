@@ -26,6 +26,10 @@
 #define UFS_VENDOR_SAMSUNG     0x1CE
 #define UFS_VENDOR_SKHYNIX     0x1AD
 
+/*uniqueu number*/
+#define UFS_UN_20_DIGITS 20
+#define UFS_UN_MAX_DIGITS 21 //current max digit + 1
+
 /**
  * ufs_dev_fix - ufs device quirk info
  * @card: ufs card details
@@ -146,5 +150,15 @@ struct ufs_dev_fix {
  * device issue, for example, device hang, may happen in some scenarios.
  */
 #define UFS_DEVICE_QUIRK_LIMITED_RPMB_MAX_RW_SIZE	(1 << 30)
+
+/*
+ * MTK PATCH
+ * Some UFS device writebooster cannot flush.
+ * To fix this problem, Toggle fWriteBoosterEn instead.
+ */
+#define UFS_DEVICE_QUIRK_WRITE_BOOSETER_FLUSH	(1 << 31)
+
+struct ufs_hba;
+void ufs_set_sec_unique_number(struct ufs_hba *hba, u8 *str_desc_buf, u8 *desc_buf);
 
 #endif /* UFS_QUIRKS_H_ */

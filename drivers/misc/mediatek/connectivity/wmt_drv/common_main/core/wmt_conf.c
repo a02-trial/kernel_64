@@ -155,6 +155,7 @@ static const struct parse_data wmtcfg_fields[] = {
 	INT(coex_wmt_ext_elna_gain_p1_D2),
 	INT(coex_wmt_ext_elna_gain_p1_D3),
 	STRING(coex_wmt_antsel_invert_support),
+	CHAR(coex_wmt_ext_epa_mode),
 
 	BYTE_ARRAY(coex_wmt_epa_elna),
 
@@ -176,6 +177,9 @@ static const struct parse_data wmtcfg_fields[] = {
 	CHAR(wifi_ant_swap_mode),
 	CHAR(wifi_main_ant_polarity),
 	CHAR(wifi_ant_swap_ant_sel_gpio),
+
+	/* This is an open config whose actual purpose is decided by WIFI. */
+	BYTE_ARRAY(wifi_config),
 };
 
 #define NUM_WMTCFG_FIELDS (osal_sizeof(wmtcfg_fields) / osal_sizeof(wmtcfg_fields[0]))
@@ -306,7 +310,7 @@ static PINT8 wmt_conf_write_int(P_DEV_WMT pWmtDev, const struct parse_data *data
 
 static INT32 wmt_conf_parse_string(P_DEV_WMT pWmtDev, const struct parse_data *data, const PINT8 pos)
 {
-	PUINT8 *dst;
+	PUINT8 *dst = NULL;
 	PUINT8 buffer;
 
 	buffer = osal_malloc(osal_strlen(pos)+1);
@@ -352,8 +356,8 @@ static PINT8 wmt_conf_write_string(P_DEV_WMT pWmtDev, const struct parse_data *d
 static INT32 wmt_conf_parse_byte_array(P_DEV_WMT pWmtDev,
 		const struct parse_data *data, const PINT8 pos)
 {
-	PUINT8 *dst;
-	struct WMT_BYTE_ARRAY *ba;
+	PUINT8 *dst = NULL;
+	struct WMT_BYTE_ARRAY *ba = NULL;
 	PUINT8 buffer;
 	INT32 size = osal_strlen(pos) / 2;
 	UINT8 temp[3];
@@ -404,9 +408,9 @@ static INT32 wmt_conf_parse_byte_array(P_DEV_WMT pWmtDev,
 
 static PINT8 wmt_conf_write_byte_array(P_DEV_WMT pWmtDev, const struct parse_data *data)
 {
-	PUINT8 *src;
+	PUINT8 *src = NULL;
 	PINT8 value;
-	struct WMT_BYTE_ARRAY *ba;
+	struct WMT_BYTE_ARRAY *ba = NULL;
 	INT32 i;
 
 	src = (PUINT8 *) (((PUINT8) pWmtDev) + (long)data->param1);
@@ -675,6 +679,15 @@ INT32 wmt_conf_deinit(VOID)
 	if (pWmtGenConf->coex_wmt_antsel_invert_support != NULL) {
 		osal_free(pWmtGenConf->coex_wmt_antsel_invert_support);
 		pWmtGenConf->coex_wmt_antsel_invert_support = NULL;
+	}
+
+	if (pWmtGenConf->wifi_config != NULL) {
+		if (pWmtGenConf->wifi_config->data != NULL) {
+			osal_free(pWmtGenConf->wifi_config->data);
+			pWmtGenConf->wifi_config->data = NULL;
+		}
+		osal_free(pWmtGenConf->wifi_config);
+		pWmtGenConf->wifi_config = NULL;
 	}
 
 	return 0;

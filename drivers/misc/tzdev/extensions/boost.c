@@ -21,9 +21,10 @@
 #include "core/cdev.h"
 #include "core/log.h"
 #include "core/notifier.h"
+#include "core/subsystem.h"
 #include "extensions/hotplug.h"
 
-#if defined(TZDEV_BOOST_CLUSTER_1)
+#if CONFIG_TZDEV_BOOST_CLUSTER == 1
 
 /* cluster 1 is a high performance cluster */
 #ifndef PM_QOS_CLUSTER1_FREQ_MAX_DEFAULT_VALUE
@@ -34,7 +35,7 @@
 
 #define TZ_BOOST_CPU_FREQ_MIN			PM_QOS_CLUSTER1_FREQ_MIN
 
-#elif defined(TZDEV_BOOST_CLUSTER_2)
+#elif CONFIG_TZDEV_BOOST_CLUSTER == 2
 
 /* cluster 2 is a high performance cluster */
 #ifndef PM_QOS_CLUSTER2_FREQ_MAX_DEFAULT_VALUE
@@ -54,22 +55,33 @@ static DEFINE_MUTEX(tz_boost_lock);
 
 static int tz_boost_init_call(struct notifier_block *cb, unsigned long code, void *unused)
 {
+	struct tzio_swd_sysconf *swd_sysconf;
+	int i;
+
 	(void)cb;
 	(void)code;
 	(void)unused;
 
-	cpu_boost_mask = tzdev_sysconf()->swd_sysconf.big_cpus_mask;
+	swd_sysconf = &tzdev_sysconf()->swd_sysconf;
 
-	log_info(tzdev_boost, "Booster initialization done.\n");
+	for (i = 0; i < CPU_CLUSTER_MAX; ++i) {
+		if (swd_sysconf->cluster_info[i].type == CPU_CLUSTER_BIG) {
+			cpu_boost_mask = swd_sysconf->cluster_info[i].mask;
+			log_info(tzdev_boost, "Booster initialization done.\n");
+			return NOTIFY_DONE;
+		}
+	}
 
-	return NOTIFY_DONE;
+	log_error(tzdev_boost, "Failed to get CPU boost mask\n");
+
+	return NOTIFY_BAD;
 }
 
 static struct notifier_block tz_boost_init_notifier = {
 	.notifier_call = tz_boost_init_call,
 };
 
-static int __init tz_boost_init(void)
+int tz_boost_init(void)
 {
 	int rc;
 
@@ -83,7 +95,7 @@ static int __init tz_boost_init(void)
 	return 0;
 }
 
-early_initcall(tz_boost_init);
+tzdev_early_initcall(tz_boost_init);
 
 void tz_boost_enable(void)
 {

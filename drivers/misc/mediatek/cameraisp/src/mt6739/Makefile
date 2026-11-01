@@ -19,8 +19,6 @@ ccflags-y += -I$(srctree)/drivers/misc/mediatek/m4u/$(MTK_PLATFORM)/
 ccflags-y += -I$(srctree)/drivers/misc/mediatek/cmdq/v3/
 ccflags-y += -I$(srctree)/drivers/misc/mediatek/cmdq/v3/$(MTK_PLATFORM)/
 ccflags-y += -I$(srctree)/drivers/misc/mediatek/smi/
-ccflags-y += -I$(srctree)/drivers/misc/mediatek/imgsensor/src/common/sysfs/
-ccflags-y += -I$(srctree)/drivers/misc/mediatek/imgsensor/inc/
 
 ifneq ($(CONFIG_ARM64), y)
 # For arm32

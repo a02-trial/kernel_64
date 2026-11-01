@@ -55,7 +55,6 @@
 #include <linux/types.h>
 #include <linux/reboot.h>
 #include <asm/div64.h>
-#include <mach/upmu_hw.h>
 
 
 /* #include <mach/mt6577_boot.h> */
@@ -132,8 +131,6 @@
  *     bit 7     : Low power detected in preloader
  *     bit 8 - 15: reserved bits
  */
- #define RTC_SPAR0 (PMIC_RTC_SPAR0_ADDR)
- #define RTC_SPAR0_BATT_REMOVAL  (1U << 15)
 
 /*
  * RTC_SPAR1:
@@ -587,9 +584,20 @@ static void rtc_handler(void)
 		now_time =
 		    mktime(nowtm.tm_year, nowtm.tm_mon, nowtm.tm_mday,
 			   nowtm.tm_hour, nowtm.tm_min, nowtm.tm_sec);
+
+		if (now_time == -1) {
+			spin_unlock_irqrestore(&rtc_lock, flags);
+			return;
+		}
+
 		time =
 		    mktime(tm.tm_year, tm.tm_mon, tm.tm_mday, tm.tm_hour,
 			   tm.tm_min, tm.tm_sec);
+
+		if (time == -1) {
+			spin_unlock_irqrestore(&rtc_lock, flags);
+			return;
+		}
 
 		/* power on */
 		if (now_time >= time - 1 && now_time <= time + 4) {
@@ -609,10 +617,19 @@ static void rtc_handler(void)
 					    mktime(nowtm.tm_year, nowtm.tm_mon,
 						   nowtm.tm_mday, nowtm.tm_hour,
 						   nowtm.tm_min, nowtm.tm_sec);
+					if (now_time == -1) {
+						spin_unlock_irqrestore(&rtc_lock, flags);
+						return;
+					}
+
 					time =
 					    mktime(tm.tm_year, tm.tm_mon,
 						   tm.tm_mday, tm.tm_hour,
 						   tm.tm_min, tm.tm_sec);
+					if (time == -1) {
+						spin_unlock_irqrestore(&rtc_lock, flags);
+						return;
+					}
 				} while (time <= now_time);
 				spin_unlock_irqrestore(&rtc_lock, flags);
 				kernel_restart("kpoc");
@@ -841,29 +858,11 @@ static const struct rtc_class_ops rtc_ops = {
 
 #ifdef CONFIG_SEC_PM
 static int poff_status;
-
-static void rtc_reset_check(struct platform_device *pdev)
-{
-	unsigned long flags;
-	u16 spar0 = 0;
-
-	spar0 = rtc_read(RTC_SPAR0);
-	if(!(spar0 & RTC_SPAR0_BATT_REMOVAL)) {
-		poff_status = 1;
-		pr_info("%s BATTERY REMOVED\n", __func__);
-
-		spin_lock_irqsave(&rtc_lock, flags);
-		spar0 = rtc_read(RTC_SPAR0)| RTC_SPAR0_BATT_REMOVAL;
-		rtc_write(RTC_SPAR0, spar0);
-		rtc_write_trigger();
-		spin_unlock_irqrestore(&rtc_lock, flags);
-	}
-}
-
 static ssize_t rtc_status_show(struct kobject *kobj,
 				  struct kobj_attribute *attr, char *buf)
 {
 	int status = poff_status;
+
 	pr_info("complete power off status(%d)\n", status);
 	poff_status = 0;
 	return sprintf(buf, "%d\n", status);
@@ -872,7 +871,7 @@ static ssize_t rtc_status_show(struct kobject *kobj,
 static struct kobj_attribute rtc_status_attr = {
 	.attr = {
 		.name = __stringify(rtc_status),
-		.mode = S_IRUGO,
+		.mode = 0444,
 	},
 	.show = rtc_status_show,
 };
@@ -881,7 +880,9 @@ static struct kobj_attribute rtc_status_attr = {
 static int rtc_pdrv_probe(struct platform_device *pdev)
 {
 	unsigned long flags;
+#ifdef CONFIG_SEC_PM
 	int ret;
+#endif
 
 	/* only enable LPD interrupt in engineering build */
 	spin_lock_irqsave(&rtc_lock, flags);
@@ -902,10 +903,12 @@ static int rtc_pdrv_probe(struct platform_device *pdev)
 	pmic_enable_interrupt(INT_RTC, 1, "RTC");
 
 #ifdef CONFIG_SEC_PM
-	rtc_reset_check(pdev);
-	if(power_kobj){
+	spin_lock_irqsave(&rtc_lock, flags);
+	poff_status = hal_rtc_reset_check();
+	spin_unlock_irqrestore(&rtc_lock, flags);
+	if (power_kobj) {
 		ret = sysfs_create_file(power_kobj, &rtc_status_attr.attr);
-		if(ret)
+		if (ret)
 			pr_err("%s: failed %d\n", __func__, ret);
 	}
 #endif
@@ -938,6 +941,8 @@ static int __init rtc_device_init(void)
 	int r;
 
 	rtc_xinfo("rtc_init");
+
+	pm_power_off = mt_power_off;
 
 	r = platform_device_register(&rtc_pdev);
 	if (r) {
@@ -981,7 +986,7 @@ static int __init rtc_late_init(void)
 
 static int __init rtc_arch_init(void)
 {
-	pm_power_off = mt_power_off;
+	//pm_power_off = mt_power_off;
 
 	return 0;
 }
