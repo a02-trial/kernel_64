@@ -509,9 +509,94 @@ out:
 	kfree(trie);
 }
 
-static int trie_get_next_key(struct bpf_map *map, void *key, void *next_key)
+static int trie_get_next_key(struct bpf_map *map, void *_key, void *_next_key)
 {
-	return -ENOTSUPP;
+	struct lpm_trie *trie = container_of(map, struct lpm_trie, map);
+	struct bpf_lpm_trie_key *key = _key, *next_key = _next_key;
+	struct lpm_trie_node **node_stack = NULL;
+	struct lpm_trie_node *node, *parent, *next_node = NULL;
+	int err = 0, stack_ptr = -1;
+	unsigned int next_bit;
+	size_t matchlen;
+
+	/* Postorder iteration (backport of upstream 4.16). Called under
+	 * rcu_read_lock() from the bpf syscall.
+	 */
+	if (!key || key->prefixlen > trie->max_prefixlen)
+		goto find_leftmost;
+
+	node_stack = kmalloc((trie->max_prefixlen + 1) *
+			     sizeof(struct lpm_trie_node *),
+			     GFP_ATOMIC | __GFP_NOWARN);
+	if (!node_stack)
+		return -ENOMEM;
+
+	/* Try to find the exact node for the given key */
+	for (node = rcu_dereference(trie->root); node;) {
+		node_stack[++stack_ptr] = node;
+		matchlen = longest_prefix_match(trie, node, key);
+		if (node->prefixlen != matchlen ||
+		    node->prefixlen == key->prefixlen)
+			break;
+
+		next_bit = extract_bit(key->data, node->prefixlen);
+		node = rcu_dereference(node->child[next_bit]);
+	}
+	if (!node || node->prefixlen != key->prefixlen ||
+	    (node->flags & LPM_TREE_NODE_FLAG_IM))
+		goto find_leftmost;
+
+	/* Exact node found: find the next node in postorder */
+	node = node_stack[stack_ptr];
+	while (stack_ptr > 0) {
+		parent = node_stack[stack_ptr - 1];
+		if (rcu_dereference(parent->child[0]) == node &&
+		    rcu_dereference(parent->child[1])) {
+			node = rcu_dereference(parent->child[1]);
+			goto descend;
+		}
+		if (!(parent->flags & LPM_TREE_NODE_FLAG_IM)) {
+			next_node = parent;
+			goto do_copy;
+		}
+
+		node = parent;
+		stack_ptr--;
+	}
+
+	/* did not find anything */
+	err = -ENOENT;
+	goto free_stack;
+
+find_leftmost:
+	node = rcu_dereference(trie->root);
+descend:
+	/* Leftmost leaf of the subtree is the first node in postorder.
+	 * Intermediate nodes always have two children, so a leaf is
+	 * never an intermediate node.
+	 */
+	while (node) {
+		if (rcu_dereference(node->child[0])) {
+			node = rcu_dereference(node->child[0]);
+		} else if (rcu_dereference(node->child[1])) {
+			node = rcu_dereference(node->child[1]);
+		} else {
+			next_node = node;
+			break;
+		}
+	}
+	if (!next_node) {
+		err = -ENOENT;
+		goto free_stack;
+	}
+
+do_copy:
+	next_key->prefixlen = next_node->prefixlen;
+	memcpy((void *)next_key + offsetof(struct bpf_lpm_trie_key, data),
+	       next_node->data, trie->data_size);
+free_stack:
+	kfree(node_stack);
+	return err;
 }
 
 const struct bpf_map_ops trie_map_ops = {

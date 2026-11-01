@@ -56,11 +56,12 @@
 #include <net/netfilter/nf_nat_core.h>
 #include <net/netfilter/nf_nat_helper.h>
 #include <net/netns/hash.h>
-
-#include "nf_internals.h"
 // SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA {
 #include <net/ncm.h>
 // SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA }
+
+
+#include "nf_internals.h"
 
 #define NF_CONNTRACK_VERSION	"0.5.0"
 
@@ -353,6 +354,7 @@ clean_from_lists(struct nf_conn *ct)
 static void nf_ct_add_to_dying_list(struct nf_conn *ct)
 {
 	struct ct_pcpu *pcpu;
+
 	// SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA {
 	/* Add 'del_timer(&ct->npa_timeout)' if struct nf_conn->timeout is of type struct timer_list; */
 	/* send dying conntrack entry to collect data */
@@ -553,6 +555,18 @@ nf_ct_key_equal(struct nf_conntrack_tuple_hash *h,
 	       net_eq(net, nf_ct_net(ct));
 }
 
+static inline bool
+nf_ct_match(const struct nf_conn *ct1, const struct nf_conn *ct2)
+{
+	return nf_ct_tuple_equal(&ct1->tuplehash[IP_CT_DIR_ORIGINAL].tuple,
+				 &ct2->tuplehash[IP_CT_DIR_ORIGINAL].tuple) &&
+	       nf_ct_tuple_equal(&ct1->tuplehash[IP_CT_DIR_REPLY].tuple,
+				 &ct2->tuplehash[IP_CT_DIR_REPLY].tuple) &&
+	       nf_ct_zone_equal(ct1, nf_ct_zone(ct2), IP_CT_DIR_ORIGINAL) &&
+	       nf_ct_zone_equal(ct1, nf_ct_zone(ct2), IP_CT_DIR_REPLY) &&
+	       net_eq(nf_ct_net(ct1), nf_ct_net(ct2));
+}
+
 /* caller must hold rcu readlock and none of the nf_conntrack_locks */
 static void nf_ct_gc_expired(struct nf_conn *ct)
 {
@@ -746,19 +760,21 @@ static int nf_ct_resolve_clash(struct net *net, struct sk_buff *skb,
 	/* This is the conntrack entry already in hashes that won race. */
 	struct nf_conn *ct = nf_ct_tuplehash_to_ctrack(h);
 	const struct nf_conntrack_l4proto *l4proto;
+	enum ip_conntrack_info oldinfo;
+	struct nf_conn *loser_ct = nf_ct_get(skb, &oldinfo);
 
 	l4proto = __nf_ct_l4proto_find(nf_ct_l3num(ct), nf_ct_protonum(ct));
 	if (l4proto->allow_clash &&
-	    ((ct->status & IPS_NAT_DONE_MASK) == 0) &&
 	    !nf_ct_is_dying(ct) &&
 	    atomic_inc_not_zero(&ct->ct_general.use)) {
-		enum ip_conntrack_info oldinfo;
-		struct nf_conn *loser_ct = nf_ct_get(skb, &oldinfo);
-
-		nf_ct_acct_merge(ct, ctinfo, loser_ct);
-		nf_conntrack_put(&loser_ct->ct_general);
-		nf_ct_set(skb, ct, oldinfo);
-		return NF_ACCEPT;
+		if (((ct->status & IPS_NAT_DONE_MASK) == 0) ||
+		    nf_ct_match(ct, loser_ct)) {
+			nf_ct_acct_merge(ct, ctinfo, loser_ct);
+			nf_conntrack_put(&loser_ct->ct_general);
+			nf_ct_set(skb, ct, oldinfo);
+			return NF_ACCEPT;
+		}
+		nf_ct_put(ct);
 	}
 	NF_CT_STAT_INC(net, drop);
 	return NF_DROP;
@@ -1095,7 +1111,7 @@ static void gc_worker(struct work_struct *work)
 					knox_collect_conntrack_data(tmp, NCM_FLOW_TYPE_INTERMEDIATE, 20);
 				}
 			}
-            // SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA }
+			// SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA }
 
 			if (nf_conntrack_max95 == 0 || gc_worker_skip_ct(tmp))
 				continue;
@@ -1218,6 +1234,7 @@ __nf_conntrack_alloc(struct net *net,
 		goto out;
 
 	spin_lock_init(&ct->lock);
+
 	// SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA {
 	/* initialize the conntrack structure members when memory is allocated */
 	if (ct != NULL) {
@@ -1240,6 +1257,7 @@ __nf_conntrack_alloc(struct net *net,
 		atomic_set(&ct->intermediateFlow, 0);
 	}
 	// SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA }
+
 	ct->tuplehash[IP_CT_DIR_ORIGINAL].tuple = *orig;
 	ct->tuplehash[IP_CT_DIR_ORIGINAL].hnnode.pprev = NULL;
 	ct->tuplehash[IP_CT_DIR_REPLY].tuple = *repl;
@@ -1247,9 +1265,9 @@ __nf_conntrack_alloc(struct net *net,
 	*(unsigned long *)(&ct->tuplehash[IP_CT_DIR_REPLY].hnnode.pprev) = hash;
 	ct->status = 0;
 	write_pnet(&ct->ct_net, net);
-	memset(&ct->__nfct_init_offset[0], 0,
+	memset(&ct->__nfct_init_offset, 0,
 	       offsetof(struct nf_conn, proto) -
-	       offsetof(struct nf_conn, __nfct_init_offset[0]));
+	       offsetof(struct nf_conn, __nfct_init_offset));
 
 	nf_ct_zone_add(ct, zone);
 

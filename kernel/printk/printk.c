@@ -49,6 +49,7 @@
 #include <linux/sched/debug.h>
 #include <linux/sched/task_stack.h>
 #include <mt-plat/aee.h>
+#include <mt-plat/mtk_printk_ctrl.h>
 #include <linux/proc_fs.h>
 
 #include <linux/uaccess.h>
@@ -61,49 +62,10 @@
 #include "braille.h"
 #include "internal.h"
 
-/*
- * 0: uart printk enable
- * 1: uart printk disable
- * 2: uart printk always enable
- */
-int printk_disable_uart;
 #ifdef CONFIG_PRINTK_MT_PREFIX
 /* declare a variable for save the status of irqs_disabled() */
 static int isIrqsDisabled;
-#endif
-module_param_named(disable_uart, printk_disable_uart, int, 0644);
 
-bool mt_get_uartlog_status(void)
-{
-	if (printk_disable_uart == 1)
-		return false;
-	else if ((printk_disable_uart == 0) || (printk_disable_uart == 2))
-		return true;
-	return true;
-}
-
-void set_uartlog_status(bool value)
-{
-#ifdef CONFIG_MTK_ENG_BUILD
-	printk_disable_uart = value ? 0 : 1;
-	pr_info("set uart log status %d.\n", value);
-#endif
-}
-
-#ifdef CONFIG_MTK_PRINTK_UART_CONSOLE
-void mt_disable_uart(void)
-{
-	/* uart print not always enable */
-	if ((mt_need_uart_console != 1) && (printk_disable_uart != 2))
-		printk_disable_uart = 1;
-}
-void mt_enable_uart(void)
-{
-	printk_disable_uart = 0;
-}
-#endif
-
-#ifdef CONFIG_PRINTK_MT_PREFIX
 static DEFINE_PER_CPU(char, printk_state);
 #endif
 
@@ -149,7 +111,7 @@ enum devkmsg_log_masks {
 };
 
 /* Keep both the 'on' and 'off' bits clear, i.e. ratelimit by default: */
-#define DEVKMSG_LOG_MASK_DEFAULT	0
+#define DEVKMSG_LOG_MASK_DEFAULT	DEVKMSG_LOG_MASK_ON
 
 static unsigned int __read_mostly devkmsg_log = DEVKMSG_LOG_MASK_DEFAULT;
 
@@ -482,19 +444,23 @@ static u32 console_idx;
 static u64 clear_seq;
 static u32 clear_idx;
 
+// SecProductFeature_KNOX.SEC_PRODUCT_FEATURE_KNOX_SUPPORT_MDM {
+/* the next printk record to read after the last 'clear_knox' command */
+static u64 clear_seq_knox;
+static u32 clear_idx_knox;
+
+#define SYSLOG_ACTION_READ_CLEAR_KNOX 99
+// SecProductFeature_KNOX.SEC_PRODUCT_FEATURE_KNOX_SUPPORT_MDM }
 #define PREFIX_MAX		32
 #define LOG_LINE_MAX		(1024 - PREFIX_MAX)
 
 #define LOG_LEVEL(v)		((v) & 0x07)
 #define LOG_FACILITY(v)		((v) >> 3 & 0xff)
 
-#ifdef CONFIG_SAMSUNG_PRODUCT_SHIP
-#define CONFIG_LOG_BUF_SHIFT 19
-#endif
-
 /* record buffer */
 #define LOG_ALIGN __alignof__(struct printk_log)
 #define __LOG_BUF_LEN (1 << CONFIG_LOG_BUF_SHIFT)
+#define LOG_BUF_LEN_MAX (u32)(1 << 31)
 static char __log_buf[__LOG_BUF_LEN] __aligned(LOG_ALIGN);
 static char *log_buf = __log_buf;
 static u32 log_buf_len = __LOG_BUF_LEN;
@@ -685,6 +651,13 @@ static int log_make_free_space(u32 msg_size)
 		clear_idx = log_first_idx;
 	}
 
+	// SecProductFeature_KNOX.SEC_PRODUCT_FEATURE_KNOX_SUPPORT_MDM {
+	/* messages are gone, move to first available one */
+	if (clear_seq_knox < log_first_seq) {
+		clear_seq_knox = log_first_seq;
+		clear_idx_knox = log_first_idx;
+	}
+	// SecProductFeature_KNOX.SEC_PRODUCT_FEATURE_KNOX_SUPPORT_MDM }
 	/* sequence numbers are equal, so the log buffer is empty */
 	if (logbuf_has_space(msg_size, log_first_seq == log_next_seq))
 		return 0;
@@ -757,6 +730,7 @@ void register_log_text_hook(void (*func)(const char *buf, size_t size))
 }
 EXPORT_SYMBOL(register_log_text_hook);
 #endif
+
 /*
  * Define how much of the log buffer we could take at maximum. The value
  * must be greater than two. Note that only half of the buffer is available
@@ -879,7 +853,7 @@ static int log_store(int facility, int level,
 	msg->type_auto_comment = (level / 10 == 9) ? level - LOGLEVEL_PR_AUTO_BASE : 0;
 	level = (msg->for_auto_comment) ? 0 : level;
 #endif
-	
+
 	msg->level = level & 7;
 	msg->flags = flags & 0x1f;
 	if (ts_nsec > 0)
@@ -1348,19 +1322,28 @@ void log_buf_vmcoreinfo_setup(void)
 static unsigned long __initdata new_log_buf_len;
 
 /* we practice scaling the ring buffer by powers of 2 */
-static void __init log_buf_len_update(unsigned size)
+static void __init log_buf_len_update(u64 size)
 {
+	if (size > (u64)LOG_BUF_LEN_MAX) {
+		size = (u64)LOG_BUF_LEN_MAX;
+		pr_err("log_buf over 2G is not supported.\n");
+	}
+
 	if (size)
 		size = roundup_pow_of_two(size);
 	if (size > log_buf_len)
-		new_log_buf_len = size;
+		new_log_buf_len = (unsigned long)size;
 }
 
 /* save requested log_buf_len since it's too early to process it */
 static int __init log_buf_len_setup(char *str)
 {
-	unsigned int size = memparse(str, &str);
+	u64 size;
 
+	if (!str)
+		return -EINVAL;
+
+	size = memparse(str, &str);
 	log_buf_len_update(size);
 
 	return 0;
@@ -1404,7 +1387,7 @@ void __init setup_log_buf(int early)
 {
 	unsigned long flags;
 	char *new_log_buf;
-	int free;
+	unsigned int free;
 
 	if (log_buf != __log_buf)
 		return;
@@ -1426,7 +1409,7 @@ void __init setup_log_buf(int early)
 	set_memsize_kernel_type(MEMSIZE_KERNEL_OTHERS);
 
 	if (unlikely(!new_log_buf)) {
-		pr_err("log_buf_len: %ld bytes not available\n",
+		pr_err("log_buf_len: %lu bytes not available\n",
 			new_log_buf_len);
 		return;
 	}
@@ -1439,8 +1422,8 @@ void __init setup_log_buf(int early)
 	memcpy(log_buf, __log_buf, __LOG_BUF_LEN);
 	logbuf_unlock_irqrestore(flags);
 
-	pr_err("log_buf_len: %d bytes\n", log_buf_len);
-	pr_info("early log buf free: %d(%d%%)\n",
+	pr_info("log_buf_len: %u bytes\n", log_buf_len);
+	pr_info("early log buf free: %u(%u%%)\n",
 		free, (free * 100) / __LOG_BUF_LEN);
 }
 
@@ -1561,7 +1544,7 @@ static size_t print_prefix(const struct printk_log *msg, bool syslog, char *buf)
 
 #ifdef CONFIG_PRINTK_MT_PREFIX
 	/* if uart printk enabled */
-	if (syslog == false && printk_disable_uart != 1) {
+	if (syslog == false && mt_get_uartlog_status()) {
 		if (buf)
 			len += sprintf(buf+len, "<%d>", smp_processor_id());
 		else
@@ -1673,7 +1656,14 @@ static int syslog_print(char __user *buf, int size)
 	return len;
 }
 
+// SecProductFeature_KNOX.SEC_PRODUCT_FEATURE_KNOX_SUPPORT_MDM {
+/*
+// SecProductFeature_KNOX.SEC_PRODUCT_FEATURE_KNOX_SUPPORT_MDM }
 static int syslog_print_all(char __user *buf, int size, bool clear)
+// SecProductFeature_KNOX.SEC_PRODUCT_FEATURE_KNOX_SUPPORT_MDM {
+*/
+static int syslog_print_all(char __user *buf, int size, bool clear, bool knox)
+// SecProductFeature_KNOX.SEC_PRODUCT_FEATURE_KNOX_SUPPORT_MDM }
 {
 	char *text;
 	int len = 0;
@@ -1703,8 +1693,22 @@ static int syslog_print_all(char __user *buf, int size, bool clear)
 		}
 
 		/* move first record forward until length fits into the buffer */
+		// SecProductFeature_KNOX.SEC_PRODUCT_FEATURE_KNOX_SUPPORT_MDM {
+		/*
+		// SecProductFeature_KNOX.SEC_PRODUCT_FEATURE_KNOX_SUPPORT_MDM }
 		seq = clear_seq;
 		idx = clear_idx;
+		// SecProductFeature_KNOX.SEC_PRODUCT_FEATURE_KNOX_SUPPORT_MDM {
+		*/
+		if (!knox) {
+			seq = clear_seq;
+			idx = clear_idx;
+		} else { // MDM edmaudit
+			seq = clear_seq_knox;
+			idx = clear_idx_knox;
+		}
+		// SecProductFeature_KNOX.SEC_PRODUCT_FEATURE_KNOX_SUPPORT_MDM }
+
 		while (len > size && seq < log_next_seq) {
 			struct printk_log *msg = log_from_idx(idx);
 
@@ -1746,8 +1750,21 @@ static int syslog_print_all(char __user *buf, int size, bool clear)
 	}
 
 	if (clear) {
+	// SecProductFeature_KNOX.SEC_PRODUCT_FEATURE_KNOX_SUPPORT_MDM {
+	/*
+	// SecProductFeature_KNOX.SEC_PRODUCT_FEATURE_KNOX_SUPPORT_MDM }
 		clear_seq = log_next_seq;
 		clear_idx = log_next_idx;
+	// SecProductFeature_KNOX.SEC_PRODUCT_FEATURE_KNOX_SUPPORT_MDM {
+	*/
+		if (!knox) {
+			clear_seq = log_next_seq;
+			clear_idx = log_next_idx;
+		} else { //MDM edmaudit
+			clear_seq_knox = log_next_seq;
+			clear_idx_knox = log_next_idx;
+		}
+	// SecProductFeature_KNOX.SEC_PRODUCT_FEATURE_KNOX_SUPPORT_MDM }
 	}
 	logbuf_unlock_irq();
 
@@ -1795,11 +1812,25 @@ int do_syslog(int type, char __user *buf, int len, int source)
 			return 0;
 		if (!access_ok(VERIFY_WRITE, buf, len))
 			return -EFAULT;
+		// SecProductFeature_KNOX.SEC_PRODUCT_FEATURE_KNOX_SUPPORT_MDM {
+		/*
+		// SecProductFeature_KNOX.SEC_PRODUCT_FEATURE_KNOX_SUPPORT_MDM }
 		error = syslog_print_all(buf, len, clear);
+		// SecProductFeature_KNOX.SEC_PRODUCT_FEATURE_KNOX_SUPPORT_MDM {
+		*/
+		error = syslog_print_all(buf, len, clear, false);
+		// SecProductFeature_KNOX.SEC_PRODUCT_FEATURE_KNOX_SUPPORT_MDM }
 		break;
 	/* Clear ring buffer */
 	case SYSLOG_ACTION_CLEAR:
+		// SecProductFeature_KNOX.SEC_PRODUCT_FEATURE_KNOX_SUPPORT_MDM {
+		/*
+		// SecProductFeature_KNOX.SEC_PRODUCT_FEATURE_KNOX_SUPPORT_MDM }
 		syslog_print_all(NULL, 0, true);
+		// SecProductFeature_KNOX.SEC_PRODUCT_FEATURE_KNOX_SUPPORT_MDM {
+		*/
+		syslog_print_all(NULL, 0, true, false);
+		// SecProductFeature_KNOX.SEC_PRODUCT_FEATURE_KNOX_SUPPORT_MDM }
 		break;
 	/* Disable logging to console */
 	case SYSLOG_ACTION_CONSOLE_OFF:
@@ -1859,10 +1890,29 @@ int do_syslog(int type, char __user *buf, int len, int source)
 	case SYSLOG_ACTION_SIZE_BUFFER:
 		error = log_buf_len;
 		break;
+	// SecProductFeature_KNOX.SEC_PRODUCT_FEATURE_KNOX_SUPPORT_MDM {
+	/* edmaudit Read last kernel messages */
+	case SYSLOG_ACTION_READ_CLEAR_KNOX:
+		error = -EINVAL;
+		if (!buf || len < 0)
+			goto out;
+		error = 0;
+		if (!len)
+			goto out;
+		if (!access_ok(VERIFY_WRITE, buf, len)) {
+			error = -EFAULT;
+			goto out;
+		}
+		error = syslog_print_all(buf, len, /* clear */ true, /* knox */true);
+		break;
+	// SecProductFeature_KNOX.SEC_PRODUCT_FEATURE_KNOX_SUPPORT_MDM }
 	default:
 		error = -EINVAL;
 		break;
 	}
+// SecProductFeature_KNOX.SEC_PRODUCT_FEATURE_KNOX_SUPPORT_MDM {
+out:
+// SecProductFeature_KNOX.SEC_PRODUCT_FEATURE_KNOX_SUPPORT_MDM }
 
 	return error;
 }
@@ -2032,7 +2082,7 @@ static void call_console_drivers(const char *ext_text, size_t ext_len,
 
 	for_each_console(con) {
 		/* if uart printk disabled */
-		if ((printk_disable_uart == 1) && (con->flags & CON_CONSDEV))
+		if (!mt_get_uartlog_status() && (con->flags & CON_CONSDEV))
 			continue;
 		if (exclusive_console && con != exclusive_console)
 			continue;
@@ -2258,7 +2308,7 @@ int vprintk_store(int facility, int level,
 		this_cpu_write(printk_state, '-');
 #ifdef CONFIG_MTK_PRINTK_UART_CONSOLE
 	/* if uart printk enabled */
-	else if (printk_disable_uart != 1)
+	else if (mt_get_uartlog_status())
 		this_cpu_write(printk_state, '.');
 #endif
 	else
@@ -2294,7 +2344,7 @@ asmlinkage int vprintk_emit(int facility, int level,
 	logbuf_unlock_irqrestore(flags);
 
 	/* If called from the scheduler, we can not call up(). */
-	if (!in_sched) {
+	if (!in_sched && cpu_online(raw_smp_processor_id())) {
 		/*
 		 * Try to acquire and then immediately release the console
 		 * semaphore.  The release will print out buffers and wake up
@@ -2535,6 +2585,9 @@ static int __init console_setup(char *str)
 	char buf[sizeof(console_cmdline[0].name) + 4]; /* 4 for "ttyS" */
 	char *s, *options, *brl_options = NULL;
 	int idx;
+
+	if (str[0] == 0)
+		return 1;
 
 	if (_braille_console_setup(&str, &brl_options))
 		return 1;
@@ -2850,10 +2903,10 @@ skip:
 			memset(conwrite_stat_struct.con_write_statbuf, 0x0,
 				sizeof(conwrite_stat_struct.con_write_statbuf)
 				- 1);
-			snprintf(conwrite_stat_struct.con_write_statbuf,
+			if (snprintf(conwrite_stat_struct.con_write_statbuf,
 				sizeof(conwrite_stat_struct.con_write_statbuf)
 				- 1,
-"cpu%d [%lu.%06lu]--[%lu.%06lu] 'ttyS' %lubytes %lu.%06lus, 'pstore' %lubytes %lu.%06lus\n",
+"cpu%d [%lu.%06lu]--[%lu.%06lu] 'ttyS' %lubytes %lu.%06lus, 'pstore' %lubytes %lu.%06lus, uart dump:%s\n",
 				smp_processor_id(),
 				(unsigned long)con_dura_time,
 				tmp_rem_nsec_start/1000,
@@ -2864,7 +2917,12 @@ skip:
 				rem_nsec_con_write_ttyS/1000,
 				(unsigned long)len_con_write_pstore,
 				(unsigned long)time_con_write_pstore,
-				rem_nsec_con_write_pstore/1000);
+				rem_nsec_con_write_pstore/1000,
+				mtk8250_uart_dump()) < 0) {
+			conwrite_stat_struct.con_write_statbuf[0] = 'N';
+			conwrite_stat_struct.con_write_statbuf[1] = 'A';
+			conwrite_stat_struct.con_write_statbuf[2] = '\0';
+			}
 			break;
 		}
 		/* print the uart status next time enter the console_unlock */
@@ -3747,7 +3805,7 @@ bool kmsg_dump_get_buffer(struct kmsg_dumper *dumper, bool syslog,
 	/* move first record forward until length fits into the buffer */
 	seq = dumper->cur_seq;
 	idx = dumper->cur_idx;
-	while (l > size && seq < dumper->next_seq) {
+	while (l >= size && seq < dumper->next_seq) {
 		struct printk_log *msg = log_from_idx(idx);
 
 		l -= msg_print_text(msg, true, NULL, 0);

@@ -23,6 +23,7 @@
 #include <linux/version.h>
 #include <linux/kernel.h>
 #include <linux/idr.h>
+#include <linux/ctype.h>
 
 #define IS_FD_ARRAY(map) ((map)->map_type == BPF_MAP_TYPE_PROG_ARRAY || \
 			   (map)->map_type == BPF_MAP_TYPE_PERF_EVENT_ARRAY || \
@@ -352,7 +353,27 @@ int bpf_get_file_flag(int flags)
 		   offsetof(union bpf_attr, CMD##_LAST_FIELD) - \
 		   sizeof(attr->CMD##_LAST_FIELD)) != NULL
 
-#define BPF_MAP_CREATE_LAST_FIELD numa_node
+#define BPF_MAP_CREATE_LAST_FIELD map_ifindex
+
+static int bpf_obj_name_cpy(char *dst, const char *src)
+{
+	const char *end = src + BPF_OBJ_NAME_LEN;
+
+	memset(dst, 0, BPF_OBJ_NAME_LEN);
+
+	/* Copy all isalnum() and '_' char */
+	while (src < end && *src) {
+		if (!isalnum(*src) && *src != '_')
+			return -EINVAL;
+		*dst++ = *src++;
+	}
+
+	/* No '\0' found in BPF_OBJ_NAME_LEN number of bytes */
+	if (src == end)
+		return -EINVAL;
+
+	return 0;
+}
 /* called via syscall */
 static int map_create(union bpf_attr *attr)
 {
@@ -363,6 +384,9 @@ static int map_create(union bpf_attr *attr)
 
 	err = CHECK_ATTR(BPF_MAP_CREATE);
 	if (err)
+		return -EINVAL;
+
+	if (attr->map_ifindex)
 		return -EINVAL;
 
 	f_flags = bpf_get_file_flag(attr->map_flags);
@@ -382,6 +406,10 @@ static int map_create(union bpf_attr *attr)
 	atomic_set(&map->refcnt, 1);
 	atomic_set(&map->usercnt, 1);
 
+	err = bpf_obj_name_cpy(map->name, attr->map_name);
+	if (err)
+		goto free_map_nouncharge;
+
 	err = security_bpf_map_alloc(map);
 	if (err)
 		goto free_map_nouncharge;
@@ -397,12 +425,12 @@ static int map_create(union bpf_attr *attr)
 	err = bpf_map_new_fd(map, f_flags);
 	if (err < 0) {
 		/* failed to allocate fd.
-		 * bpf_map_put() is needed because the above
+		 * bpf_map_put_with_uref() is needed because the above
 		 * bpf_map_alloc_id() has published the map
 		 * to the userspace and the userspace may
 		 * have refcnt-ed it through BPF_MAP_GET_FD_BY_ID.
 		 */
-		bpf_map_put(map);
+		bpf_map_put_with_uref(map);
 		return err;
 	}
 
@@ -1069,7 +1097,7 @@ struct bpf_prog *bpf_prog_get_type(u32 ufd, enum bpf_prog_type type)
 EXPORT_SYMBOL_GPL(bpf_prog_get_type);
 
 /* last field in 'union bpf_attr' used by this command */
-#define	BPF_PROG_LOAD_LAST_FIELD prog_flags
+#define	BPF_PROG_LOAD_LAST_FIELD expected_attach_type
 
 static int bpf_prog_load(union bpf_attr *attr)
 {
@@ -1083,6 +1111,9 @@ static int bpf_prog_load(union bpf_attr *attr)
 		return -EINVAL;
 
 	if (attr->prog_flags & ~BPF_F_STRICT_ALIGNMENT)
+		return -EINVAL;
+
+	if (attr->prog_ifindex)
 		return -EINVAL;
 
 	/* copy eBPF program license from user space */
@@ -1129,6 +1160,10 @@ static int bpf_prog_load(union bpf_attr *attr)
 	prog->orig_prog = NULL;
 	prog->jited = 0;
 
+	err = bpf_obj_name_cpy(prog->aux->name, attr->prog_name);
+	if (err)
+		goto free_prog;
+
 	atomic_set(&prog->aux->refcnt, 1);
 	prog->gpl_compatible = is_gpl ? 1 : 0;
 
@@ -1151,20 +1186,26 @@ static int bpf_prog_load(union bpf_attr *attr)
 	if (err)
 		goto free_used_maps;
 
-	err = bpf_prog_new_fd(prog);
-	if (err < 0) {
-		/* failed to allocate fd.
-		 * bpf_prog_put() is needed because the above
-		 * bpf_prog_alloc_id() has published the prog
-		 * to the userspace and the userspace may
-		 * have refcnt-ed it through BPF_PROG_GET_FD_BY_ID.
-		 */
-		bpf_prog_put(prog);
-		return err;
-	}
-
+	/* Upon success of bpf_prog_alloc_id(), the BPF prog is
+	 * effectively publicly exposed. However, retrieving via
+	 * bpf_prog_get_fd_by_id() will take another reference,
+	 * therefore it cannot be gone underneath us.
+	 *
+	 * Only for the time /after/ successful bpf_prog_new_fd()
+	 * and before returning to userspace, we might just hold
+	 * one reference and any parallel close on that fd could
+	 * rip everything out. Hence, below notifications must
+	 * happen before bpf_prog_new_fd().
+	 *
+	 * Also, any failure handling from this point onwards must
+	 * be using bpf_prog_put() given the program is exposed.
+	 */
 	bpf_prog_kallsyms_add(prog);
 	trace_bpf_prog_load(prog, err);
+
+	err = bpf_prog_new_fd(prog);
+	if (err < 0)
+		bpf_prog_put(prog);
 	return err;
 
 free_used_maps:
@@ -1236,6 +1277,9 @@ static int sockmap_get_from_fd(const union bpf_attr *attr, bool attach)
 	return 0;
 }
 
+#define BPF_F_ATTACH_MASK \
+	(BPF_F_ALLOW_OVERRIDE | BPF_F_ALLOW_MULTI)
+
 static int bpf_prog_attach(const union bpf_attr *attr)
 {
 	enum bpf_prog_type ptype;
@@ -1249,7 +1293,7 @@ static int bpf_prog_attach(const union bpf_attr *attr)
 	if (CHECK_ATTR(BPF_PROG_ATTACH))
 		return -EINVAL;
 
-	if (attr->attach_flags & ~BPF_F_ALLOW_OVERRIDE)
+	if (attr->attach_flags & ~BPF_F_ATTACH_MASK)
 		return -EINVAL;
 
 	switch (attr->attach_type) {
@@ -1280,8 +1324,8 @@ static int bpf_prog_attach(const union bpf_attr *attr)
 		return PTR_ERR(cgrp);
 	}
 
-	ret = cgroup_bpf_update(cgrp, prog, attr->attach_type,
-				attr->attach_flags & BPF_F_ALLOW_OVERRIDE);
+	ret = cgroup_bpf_attach(cgrp, prog, attr->attach_type,
+				attr->attach_flags);
 	if (ret)
 		bpf_prog_put(prog);
 	cgroup_put(cgrp);
@@ -1293,6 +1337,8 @@ static int bpf_prog_attach(const union bpf_attr *attr)
 
 static int bpf_prog_detach(const union bpf_attr *attr)
 {
+	enum bpf_prog_type ptype;
+	struct bpf_prog *prog;
 	struct cgroup *cgrp;
 	int ret;
 
@@ -1305,23 +1351,33 @@ static int bpf_prog_detach(const union bpf_attr *attr)
 	switch (attr->attach_type) {
 	case BPF_CGROUP_INET_INGRESS:
 	case BPF_CGROUP_INET_EGRESS:
+		ptype = BPF_PROG_TYPE_CGROUP_SKB;
+		break;
 	case BPF_CGROUP_INET_SOCK_CREATE:
+		ptype = BPF_PROG_TYPE_CGROUP_SOCK;
+		break;
 	case BPF_CGROUP_SOCK_OPS:
-		cgrp = cgroup_get_from_fd(attr->target_fd);
-		if (IS_ERR(cgrp))
-			return PTR_ERR(cgrp);
-
-		ret = cgroup_bpf_update(cgrp, NULL, attr->attach_type, false);
-		cgroup_put(cgrp);
+		ptype = BPF_PROG_TYPE_SOCK_OPS;
 		break;
 	case BPF_SK_SKB_STREAM_PARSER:
 	case BPF_SK_SKB_STREAM_VERDICT:
-		ret = sockmap_get_from_fd(attr, false);
-		break;
+		return sockmap_get_from_fd(attr, false);
 	default:
 		return -EINVAL;
 	}
 
+	cgrp = cgroup_get_from_fd(attr->target_fd);
+	if (IS_ERR(cgrp))
+		return PTR_ERR(cgrp);
+
+	prog = bpf_prog_get_type(attr->attach_bpf_fd, ptype);
+	if (IS_ERR(prog))
+		prog = NULL;
+
+	ret = cgroup_bpf_detach(cgrp, prog, attr->attach_type, 0);
+	if (prog)
+		bpf_prog_put(prog);
+	cgroup_put(cgrp);
 	return ret;
 }
 
@@ -1442,7 +1498,7 @@ static int bpf_map_get_fd_by_id(const union bpf_attr *attr)
 
 	fd = bpf_map_new_fd(map, f_flags);
 	if (fd < 0)
-		bpf_map_put(map);
+		bpf_map_put_with_uref(map);
 
 	return fd;
 }
@@ -1452,7 +1508,7 @@ static int bpf_prog_get_info_by_fd(struct bpf_prog *prog,
 				   union bpf_attr __user *uattr)
 {
 	struct bpf_prog_info __user *uinfo = u64_to_user_ptr(attr->info.info);
-	struct bpf_prog_info info = {};
+	struct bpf_prog_info info;
 	u32 info_len = attr->info.info_len;
 	char __user *uinsns;
 	u32 ulen;
@@ -1463,6 +1519,7 @@ static int bpf_prog_get_info_by_fd(struct bpf_prog *prog,
 		return err;
 	info_len = min_t(u32, sizeof(info), info_len);
 
+	memset(&info, 0, sizeof(info));
 	if (copy_from_user(&info, uinfo, info_len))
 		return -EFAULT;
 
@@ -1508,7 +1565,7 @@ static int bpf_map_get_info_by_fd(struct bpf_map *map,
 				  union bpf_attr __user *uattr)
 {
 	struct bpf_map_info __user *uinfo = u64_to_user_ptr(attr->info.info);
-	struct bpf_map_info info = {};
+	struct bpf_map_info info;
 	u32 info_len = attr->info.info_len;
 	int err;
 
@@ -1517,6 +1574,7 @@ static int bpf_map_get_info_by_fd(struct bpf_map *map,
 		return err;
 	info_len = min_t(u32, sizeof(info), info_len);
 
+	memset(&info, 0, sizeof(info));
 	info.type = map->map_type;
 	info.id = map->id;
 	info.key_size = map->key_size;
@@ -1562,7 +1620,7 @@ static int bpf_obj_get_info_by_fd(const union bpf_attr *attr,
 
 SYSCALL_DEFINE3(bpf, int, cmd, union bpf_attr __user *, uattr, unsigned int, size)
 {
-	union bpf_attr attr = {};
+	union bpf_attr attr;
 	int err;
 
 	if (sysctl_unprivileged_bpf_disabled && !capable(CAP_SYS_ADMIN))
@@ -1574,6 +1632,7 @@ SYSCALL_DEFINE3(bpf, int, cmd, union bpf_attr __user *, uattr, unsigned int, siz
 	size = min_t(u32, size, sizeof(attr));
 
 	/* copy attributes from user space, may be less than sizeof(bpf_attr) */
+	memset(&attr, 0, sizeof(attr));
 	if (copy_from_user(&attr, uattr, size) != 0)
 		return -EFAULT;
 

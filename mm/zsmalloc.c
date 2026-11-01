@@ -580,8 +580,6 @@ static inline unsigned long zs_stat_get(struct size_class *class,
 	return class->stats.objs[type];
 }
 
-static unsigned long zs_can_compact(struct size_class *class);
-
 #ifdef CONFIG_ZSMALLOC_STAT
 
 static void __init zs_stat_init(void)
@@ -600,6 +598,8 @@ static void __exit zs_stat_exit(void)
 {
 	debugfs_remove_recursive(zs_stat_root);
 }
+
+static unsigned long zs_can_compact(struct size_class *class);
 
 static int zs_stats_size_show(struct seq_file *s, void *v)
 {
@@ -1586,51 +1586,6 @@ static void obj_free(struct size_class *class, unsigned long obj)
 	zs_stat_dec(class, OBJ_USED, 1);
 }
 
-#define ZS_COMPACT_THRESHOLD	1024
-#define ZS_COMPACT_INTERVAL	10
-
-struct zs_pool *g_pool;
-
-static void do_zs_compact(struct work_struct *work)
-{
-	if (g_pool)
-		zs_compact(g_pool);
-}
-static DECLARE_WORK(zs_compact_work, do_zs_compact);
-
-static bool zs_compactable(struct zs_pool *pool, unsigned int pages)
-{
-	int i;
-	struct size_class *class;
-	unsigned long pages_to_free = 0;
-
-	for (i = ZS_SIZE_CLASSES - 1; i >= 0; i--) {
-		class = pool->size_class[i];
-		if (!class)
-			continue;
-		if (class->index != i)
-			continue;
-
-		pages_to_free += zs_can_compact(class);
-
-		if (pages_to_free >= pages)
-			return true;
-	}
-	return false;
-}
-
-static void try_schedule_zs_compact(struct zs_pool *pool)
-{
-	static unsigned long resume = INITIAL_JIFFIES;
-
-	if (g_pool == pool && time_is_before_jiffies(resume) &&
-			!work_pending(&zs_compact_work) &&
-			zs_compactable(pool, ZS_COMPACT_THRESHOLD)) {
-		resume = jiffies + ZS_COMPACT_INTERVAL * HZ;
-		schedule_work(&zs_compact_work);
-	}
-}
-
 void zs_free(struct zs_pool *pool, unsigned long handle)
 {
 	struct zspage *zspage;
@@ -1673,7 +1628,6 @@ out:
 	spin_unlock(&class->lock);
 	unpin_tag(handle);
 	cache_free_handle(pool, handle);
-	try_schedule_zs_compact(pool);
 }
 EXPORT_SYMBOL_GPL(zs_free);
 
@@ -2156,6 +2110,11 @@ int zs_page_migrate(struct address_space *mapping, struct page *newpage,
 		zs_pool_dec_isolated(pool);
 	}
 
+	if (page_zone(newpage) != page_zone(page)) {
+		dec_zone_page_state(page, NR_ZSPAGES);
+		inc_zone_page_state(newpage, NR_ZSPAGES);
+	}
+
 	reset_page(page);
 	put_page(page);
 	page = newpage;
@@ -2477,8 +2436,6 @@ static void zs_unregister_shrinker(struct zs_pool *pool)
 
 static int zs_register_shrinker(struct zs_pool *pool)
 {
-	if (g_pool == pool)
-		return -1;
 	pool->shrinker.scan_objects = zs_shrinker_scan;
 	pool->shrinker.count_objects = zs_shrinker_count;
 	pool->shrinker.batch = 0;
@@ -2513,7 +2470,9 @@ struct zs_pool *zs_create_pool(const char *name)
 	if (!pool->name)
 		goto err;
 
+#ifdef CONFIG_COMPACTION
 	init_waitqueue_head(&pool->migration_wait);
+#endif
 
 	if (create_cache(pool))
 		goto err;
@@ -2595,8 +2554,6 @@ struct zs_pool *zs_create_pool(const char *name)
 	if (zs_register_migration(pool))
 		goto err;
 
-	if (!g_pool)
-		g_pool = pool;
 	/*
 	 * Not critical, we still can use the pool
 	 * and user can trigger compaction manually.

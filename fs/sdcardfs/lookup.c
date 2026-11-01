@@ -315,6 +315,7 @@ put_name:
 
 	/* no error: handle positive dentries */
 	if (!err) {
+found:
 		/* check if the dentry is an obb dentry
 		 * if true, the lower_inode must be replaced with
 		 * the inode of the graft path
@@ -371,6 +372,16 @@ put_name:
 
 	lower_path.dentry = lower_dentry;
 	lower_path.mnt = mntget(lower_dir_mnt);
+
+	/*
+	 * Check if someone sneakily filled in the dentry when
+	 * we weren't looking. We'll check again in create.
+	 */
+	if (unlikely(d_inode_rcu(lower_dentry))) {
+		err = 0;
+		goto found;
+	}
+
 	sdcardfs_set_lower_path(dentry, &lower_path);
 
 	/*

@@ -1461,7 +1461,7 @@ static void print_other_cpu_stall(struct rcu_state *rsp, unsigned long gpnum)
 	check_held_locks(1);
 #ifdef CONFIG_SEC_DEBUG_AUTO_COMMENT
 	pr_auto(ASL1, "INFO: %s detected stalls on CPUs/tasks:",
-	       rsp->name);
+		   rsp->name);
 #else
 	pr_err("INFO: %s detected stalls on CPUs/tasks:",
 	       rsp->name);

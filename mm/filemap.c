@@ -39,10 +39,20 @@
 #include <linux/delayacct.h>
 #include <linux/psi.h>
 #include "internal.h"
+#ifdef CONFIG_PAGE_BOOST_RECORDING
+#include <linux/io_record.h>
+#endif
+
+#if defined(CONFIG_SDP)
+#include <sdp/cache_cleanup.h>
+#endif
+
+#ifdef CONFIG_FSCRYPT_SDP
+#include <linux/fscrypto_sdp_cache.h>
+#endif
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/filemap.h>
-#include <trace/systrace_mark.h>
 
 /*
  * FIXME: remove all knowledge of the buffer layer from the core VM
@@ -341,7 +351,8 @@ int __filemap_fdatawrite_range(struct address_space *mapping, loff_t start,
 		.range_end = end,
 	};
 
-	if (!mapping_cap_writeback_dirty(mapping))
+	if (!mapping_cap_writeback_dirty(mapping) ||
+	    !mapping_tagged(mapping, PAGECACHE_TAG_DIRTY))
 		return 0;
 
 	wbc_attach_fdatawrite_inode(&wbc, mapping->host);
@@ -2020,6 +2031,9 @@ static ssize_t generic_file_buffered_read(struct kiocb *iocb,
 	prev_offset = ra->prev_pos & (PAGE_SIZE-1);
 	last_index = (*ppos + iter->count + PAGE_SIZE-1) >> PAGE_SHIFT;
 	offset = *ppos & ~PAGE_MASK;
+#ifdef CONFIG_PAGE_BOOST_RECORDING
+	record_io_info(filp, index, last_index - index);
+#endif
 
 	for (;;) {
 		struct page *page;
@@ -2307,8 +2321,17 @@ generic_file_read_iter(struct kiocb *iocb, struct iov_iter *iter)
 		    IS_DAX(inode))
 			goto out;
 	}
-
+#ifdef CONFIG_FSCRYPT_SDP
+	//Check after writeback is completed.
+	if (fscrypt_sdp_file_not_readable(iocb->ki_filp)) {
+		retval = -EIO;
+		goto out;
+	}
+#endif
 	retval = generic_file_buffered_read(iocb, iter, retval);
+#ifdef CONFIG_FSCRYPT_SDP
+	fscrypt_sdp_unset_file_io_ongoing(iocb->ki_filp);
+#endif
 out:
 	return retval;
 }
@@ -2380,33 +2403,33 @@ static int lock_page_maybe_drop_mmap(struct vm_fault *vmf, struct page *page,
 	return 1;
 }
 
+static noinline void tracing_mark_write(bool start, struct file *file, pgoff_t offset, unsigned int size, bool sync)
+{
+	char buf[256], *path;
+
+	if (!tracing_is_on() || file == NULL || file->f_path.dentry == NULL)
+		return;
+
+	if (start) {
+		path = dentry_path(file->f_path.dentry, buf, 256);
+
+		if (!IS_ERR(path))
+			trace_printk("B|%d|%d , %s , %lu , %d\n", current->tgid, sync, path, offset, size);
+		else
+			trace_printk("B|%d|%d , %s , %lu , %d\n", current->tgid, sync, "dentry_path failed", offset, size);
+	} else {
+		trace_printk("E|%d\n", current->tgid);
+	}
+}
+
+#define trace_fault_file_path_start(...) tracing_mark_write(1, ##__VA_ARGS__)
+#define trace_fault_file_path_end(...) tracing_mark_write(0, ##__VA_ARGS__)
+
 #if CONFIG_MMAP_READAROUND_LIMIT == 0
 int mmap_readaround_limit = (VM_MAX_READAHEAD / 4); 		/* page */
 #else
 int mmap_readaround_limit = CONFIG_MMAP_READAROUND_LIMIT; 	/* page */
 #endif
-
-static void filemap_systrace_mark_begin(struct file *file,
-		pgoff_t offset, unsigned int size, bool sync)
-{
-	char buf[SYSTRACE_MARK_BUF_SIZE], *path;
-
-	if (!tracing_is_on())
-		return;
-
-	path = file_path(file, buf, SYSTRACE_MARK_BUF_SIZE);
-	if (IS_ERR(path)) {
-		sprintf(buf, "file_path failed(%ld)", PTR_ERR(path));
-		path = buf;
-	}
-
-	systrace_mark_begin("%d , %s , %lu , %d", sync, path, offset, size);
-}
-
-static void filemap_systrace_mark_end(void)
-{
-    systrace_mark_end();
-}
 
 /*
  * Synchronous readahead happens when we don't even find a page in the page
@@ -2432,10 +2455,10 @@ static struct file *do_sync_mmap_readahead(struct vm_fault *vmf)
 
 	if (vmf->vma->vm_flags & VM_SEQ_READ) {
 		fpin = maybe_unlock_mmap_for_io(vmf, fpin);
-		filemap_systrace_mark_begin(file, offset, ra->ra_pages, 1);
+		trace_fault_file_path_start(file, offset, ra->ra_pages, 1);
 		page_cache_sync_readahead(mapping, ra, file, offset,
 					  ra->ra_pages);
-		filemap_systrace_mark_end();
+		trace_fault_file_path_end(file, offset, ra->ra_pages, 1);
 		return fpin;
 	}
 
@@ -2458,9 +2481,10 @@ static struct file *do_sync_mmap_readahead(struct vm_fault *vmf)
 	ra->start = max_t(long, 0, offset - ra_pages / 2);
 	ra->size = ra_pages;
 	ra->async_size = ra_pages / 4;
-	filemap_systrace_mark_begin(file, offset, ra_pages, 1);
+
+	trace_fault_file_path_start(file, offset, ra_pages, 1);
 	ra_submit(ra, mapping, file);
-	filemap_systrace_mark_end();
+	trace_fault_file_path_end(file, offset, ra_pages, 1);
 	return fpin;
 }
 
@@ -2485,10 +2509,10 @@ static struct file *do_async_mmap_readahead(struct vm_fault *vmf,
 		ra->mmap_miss--;
 	if (PageReadahead(page)) {
 		fpin = maybe_unlock_mmap_for_io(vmf, fpin);
-		filemap_systrace_mark_begin(file, offset, ra->ra_pages, 0);
+		trace_fault_file_path_start(file, offset, ra->ra_pages, 0);
 		page_cache_async_readahead(mapping, ra, file,
 					   page, offset, ra->ra_pages);
-		filemap_systrace_mark_end();
+		trace_fault_file_path_end(file, offset, ra->ra_pages, 0);
 	}
 	return fpin;
 }
@@ -2615,9 +2639,9 @@ page_not_uptodate:
 	 */
 	ClearPageError(page);
 	fpin = maybe_unlock_mmap_for_io(vmf, fpin);
-	filemap_systrace_mark_begin(file, offset, 1, 1);
+	trace_fault_file_path_start(file, offset, 1, 1);
 	error = mapping->a_ops->readpage(file, page);
-	filemap_systrace_mark_end();
+	trace_fault_file_path_end(file, offset, 1, 1);
 	if (!error) {
 		wait_on_page_locked(page);
 		if (!PageUptodate(page))
@@ -2729,6 +2753,11 @@ next:
 			break;
 	}
 	rcu_read_unlock();
+
+#ifdef CONFIG_PAGE_BOOST_RECORDING
+	/* end_pgoff is inclusive */
+	record_io_info(file, start_pgoff, last_pgoff - start_pgoff + 1);
+#endif
 }
 EXPORT_SYMBOL(filemap_map_pages);
 
@@ -2901,6 +2930,14 @@ filler:
 		unlock_page(page);
 		goto out;
 	}
+
+	/*
+	 * A previous I/O error may have been due to temporary
+	 * failures.
+	 * Clear page error before actual read, PG_error will be
+	 * set again if read page fails.
+	 */
+	ClearPageError(page);
 	goto filler;
 
 out:
@@ -2963,6 +3000,9 @@ inline ssize_t generic_write_checks(struct kiocb *iocb, struct iov_iter *from)
 	struct inode *inode = file->f_mapping->host;
 	unsigned long limit = rlimit(RLIMIT_FSIZE);
 	loff_t pos;
+
+	if (IS_SWAPFILE(inode))
+		return -ETXTBSY;
 
 	if (!iov_iter_count(from))
 		return 0;

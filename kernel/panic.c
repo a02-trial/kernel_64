@@ -28,13 +28,8 @@
 #include <linux/console.h>
 #include <linux/bug.h>
 #include <linux/ratelimit.h>
-
 #ifdef CONFIG_SEC_DEBUG
 #include <linux/sec_debug.h>
-
-DECLARE_PER_CPU(unsigned char, coreregs_stored);
-DECLARE_PER_CPU(struct pt_regs, sec_debug_core_reg);
-DECLARE_PER_CPU(sec_debug_mmu_reg_t, sec_debug_mmu_reg);
 #endif
 
 #define PANIC_TIMER_STEP 100
@@ -146,7 +141,14 @@ void panic(const char *fmt, ...)
 	int state = 0;
 	int old_cpu, this_cpu;
 	bool _crash_kexec_post_notifiers = crash_kexec_post_notifiers;
+#ifndef CONFIG_MACH_MT6739
+#ifdef CONFIG_SEC_DEBUG_EXTRA_INFO
+	struct pt_regs regs;
 
+	regs.uregs[30] = _RET_IP_;
+	regs.ARM_pc = regs.uregs[30] - sizeof(unsigned int);
+#endif
+#endif
 	/*
 	 * Disable local interrupts. This will prevent panic_smp_self_stop
 	 * from deadlocking the first cpu that invokes the panic, since
@@ -154,6 +156,7 @@ void panic(const char *fmt, ...)
 	 * after setting panic_cpu) from invoking panic() again.
 	 */
 	local_irq_disable();
+	preempt_disable_notrace();
 
 	/*
 	 * It's possible to come here directly from a panic-assertion and
@@ -185,6 +188,12 @@ void panic(const char *fmt, ...)
 #ifdef CONFIG_SEC_DEBUG_AUTO_COMMENT
 	if (buf[strlen(buf) - 1] == '\n')
 		buf[strlen(buf) - 1] = '\0';
+#endif
+
+#ifndef CONFIG_MACH_MT6739
+#ifdef CONFIG_SEC_DEBUG_EXTRA_INFO
+	sec_debug_set_extra_info_fault((unsigned long)regs.ARM_pc, &regs);
+#endif
 #endif
 
 #ifdef CONFIG_SEC_DEBUG_AUTO_COMMENT
@@ -227,15 +236,6 @@ void panic(const char *fmt, ...)
 		 */
 		crash_smp_send_stop();
 	}
-
-#ifdef CONFIG_SEC_DEBUG
-	if (!__this_cpu_read(coreregs_stored)) {
-		sec_debug_save_mmu_reg(&per_cpu(sec_debug_mmu_reg, smp_processor_id()));
-		sec_debug_save_core_reg(NULL);
-		__this_cpu_inc(coreregs_stored);
-		pr_emerg("context saved(CPU:%d)[%s,%d]\n", smp_processor_id(), __func__, __LINE__);
-	}
-#endif
 
 	/*
 	 * Run any panic handlers, including those that might need to
@@ -576,9 +576,11 @@ void __warn(const char *file, int line, void *caller, unsigned taint,
 
 	print_modules();
 
+#ifndef CONFIG_SEC_DEBUG
 	if (regs)
 		show_regs(regs);
 	else
+#endif
 		dump_stack();
 
 	print_oops_end_marker();

@@ -33,6 +33,25 @@
 #endif
 #include <asm/unaligned.h>
 
+static void xfrm_state_print_func(unsigned long data);
+static DEFINE_TIMER(xfrm_state_print_timer, xfrm_state_print_func, 0, 0);
+#define XFRM_STATE_PRINT_TIME 4
+
+static int  del_sa_count;
+static int  del_sa_err_count;
+static int  add_sa_count;
+static int  add_sa_err_count;
+
+static void xfrm_state_print_func(unsigned long data)
+{
+#ifdef CONFIG_MTK_ENG_BUILD
+	pr_info("[xfrm_state]:add_sa[%d] del_sa[%d] add_err[%d] del_err[%d]\n",
+		add_sa_count, del_sa_count, add_sa_err_count, del_sa_err_count);
+	mod_timer(&xfrm_state_print_timer, jiffies
+		  + XFRM_STATE_PRINT_TIME * HZ);
+#endif
+}
+
 static int verify_one_alg(struct nlattr **attrs, enum xfrm_attr_type_t type)
 {
 	struct nlattr *rt = attrs[type];
@@ -109,7 +128,8 @@ static inline int verify_sec_ctx_len(struct nlattr **attrs)
 		return 0;
 
 	uctx = nla_data(rt);
-	if (uctx->len != (sizeof(struct xfrm_user_sec_ctx) + uctx->ctx_len))
+	if (uctx->len > nla_len(rt) ||
+	    uctx->len != (sizeof(struct xfrm_user_sec_ctx) + uctx->ctx_len))
 		return -EINVAL;
 
 	return 0;
@@ -775,6 +795,10 @@ static int xfrm_del_sa(struct sk_buff *skb, struct nlmsghdr *nlh,
 out:
 	xfrm_audit_state_delete(x, err ? 0 : 1, true);
 	xfrm_state_put(x);
+	if (!err)
+		del_sa_count++;
+	else
+		del_sa_err_count++;
 	return err;
 }
 
@@ -1307,7 +1331,12 @@ static int xfrm_alloc_userspi(struct sk_buff *skb, struct nlmsghdr *nlh,
 	u32 mark;
 	struct xfrm_mark m;
 	u32 if_id = 0;
+	static int count;
 
+	count++;
+	if (count == 1)
+		mod_timer(&xfrm_state_print_timer,
+			  jiffies + XFRM_STATE_PRINT_TIME * HZ);
 	p = nlmsg_data(nlh);
 	err = verify_spi_info(p->info.id.proto, p->min, p->max);
 	if (err)
@@ -1355,6 +1384,10 @@ static int xfrm_alloc_userspi(struct sk_buff *skb, struct nlmsghdr *nlh,
 out:
 	xfrm_state_put(x);
 out_noput:
+	if (!err)
+		add_sa_count++;
+	else
+		add_sa_err_count++;
 	return err;
 }
 
@@ -1526,20 +1559,8 @@ static int validate_tmpl(int nr, struct xfrm_user_tmpl *ut, u16 family)
 			return -EINVAL;
 		}
 
-		switch (ut[i].id.proto) {
-		case IPPROTO_AH:
-		case IPPROTO_ESP:
-		case IPPROTO_COMP:
-#if IS_ENABLED(CONFIG_IPV6)
-		case IPPROTO_ROUTING:
-		case IPPROTO_DSTOPTS:
-#endif
-		case IPSEC_PROTO_ANY:
-			break;
-		default:
+		if (!xfrm_id_proto_valid(ut[i].id.proto))
 			return -EINVAL;
-		}
-
 	}
 
 	return 0;
@@ -2277,6 +2298,9 @@ static int xfrm_add_acquire(struct sk_buff *skb, struct nlmsghdr *nlh,
 	xfrm_mark_get(attrs, &mark);
 
 	err = verify_newpolicy_info(&ua->policy);
+	if (err)
+		goto free_state;
+	err = verify_sec_ctx_len(attrs);
 	if (err)
 		goto free_state;
 
