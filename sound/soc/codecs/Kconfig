@@ -148,6 +148,7 @@ config SND_SOC_ALL_CODECS
 	select SND_SOC_STAC9766 if SND_SOC_AC97_BUS
 	select SND_SOC_STI_SAS
 	select SND_SOC_TAS2552 if I2C
+	select SND_SOC_TAS256X if I2C
 	select SND_SOC_TAS5086 if I2C
 	select SND_SOC_TAS571X if I2C
 	select SND_SOC_TAS5782M if I2C
@@ -225,6 +226,8 @@ config SND_SOC_ALL_CODECS
 	select SND_SOC_MT6660 if I2C
 	select SND_SOC_SMA1301 if I2C
 	select SND_SOC_TFA9874 if I2C
+	select SND_SOC_SMA1303 if I2C
+	select SND_SOC_SMA1305 if I2C
         help
           Normally ASoC codec drivers are only built if a machine driver which
           uses them is also built since they are only usable with a machine
@@ -875,6 +878,12 @@ config SND_SOC_TAS2552
 	tristate "Texas Instruments TAS2552 Mono Audio amplifier"
 	depends on I2C
 
+config SND_SOC_TAS256X
+	tristate "Texas Instruments TAS256X SmartAmp(R)"
+	depends on I2C
+	help
+	  Enable the support for TAS driver.
+
 config SND_SOC_TAS5086
 	tristate "Texas Instruments TAS5086 speaker amplifier"
 	depends on I2C
@@ -1164,20 +1173,36 @@ config SND_SOC_ZX_AUD96P22
 config SND_SOC_MT6660
 	tristate "Mediatek MT6660 speaker amplifier"
 	depends on I2C
-	select CRC32
-	select CRYPTO_SHA256
-	select CRYPTO_RSA
+	select SND_RICHTEK_SPM
+	select RT_REGMAP
 	help
 	  Config of MT6660. It is a Smart power
 	  amplifier which contain speaker protection,
 	  multi-band DRC, equalizer function. It would
 	  be set to yes if device with MT6660 on it.
 
+config SND_RICHTEK_SPM
+	bool "Richtek SPM Class"
+	help
+	  Say Y here to enable Richtek SPM Class support.
+	  This is a IPC Command for audio dsp and amp driver.
+	  Enable it, driver can get hifi3 data.
+	  Disable it, driver cannot get hifi3 data.
+
 config SND_SOC_AW8896
 	tristate "SoC Audio for awinic aw8896 series"
 	depends on I2C
 	help
 		This option enables support for aw8896 series Smart PA.
+
+config SND_SOC_SMA1303
+	tristate "Silicon Mitus SMA1303 speaker amplifier"
+	depends on I2C
+	help
+	  Config of SMA1303. It is a Smart power
+	  amplifier which contain speaker protection,
+	  multi-band DRC, equalizer function. It would
+	  be set to yes if device with SMA1303 on it.
 
 config SND_SOC_SMA1301
 	tristate "Silicon Mitus SMA1301 speaker amplifier"
@@ -1188,6 +1213,15 @@ config SND_SOC_SMA1301
 	  multi-band DRC, equalizer function. It would
 	  be set to yes if device with SMA1301 on it.
 
+config SND_SOC_SMA1305
+	tristate "Silicon Mitus SMA1305 speaker amplifier"
+	depends on I2C
+	help
+	  Config of SMA1305. It is a Smart power
+	  amplifier which contain speaker protection,
+	  multi-band DRC, equalizer function. It would
+	  be set to yes if device with SMA1305 on it.
+
 config SND_SOC_TFA9874
 	tristate "NXP TFA9874 speaker amplifier"
 	depends on I2C
@@ -1196,6 +1230,14 @@ config SND_SOC_TFA9874
 	  amplifier which contain speaker protection,
 	  multi-band DRC, equalizer function. It would
 	  be set to yes if device with TFA9874 on it.
+
+config SND_SOC_AW87339
+	tristate "AWINIC AW8773 speaker amplifier"
+	help
+	  Config of AWINIC AW87339 speaker amplifier.
+	  It is a speaker amp which connect with MTK
+	  PMIC device which has no speaker protection
+	  function.
 
 config SND_SOC_LM4857
 	tristate
@@ -1244,5 +1286,8 @@ config SND_SOC_RT5509
 	tristate "Richtek RT5509 Smart AMP"
 	depends on I2C
 	select RT_REGMAP
+
+#TAS256X
+source "sound/soc/codecs/tas256x/Kconfig"
 
 endmenu

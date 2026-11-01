@@ -14,6 +14,7 @@ enum {
 	DVFS_USER_ID = 0,
 	DVFS_TOUCH_ID,
 	DVFS_FINGER_ID,
+	DVFS_OVERLIMIT_ID,
 	DVFS_MAX_ID
 };
 
@@ -23,8 +24,5 @@ extern int set_freq_limit(unsigned int id, int freq);
 #else
 static inline int set_freq_limit(unsigned int id, int freq) { return 0; }
 #endif
-
-extern unsigned int cpufreq_limit_get_over_limit(void);
-extern void cpufreq_limit_set_over_limit(unsigned int val);
 
 #endif /* __LINUX_CPUFREQ_LIMIT_H__ */

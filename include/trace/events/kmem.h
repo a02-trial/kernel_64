@@ -318,53 +318,108 @@ TRACE_EVENT(mm_page_alloc_extfrag,
 		__entry->change_ownership)
 );
 
-TRACE_EVENT(ion_heap_shrink,
+DECLARE_EVENT_CLASS(ion_rbin,
 
 	TP_PROTO(const char *heap_name,
-		 size_t len,
-		 long total_allocated),
-
-	TP_ARGS(heap_name, len, total_allocated),
+		 void *buffer,
+		 unsigned long size,
+		 void *page),
+	TP_ARGS(heap_name, buffer, size, page),
 
 	TP_STRUCT__entry(
-		__string(heap_name, heap_name)
-		__field(size_t, len)
-		__field(long, total_allocated)
+		__field(	const char *,	heap_name)
+		__field(	void *,		buffer	)
+		__field(	unsigned long,	size	)
+		__field(	void *,		page	)
 	),
 
 	TP_fast_assign(
-		__assign_str(heap_name, heap_name);
-		__entry->len = len;
-		__entry->total_allocated = total_allocated;
+		__entry->heap_name	= heap_name;
+		__entry->buffer		= buffer;
+		__entry->size		= size;
+		__entry->page		= page;
 	),
 
-	TP_printk("heap_name=%s, len=%zu, total_allocated=%ld",
-		  __get_str(heap_name), __entry->len, __entry->total_allocated)
+	TP_printk("heap_name=%s buffer=%p size=%lu page=%p",
+		__entry->heap_name,
+		__entry->buffer,
+		__entry->size,
+		__entry->page
+	)
 );
 
-TRACE_EVENT(ion_heap_grow,
+DEFINE_EVENT(ion_rbin, ion_rbin_alloc_start,
+	TP_PROTO(const char *heap_name, void *buffer, unsigned long size,
+		 void *page),
 
-	TP_PROTO(const char *heap_name,
-		 size_t len,
-		 long total_allocated),
+	TP_ARGS(heap_name, buffer, size, page)
+);
 
-	TP_ARGS(heap_name, len, total_allocated),
+DEFINE_EVENT(ion_rbin, ion_rbin_alloc_end,
+	TP_PROTO(const char *heap_name, void *buffer, unsigned long size,
+		 void *page),
 
-	TP_STRUCT__entry(
-		__string(heap_name, heap_name)
-		__field(size_t, len)
-		__field(long, total_allocated)
-	),
+	TP_ARGS(heap_name, buffer, size, page)
+);
 
-	TP_fast_assign(
-		__assign_str(heap_name, heap_name);
-		__entry->len = len;
-		__entry->total_allocated = total_allocated;
-	),
+DEFINE_EVENT(ion_rbin, ion_rbin_free_start,
+	TP_PROTO(const char *heap_name, void *buffer, unsigned long size,
+		 void *page),
 
-	TP_printk("heap_name=%s, len=%zu, total_allocated=%ld",
-		  __get_str(heap_name), __entry->len, __entry->total_allocated)
-	);
+	TP_ARGS(heap_name, buffer, size, page)
+);
+
+DEFINE_EVENT(ion_rbin, ion_rbin_free_end,
+	TP_PROTO(const char *heap_name, void *buffer, unsigned long size,
+		 void *page),
+
+	TP_ARGS(heap_name, buffer, size, page)
+);
+
+DEFINE_EVENT(ion_rbin, ion_rbin_partial_alloc_start,
+	TP_PROTO(const char *heap_name, void *buffer, unsigned long size,
+		 void *page),
+
+	TP_ARGS(heap_name, buffer, size, page)
+);
+
+DEFINE_EVENT(ion_rbin, ion_rbin_partial_alloc_end,
+	TP_PROTO(const char *heap_name, void *buffer, unsigned long size,
+		 void *page),
+
+	TP_ARGS(heap_name, buffer, size, page)
+);
+
+DEFINE_EVENT(ion_rbin, ion_rbin_partial_free_start,
+	TP_PROTO(const char *heap_name, void *buffer, unsigned long size,
+		 void *page),
+
+	TP_ARGS(heap_name, buffer, size, page)
+);
+
+DEFINE_EVENT(ion_rbin, ion_rbin_partial_free_end,
+	TP_PROTO(const char *heap_name, void *buffer, unsigned long size,
+		 void *page),
+
+	TP_ARGS(heap_name, buffer, size, page)
+);
+
+
+DEFINE_EVENT(ion_rbin, ion_rbin_pool_alloc_start,
+
+	TP_PROTO(const char *heap_name, void *buffer, unsigned long size,
+		 void *page),
+
+	TP_ARGS(heap_name, buffer, size, page)
+);
+
+DEFINE_EVENT(ion_rbin, ion_rbin_pool_alloc_end,
+
+	TP_PROTO(const char *heap_name, void *buffer, unsigned long size,
+		 void *page),
+
+	TP_ARGS(heap_name, buffer, size, page)
+);
 
 TRACE_EVENT(rss_stat,
 

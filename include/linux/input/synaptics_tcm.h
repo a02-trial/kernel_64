@@ -69,7 +69,6 @@ struct syna_tcm_board_data {
 	u32	area_indicator;
 	u32	area_navigation;
 	u32	area_edge;
-	bool support_ear_detect;
 };
 
 #endif

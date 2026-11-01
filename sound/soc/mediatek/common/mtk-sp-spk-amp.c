@@ -19,6 +19,11 @@
 
 #include "mtk-sp-common.h"
 #include "mtk-sp-spk-amp.h"
+
+#ifdef CONFIG_SND_SOC_AW8896
+#include "../../codecs/aw8896.h"
+#endif
+
 #if defined(CONFIG_SND_SOC_RT5509)
 #include "../../codecs/rt5509.h"
 #endif
@@ -30,8 +35,21 @@
 #include "../../codecs/tfa98xx/inc/tfa98xx_ext.h"
 #endif
 
-#ifdef CONFIG_SND_SOC_SMA1301
-#include "../../codecs/sma1301.h"
+#ifdef CONFIG_SND_SOC_AW87339
+#include "aw87339.h"
+#endif
+
+#ifdef CONFIG_SND_SOC_SMA1303
+#include "../../codecs/sma1303.h"
+#endif
+
+#ifdef CONFIG_SND_SOC_SMA1305
+#include "../../codecs/sma1305.h"
+#endif
+
+#ifdef CONFIG_SND_SOC_TAS256X
+#include "../../codecs/tas256x/physical_layer/inc/tas256x.h"
+#include "../../codecs/tas256x/os_layer/inc/tas256x-regmap.h"
 #endif
 
 #define MTK_SPK_NAME "Speaker Codec"
@@ -43,14 +61,30 @@ static struct mtk_spk_i2c_ctrl mtk_spk_list[MTK_SPK_TYPE_NUM] = {
 		.codec_dai_name = "snd-soc-dummy-dai",
 		.codec_name = "snd-soc-dummy",
 	},
-#ifdef CONFIG_SND_SOC_SMA1301
-	[MTK_SPK_SILICON_SM1301] = {
-		.i2c_probe = sma1301_i2c_probe,
-		.i2c_remove = sma1301_i2c_remove,
-		.codec_dai_name = "sma1301-amplifier",
-		.codec_name = "sma1301.0-001e",
+#ifdef CONFIG_SND_SOC_AW8896
+	[MTK_SPK_AWINIC_AW8896] = {
+		.i2c_probe = aw8896_i2c_probe,
+		.i2c_remove = aw8896_i2c_remove,
+		.codec_dai_name = "aw8896-aif",
+		.codec_name = "aw8896_smartpa",
 	},
-#endif /* CONFIG_SND_SOC_SMA1301 */
+#endif
+#ifdef CONFIG_SND_SOC_SMA1303
+	[MTK_SPK_SILICON_SM1303] = {
+		.i2c_probe = sma1303_i2c_probe,
+		.i2c_remove = sma1303_i2c_remove,
+		.codec_dai_name = "sma1303-amplifier",
+		.codec_name = "sma1303.18-001e",
+	},
+#endif
+#ifdef CONFIG_SND_SOC_SMA1305
+	[MTK_SPK_SILICON_SM1305] = {
+		.i2c_probe = sma1305_i2c_probe,
+		.i2c_remove = sma1305_i2c_remove,
+		.codec_dai_name = "sma1305-amplifier",
+		.codec_name = "sma1305.18-001e",
+	},
+#endif
 #if defined(CONFIG_SND_SOC_RT5509)
 	[MTK_SPK_RICHTEK_RT5509] = {
 		.i2c_probe = rt5509_i2c_probe,
@@ -68,7 +102,6 @@ static struct mtk_spk_i2c_ctrl mtk_spk_list[MTK_SPK_TYPE_NUM] = {
 		.codec_name = "MT6660_MT_0",
 	},
 #endif /* CONFIG_SND_SOC_MT6660 */
-
 #ifdef CONFIG_SND_SOC_TFA9874
 	[MTK_SPK_NXP_TFA98XX] = {
 		.i2c_probe = tfa98xx_i2c_probe,
@@ -76,7 +109,15 @@ static struct mtk_spk_i2c_ctrl mtk_spk_list[MTK_SPK_TYPE_NUM] = {
 		.codec_dai_name = "tfa98xx-aif",
 		.codec_name = "tfa98xx",
 	},
-#endif /* CONFIG_SND_SOC_MT6660 */
+#endif /* CONFIG_SND_SOC_TFA9874 */
+#ifdef CONFIG_SND_SOC_TAS256X
+	[MTK_SPK_TI_TAS256X] = {
+		.i2c_probe = tas256x_i2c_probe,
+		.i2c_remove = tas256x_i2c_remove,
+		.codec_dai_name = "tas256x ASI1",
+		.codec_name = "tas256x.18-004c",
+	},
+#endif
 };
 
 static int mtk_spk_i2c_probe(struct i2c_client *client,
@@ -138,6 +179,138 @@ int mtk_spk_get_i2s_in_type(void)
 }
 EXPORT_SYMBOL(mtk_spk_get_i2s_in_type);
 
+int mtk_ext_spk_get_status(void)
+{
+#ifdef CONFIG_SND_SOC_AW87339
+	return aw87339_spk_status_get();
+#else
+	return 0;
+#endif
+}
+EXPORT_SYMBOL(mtk_ext_spk_get_status);
+
+void mtk_ext_spk_enable(int enable)
+{
+#ifdef CONFIG_SND_SOC_AW87339
+	aw87339_spk_enable_set(enable);
+#endif
+}
+EXPORT_SYMBOL(mtk_ext_spk_enable);
+
+int mtk_spk_update_info(struct snd_soc_card *card,
+			struct platform_device *pdev,
+			int *spk_out_dai_link_idx, int *spk_ref_dai_link_idx,
+			const struct snd_soc_ops *i2s_ops)
+{
+	int ret, i, mck_num;
+	struct snd_soc_dai_link *dai_link;
+	int i2s_out_dai_link_idx = -1;
+	int i2s_in_dai_link_idx = -1;
+
+	/* get spk i2s out number */
+	ret = of_property_read_u32(pdev->dev.of_node,
+				   "mtk_spk_i2s_out", &mtk_spk_i2s_out);
+	if (ret) {
+		mtk_spk_i2s_out = MTK_SPK_I2S_3;
+		dev_err(&pdev->dev,
+			"%s(), get mtk_spk_i2s_out fail, use defalut i2s3\n",
+			__func__);
+	}
+
+	/* get spk i2s in number */
+	ret = of_property_read_u32(pdev->dev.of_node,
+				   "mtk_spk_i2s_in", &mtk_spk_i2s_in);
+	if (ret) {
+		mtk_spk_i2s_in = MTK_SPK_I2S_0;
+		dev_err(&pdev->dev,
+			"%s(), get mtk_spk_i2s_in fail, use defalut i2s0\n",
+			 __func__);
+	}
+
+	if (mtk_spk_i2s_out > MTK_SPK_I2S_TYPE_NUM ||
+	    mtk_spk_i2s_in > MTK_SPK_I2S_TYPE_NUM) {
+		dev_err(&pdev->dev, "%s(), get mtk spk i2s fail\n",
+			__func__);
+		return -ENODEV;
+	}
+
+	/* get spk i2s mck number */
+	ret = of_property_read_u32(pdev->dev.of_node,
+				   "mtk_spk_i2s_mck", &mck_num);
+	if (ret) {
+		mck_num = MTK_SPK_I2S_TYPE_INVALID;
+		dev_warn(&pdev->dev, "%s(), mtk_spk_i2s_mck no use\n",
+			 __func__);
+	}
+
+	/* find dai link of i2s in and i2s out */
+	for (i = 0; i < card->num_links; i++) {
+		dai_link = &card->dai_link[i];
+
+		if (i2s_out_dai_link_idx < 0 &&
+		    strcmp(dai_link->cpu_dai_name, "I2S1") == 0 &&
+		    mtk_spk_i2s_out == MTK_SPK_I2S_1) {
+			i2s_out_dai_link_idx = i;
+		} else if (i2s_out_dai_link_idx < 0 &&
+			   strcmp(dai_link->cpu_dai_name, "I2S3") == 0 &&
+			   mtk_spk_i2s_out == MTK_SPK_I2S_3) {
+			i2s_out_dai_link_idx = i;
+		} else if (i2s_out_dai_link_idx < 0 &&
+			   strcmp(dai_link->cpu_dai_name, "I2S5") == 0 &&
+			   mtk_spk_i2s_out == MTK_SPK_I2S_5) {
+			i2s_out_dai_link_idx = i;
+		}
+
+		if (i2s_in_dai_link_idx < 0 &&
+		    strcmp(dai_link->cpu_dai_name, "I2S0") == 0 &&
+		    (mtk_spk_i2s_in == MTK_SPK_I2S_0 ||
+		     mtk_spk_i2s_in == MTK_SPK_TINYCONN_I2S_0)) {
+			i2s_in_dai_link_idx = i;
+		} else if (i2s_in_dai_link_idx < 0 &&
+			   strcmp(dai_link->cpu_dai_name, "I2S2") == 0 &&
+			   (mtk_spk_i2s_in == MTK_SPK_I2S_2 ||
+			    mtk_spk_i2s_in == MTK_SPK_TINYCONN_I2S_2)) {
+			i2s_in_dai_link_idx = i;
+		}
+
+		if (i2s_out_dai_link_idx >= 0 && i2s_in_dai_link_idx >= 0)
+			break;
+	}
+
+	if (i2s_out_dai_link_idx < 0 || i2s_in_dai_link_idx < 0) {
+		dev_err(&pdev->dev,
+			"%s(), i2s cpu dai name error, i2s_out_dai_link_idx = %d, i2s_in_dai_link_idx = %d",
+			__func__, i2s_out_dai_link_idx, i2s_in_dai_link_idx);
+		return -ENODEV;
+	}
+
+	*spk_out_dai_link_idx = i2s_out_dai_link_idx;
+	*spk_ref_dai_link_idx = i2s_in_dai_link_idx;
+
+	if (mtk_spk_type != MTK_SPK_NOT_SMARTPA) {
+		dai_link = &card->dai_link[i2s_out_dai_link_idx];
+		dai_link->codec_name = NULL;
+		dai_link->codec_dai_name = NULL;
+		if (mck_num == mtk_spk_i2s_out)
+			dai_link->ops = i2s_ops;
+
+		dai_link = &card->dai_link[i2s_in_dai_link_idx];
+		dai_link->codec_name = NULL;
+		dai_link->codec_dai_name = NULL;
+		if (mck_num == mtk_spk_i2s_in)
+			dai_link->ops = i2s_ops;
+	}
+
+	dev_info(&pdev->dev,
+		 "%s(), mtk_spk_type %d, spk_out_dai_link_idx %d, spk_out_dai_link_idx %d, mck: %d\n",
+		 __func__,
+		 mtk_spk_type, *spk_ref_dai_link_idx,
+		 *spk_out_dai_link_idx, mck_num);
+
+	return 0;
+}
+EXPORT_SYMBOL(mtk_spk_update_info);
+
 int mtk_spk_update_dai_link(struct snd_soc_card *card,
 			    struct platform_device *pdev,
 			    const struct snd_soc_ops *i2s_ops)
@@ -180,11 +353,21 @@ int mtk_spk_update_dai_link(struct snd_soc_card *card,
 			 __func__);
 	}
 
+	dev_info(&pdev->dev,
+		 "%s(), mtk_spk_type %d, i2s in %d, i2s out %d\n",
+		 __func__, mtk_spk_type, mtk_spk_i2s_in, mtk_spk_i2s_out);
+
 	if (mtk_spk_i2s_out > MTK_SPK_I2S_TYPE_NUM ||
 	    mtk_spk_i2s_in > MTK_SPK_I2S_TYPE_NUM) {
 		dev_err(&pdev->dev, "%s(), get mtk spk i2s fail\n",
 			__func__);
 		return -ENODEV;
+	}
+
+	if (mtk_spk_type == MTK_SPK_NOT_SMARTPA) {
+		dev_info(&pdev->dev, "%s(), no need to update dailink\n",
+			 __func__);
+		return 0;
 	}
 
 	/* find dai link of i2s in and i2s out */
@@ -207,11 +390,13 @@ int mtk_spk_update_dai_link(struct snd_soc_card *card,
 
 		if (spk_ref_dai_link_idx < 0 &&
 		    strcmp(dai_link->cpu_dai_name, "I2S0") == 0 &&
-		    mtk_spk_i2s_in == MTK_SPK_I2S_0) {
+		    (mtk_spk_i2s_in == MTK_SPK_I2S_0 ||
+		     mtk_spk_i2s_in == MTK_SPK_TINYCONN_I2S_0)) {
 			spk_ref_dai_link_idx = i;
 		} else if (spk_ref_dai_link_idx < 0 &&
 			   strcmp(dai_link->cpu_dai_name, "I2S2") == 0 &&
-			   mtk_spk_i2s_in == MTK_SPK_I2S_2) {
+			   (mtk_spk_i2s_in == MTK_SPK_I2S_2 ||
+			    mtk_spk_i2s_in == MTK_SPK_TINYCONN_I2S_2)) {
 			spk_ref_dai_link_idx = i;
 		}
 
@@ -309,10 +494,19 @@ EXPORT_SYMBOL(mtk_spk_recv_ipi_buf_from_dsp);
 
 static const struct i2c_device_id mtk_spk_i2c_id[] = {
 	{ "tfa98xx", 0},
-#ifdef CONFIG_SND_SOC_SMA1301
-	{ "sma1301", 0},
+#ifdef CONFIG_SND_SOC_AW8896
+	{ "aw8896", 0},
+#endif
+#ifdef CONFIG_SND_SOC_SMA1303
+	{ "sma1303", 0},
+#endif
+#ifdef CONFIG_SND_SOC_SMA1305
+	{ "sma1305", 0},
 #endif
 	{ "speaker_amp", 0},
+#ifdef CONFIG_SND_SOC_TAS256X
+	{ "tas256x", 0},
+#endif
 	{}
 };
 MODULE_DEVICE_TABLE(i2c, mtk_spk_i2c_id);
@@ -320,10 +514,19 @@ MODULE_DEVICE_TABLE(i2c, mtk_spk_i2c_id);
 #ifdef CONFIG_OF
 static const struct of_device_id mtk_spk_match_table[] = {
 	{.compatible = "nxp,tfa98xx",},
-#ifdef CONFIG_SND_SOC_SMA1301
-	{.compatible = "siliconmitus,sma1301",},
+#ifdef CONFIG_SND_SOC_AW8896
+	{.compatible = "awinic,aw8896_smartpa",},
+#endif
+#ifdef CONFIG_SND_SOC_SMA1303
+	{.compatible = "siliconmitus,sma1303",},
+#endif
+#ifdef CONFIG_SND_SOC_SMA1305
+	{.compatible = "siliconmitus,sma1305",},
 #endif
 	{.compatible = "mediatek,speaker_amp",},
+#ifdef CONFIG_SND_SOC_TAS256X
+	{.compatible = "ti,tas256x",},
+#endif
 	{},
 };
 MODULE_DEVICE_TABLE(of, mtk_spk_match_table);
@@ -331,8 +534,8 @@ MODULE_DEVICE_TABLE(of, mtk_spk_match_table);
 
 static struct i2c_driver mtk_spk_i2c_driver = {
 	.driver = {
-#ifdef CONFIG_SND_SOC_SMA1301
-		.name = "sma1301",
+#ifdef CONFIG_SND_SOC_SMA1303
+		.name = "sma1303",
 #else
 		.name = "speaker_amp",
 #endif

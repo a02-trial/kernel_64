@@ -65,11 +65,11 @@
  * .data. We don't want to pull in .data..other sections, which Linux
  * has defined. Same for text and bss.
  */
-#ifdef CONFIG_LD_DEAD_CODE_DATA_ELIMINATION
+#if defined(CONFIG_LD_DEAD_CODE_DATA_ELIMINATION) || defined(CONFIG_LTO_CLANG)
 #define TEXT_MAIN .text .text.[0-9a-zA-Z_]*
 #define TEXT_CFI_MAIN .text.cfi .text.[0-9a-zA-Z_]*.cfi
-#define DATA_MAIN .data .data.[0-9a-zA-Z_]*
-#define BSS_MAIN .bss .bss.[0-9a-zA-Z_]*
+#define DATA_MAIN .data .data.[0-9a-zA-Z_]* .data..compoundliteral* .data..L*
+#define BSS_MAIN .bss .bss.[0-9a-zA-Z_]* .bss..compoundliteral* .bss..L*
 #else
 #define TEXT_MAIN .text
 #define TEXT_CFI_MAIN .text.cfi
@@ -253,7 +253,8 @@
 
 #define PAGE_ALIGNED_DATA(page_align)					\
 	. = ALIGN(page_align);						\
-	*(.data..page_aligned)
+	*(.data..page_aligned)						\
+	. = ALIGN(page_align);
 
 #define READ_MOSTLY_DATA(align)						\
 	. = ALIGN(align);						\
@@ -281,6 +282,44 @@
 	VMLINUX_SYMBOL(__end_ro_after_init) = .;
 #endif
 
+
+#define PG_IDMAP							\
+	. = ALIGN(PAGE_SIZE);					\
+		idmap_pg_dir = .;					\
+	. += IDMAP_DIR_SIZE;
+
+#define PG_SWAP								\
+	. = ALIGN(PAGE_SIZE);					\
+		swapper_pg_dir = .;					\
+	. += SWAPPER_DIR_SIZE;
+
+#ifdef CONFIG_ARM64_SW_TTBR0_PAN
+#define PG_RESERVED							\
+	. = ALIGN(PAGE_SIZE);					\
+	reserved_ttbr0 = .;						\
+	. += RESERVED_TTBR0_SIZE;
+#else
+#define PG_RESERVED
+#endif
+
+#ifdef CONFIG_UNMAP_KERNEL_AT_EL0
+#define PG_TRAMP							\
+	. = ALIGN(PAGE_SIZE);					\
+	tramp_pg_dir = .;						\
+	. += PAGE_SIZE;
+#else
+#define PG_TRAMP
+#endif
+
+#ifdef CONFIG_UH_RKP
+#define RKP_RO_DATA							\
+	PG_IDMAP								\
+	PG_SWAP									\
+	PG_RESERVED								\
+	PG_TRAMP
+#else
+#define RKP_RO_DATA
+#endif
 /*
  * Read only Data
  */
@@ -300,6 +339,17 @@
 									\
 	.rodata1          : AT(ADDR(.rodata1) - LOAD_OFFSET) {		\
 		*(.rodata1)						\
+	}								\
+	. = ALIGN(4096);				\
+	.rkp_bss          : AT(ADDR(.rkp_bss) - LOAD_OFFSET) {		\
+		*(.rkp_bss.page_aligned)				\
+		*(.rkp_bss)						\
+	} = 0								\
+									\
+	.rkp_ro          : AT(ADDR(.rkp_ro) - LOAD_OFFSET) {		\
+		*(.rkp_ro)						\
+		*(.kdp_ro)						\
+		RKP_RO_DATA	/* Read only after init */	        \
 	}								\
 									\
 	/* PCI quirks */						\
@@ -623,7 +673,9 @@
 	. = ALIGN(bss_align);						\
 	.bss : AT(ADDR(.bss) - LOAD_OFFSET) {				\
 		BSS_FIRST_SECTIONS					\
+		. = ALIGN(PAGE_SIZE);					\
 		*(.bss..page_aligned)					\
+		. = ALIGN(PAGE_SIZE);					\
 		*(.dynbss)						\
 		*(BSS_MAIN)						\
 		*(COMMON)						\

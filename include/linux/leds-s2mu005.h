@@ -14,8 +14,8 @@
 #define __MANGLE_NAME(_f_) _f_##_s2mu005
 
 #ifdef CONFIG_MUIC_NOTIFIER
-#include <linux/muic/muic.h>
-#include <linux/muic/muic_notifier.h>
+#include <linux/ssdev_in_mtk/muic/muic.h>
+#include <linux/ssdev_in_mtk/muic/muic_notifier.h>
 #endif /* CONFIG_MUIC_NOTIFIER */
 
 #define S2MU005_EN_CHANNEL_SHARE_MASK 0x80
@@ -188,5 +188,6 @@ int ss_rear_flash_led_flash_on(void);
 int ss_rear_flash_led_torch_on(void);
 int ss_rear_flash_led_turn_off(void);
 int ss_rear_torch_set_flashlight(bool isFlashlight);
+extern bool s2mu005_is_fd_in_use(void);
 
 #endif

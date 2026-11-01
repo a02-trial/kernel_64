@@ -1,5 +1,5 @@
 /*
- * s2mu005.h - Driver for the s2mu005 mfd
+ * s2mu005.h - Driver for the s2mu005
  *
  * Copyright (C) 2016 Samsung Electronics Co.Ltd
  *

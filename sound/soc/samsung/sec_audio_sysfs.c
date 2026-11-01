@@ -14,7 +14,8 @@
  *   GNU General Public License for more details.
  *
  *   You should have received a copy of the GNU General Public License
- *   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *   along with this program; if not, write to the Free Software
+ *   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA
  *
  */
 
@@ -22,10 +23,10 @@
 #include <linux/err.h>
 #include <linux/platform_device.h>
 #include <linux/time.h>
-#include <linux/delay.h>
 #include <linux/wait.h>
 #include <linux/module.h>
 #include <linux/slab.h>
+
 #include <sound/samsung/sec_audio_sysfs.h>
 
 struct sec_audio_sysfs_data *audio_data;
@@ -86,10 +87,8 @@ static ssize_t audio_jack_state_show(struct device *dev,
 
 	if (audio_data->get_jack_state)
 		report = audio_data->get_jack_state();
-	else {
+	else
 		dev_info(dev, "%s: No callback registered\n", __func__);
-		panic("sound card is not registered");
-	}
 
 	return snprintf(buf, 4, "%d\n", report);
 }
